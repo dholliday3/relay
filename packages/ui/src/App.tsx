@@ -5,6 +5,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { TicketDetail } from "./components/TicketDetail";
 import { Dashboard } from "./components/Dashboard";
 import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./components/MetaFields";
+import { TerminalPane } from "./components/TerminalPane";
 import type { Ticket, TicketbookConfig, Status, Priority, Meta, CreateTicketInput, DebriefStyle } from "./types";
 
 type ViewMode = "home" | "list" | "board";
@@ -36,7 +37,10 @@ export function App() {
     return "list";
   });
   const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [terminalOpen, setTerminalOpen] = useState(() => localStorage.getItem("ticketbook-terminal-open") === "true");
+  const [terminalWidth, setTerminalWidth] = useState(() => parseInt(localStorage.getItem("ticketbook-terminal-width") || "400", 10));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const isDraggingRef = useRef(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -429,6 +433,35 @@ export function App() {
     setIsCreating(false);
   };
 
+  const handleToggleTerminal = useCallback(() => {
+    setTerminalOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem("ticketbook-terminal-open", String(next));
+      return next;
+    });
+  }, []);
+
+  const handleTerminalDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = terminalWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      const newWidth = Math.max(200, Math.min(window.innerWidth * 0.7, startWidth + delta));
+      setTerminalWidth(newWidth);
+    };
+    const onUp = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setTerminalWidth((w) => { localStorage.setItem("ticketbook-terminal-width", String(w)); return w; });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [terminalWidth]);
+
   const activeTicket = tickets.find((t) => t.id === activeTicketId) ?? null;
   const deleteTicketTitle = confirmDelete
     ? tickets.find((t) => t.id === confirmDelete)?.title ?? confirmDelete
@@ -552,6 +585,8 @@ export function App() {
           </svg>
         </button>
       </header>
+      <div className="main-with-terminal">
+      <div className="main-content">
       {viewMode === "home" ? (
         <Dashboard
           tickets={tickets}
@@ -687,21 +722,58 @@ export function App() {
           {activeTicket && (
             <>
               <div
-                className="slideover-backdrop"
+                className="board-modal-backdrop"
                 onClick={() => { setActiveTicketId(null); }}
               />
-              <aside className="slideover-panel">
+              <div className="board-modal">
+                <button
+                  className="board-modal-close"
+                  onClick={() => setActiveTicketId(null)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
                 <TicketDetail
                   ticket={activeTicket}
                   meta={meta}
                   onUpdated={loadTickets}
                   onDelete={handleDeleteRequest}
                 />
-              </aside>
+              </div>
             </>
           )}
         </div>
       )}
+
+      </div>{/* end main-content */}
+
+      {/* Terminal pane (right side) */}
+      {!isMobile && (
+        terminalOpen ? (
+          <>
+            <div
+              className="terminal-drag-handle"
+              onMouseDown={handleTerminalDragStart}
+            />
+            <div className="terminal-side" style={{ width: terminalWidth }}>
+              <TerminalPane onClose={handleToggleTerminal} />
+            </div>
+          </>
+        ) : (
+          <button
+            className="terminal-collapsed-bar"
+            onClick={handleToggleTerminal}
+            title="Open terminal"
+            aria-label="Open terminal"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </button>
+        )
+      )}
+      </div>{/* end main-with-terminal */}
 
       {/* Status bar */}
       <footer className="status-bar">

@@ -2,6 +2,7 @@ import { resolve, join } from "node:path";
 import { stat } from "node:fs/promises";
 import { createRoutes, matchRoute, handleError, broadcastEvent } from "./api.js";
 import { createWatcher } from "./watcher.js";
+import { createPtySession, writeToPty, resizePty, destroyPtySession, destroyAllSessions } from "./terminal.js";
 
 export interface ServerConfig {
   ticketsDir: string;
@@ -67,9 +68,11 @@ export function startServer(config: ServerConfig): ServerHandle {
     return null;
   }
 
-  const server = Bun.serve({
+  type WsData = { sessionId: string; ticketsDir: string };
+
+  const server = Bun.serve<WsData>({
     port,
-    async fetch(req) {
+    async fetch(req, server) {
       const origin = req.headers.get("Origin");
 
       // Handle CORS preflight
@@ -78,6 +81,15 @@ export function startServer(config: ServerConfig): ServerHandle {
       }
 
       const url = new URL(req.url);
+
+      // WebSocket upgrade for terminal
+      const termMatch = url.pathname.match(/^\/api\/terminal\/(.+)$/);
+      if (termMatch && req.headers.get("upgrade")?.toLowerCase() === "websocket") {
+        const sessionId = decodeURIComponent(termMatch[1]);
+        const success = server.upgrade(req, { data: { sessionId, ticketsDir } });
+        if (success) return undefined as unknown as Response;
+        return new Response("WebSocket upgrade failed", { status: 500 });
+      }
 
       // API routes
       if (url.pathname.startsWith("/api")) {
@@ -106,12 +118,46 @@ export function startServer(config: ServerConfig): ServerHandle {
 
       return new Response("Not found", { status: 404 });
     },
+    websocket: {
+      open(ws) {
+        const { sessionId, ticketsDir: cwd } = ws.data;
+        const session = createPtySession(sessionId, resolve(cwd, ".."));
+        session.onData = (data: string) => {
+          try {
+            ws.send(JSON.stringify({ type: "output", data }));
+          } catch {
+            // ws closed
+          }
+        };
+        session.onExit = () => {
+          try { ws.close(); } catch { /* already closed */ }
+        };
+      },
+      message(ws, message) {
+        const { sessionId } = ws.data;
+        try {
+          const msg = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message));
+          if (msg.type === "input" && typeof msg.data === "string") {
+            writeToPty(sessionId, msg.data);
+          } else if (msg.type === "resize" && typeof msg.cols === "number" && typeof msg.rows === "number") {
+            resizePty(sessionId, msg.cols, msg.rows);
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      },
+      close(ws) {
+        const { sessionId } = ws.data;
+        destroyPtySession(sessionId);
+      },
+    },
   });
 
   // Start file watcher for live SSE updates
   const watcher = createWatcher(ticketsDir, broadcastEvent);
 
   process.on("SIGINT", () => {
+    destroyAllSessions();
     watcher.close();
     server.stop();
     process.exit(0);

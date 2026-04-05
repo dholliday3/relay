@@ -5,7 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://localhost:4242",
+      "/api": {
+        target: "http://localhost:4242",
+        ws: true,
+      },
     },
   },
   build: {
@@ -18,6 +21,7 @@ export default defineConfig({
             if (id.includes("@tiptap") || id.includes("tiptap-markdown")) return "tiptap";
             if (id.includes("@dnd-kit")) return "dndkit";
             if (id.includes("lowlight") || id.includes("highlight.js")) return "lowlight";
+            if (id.includes("@xterm")) return "xterm";
           }
         },
       },
