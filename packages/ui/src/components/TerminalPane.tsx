@@ -54,7 +54,11 @@ interface TerminalPaneProps {
 
 export function TerminalPane({ onClose }: TerminalPaneProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>("");
+  const [activeTabId, _setActiveTabId] = useState<string>("");
+  const setActiveTabId = useCallback((id: string) => {
+    _setActiveTabId(id);
+    localStorage.setItem("ticketbook-active-terminal-tab", id);
+  }, []);
   const [initialized, setInitialized] = useState(false);
 
   // On mount: fetch existing sessions from server
@@ -71,7 +75,10 @@ export function TerminalPane({ onClose }: TerminalPaneProps) {
         nextTabNum = maxNum + 1;
 
         setTabs(serverTabs);
-        setActiveTabId(serverTabs[0].id);
+        // Restore last active tab, falling back to first tab
+        const savedTabId = localStorage.getItem("ticketbook-active-terminal-tab");
+        const restoredTab = savedTabId && serverTabs.some((t) => t.id === savedTabId) ? savedTabId : serverTabs[0].id;
+        setActiveTabId(restoredTab);
       } else {
         // No existing sessions — create a fresh one
         const id = generateTabId();
@@ -94,7 +101,7 @@ export function TerminalPane({ onClose }: TerminalPaneProps) {
     await createTabOnServer(id, title, sortOrder);
     setTabs((prev) => [...prev, { id, title, alive: false }]);
     setActiveTabId(id);
-  }, [tabs.length]);
+  }, [tabs.length, setActiveTabId]);
 
   const handleCloseTab = useCallback(async (id: string) => {
     await deleteTabOnServer(id);
@@ -115,7 +122,7 @@ export function TerminalPane({ onClose }: TerminalPaneProps) {
       }
       return next;
     });
-  }, [activeTabId]);
+  }, [activeTabId, setActiveTabId]);
 
   if (!initialized) return null;
 

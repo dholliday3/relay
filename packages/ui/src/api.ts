@@ -1,4 +1,4 @@
-import type { Ticket, TicketPatch, Meta, TicketbookConfig, CreateTicketInput } from "./types";
+import type { Ticket, TicketPatch, Meta, TicketbookConfig, CreateTicketInput, Plan, PlanPatch, CreatePlanInput, PlanMeta } from "./types";
 
 const BASE = "/api";
 
@@ -87,7 +87,72 @@ export async function reorderTicket(
   return res.json();
 }
 
-export function subscribeSSE(onEvent: (event: { type: string; ticketId?: string }) => void): () => void {
+// --- Plans ---
+
+export async function fetchPlans(): Promise<Plan[]> {
+  const res = await fetch(`${BASE}/plans`);
+  if (!res.ok) throw new Error(`Failed to fetch plans: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPlan(id: string): Promise<Plan> {
+  const res = await fetch(`${BASE}/plans/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Failed to fetch plan: ${res.status}`);
+  return res.json();
+}
+
+export async function patchPlan(id: string, patch: PlanPatch): Promise<Plan> {
+  const res = await fetch(`${BASE}/plans/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Failed to patch plan: ${res.status}`);
+  return res.json();
+}
+
+export async function patchPlanBody(id: string, body: string): Promise<Plan> {
+  const res = await fetch(`${BASE}/plans/${encodeURIComponent(id)}/body`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) throw new Error(`Failed to patch plan body: ${res.status}`);
+  return res.json();
+}
+
+export async function createPlan(input: CreatePlanInput): Promise<Plan> {
+  const res = await fetch(`${BASE}/plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`Failed to create plan: ${res.status}`);
+  return res.json();
+}
+
+export async function deletePlan(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/plans/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete plan: ${res.status}`);
+}
+
+export async function fetchPlanMeta(): Promise<PlanMeta> {
+  const res = await fetch(`${BASE}/plans/meta`);
+  if (!res.ok) throw new Error(`Failed to fetch plan meta: ${res.status}`);
+  return res.json();
+}
+
+export async function cutTicketsFromPlan(planId: string): Promise<{ plan: Plan; createdTickets: any[]; count: number }> {
+  const res = await fetch(`${BASE}/plans/${encodeURIComponent(planId)}/cut-tickets`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`Failed to cut tickets: ${res.status}`);
+  return res.json();
+}
+
+export function subscribeSSE(onEvent: (event: { type: string; ticketId?: string; source?: string }) => void): () => void {
   let es: EventSource | null = new EventSource(`${BASE}/events`);
 
   es.onmessage = (msg) => {

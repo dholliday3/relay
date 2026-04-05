@@ -11,7 +11,14 @@ import {
   addSubtask,
   reorderTicket,
   sortTickets,
+  listPlans,
+  getPlan,
+  createPlan,
+  updatePlan,
+  deletePlan,
+  cutTicketsFromPlan,
 } from "@ticketbook/core";
+import type { Plan } from "@ticketbook/core";
 
 function ticketSummary(t: {
   id: string;
@@ -73,7 +80,33 @@ function formatTicketFull(t: {
   return lines.join("\n");
 }
 
-export async function startMcpServer(ticketsDir: string): Promise<void> {
+function planSummary(p: Plan): string {
+  const parts = [`[${p.id}] ${p.title}`, `status: ${p.status}`];
+  if (p.project) parts.push(`project: ${p.project}`);
+  if (p.tags && p.tags.length > 0) parts.push(`tags: ${p.tags.join(", ")}`);
+  if (p.tickets && p.tickets.length > 0) parts.push(`tickets: ${p.tickets.join(", ")}`);
+  return parts.join(" | ");
+}
+
+function formatPlanFull(p: Plan): string {
+  const lines = [
+    `# ${p.id}: ${p.title}`,
+    "",
+    `- Status: ${p.status}`,
+  ];
+  if (p.project) lines.push(`- Project: ${p.project}`);
+  if (p.tags && p.tags.length > 0) lines.push(`- Tags: ${p.tags.join(", ")}`);
+  if (p.tickets && p.tickets.length > 0) lines.push(`- Linked tickets: ${p.tickets.join(", ")}`);
+  if (p.refs && p.refs.length > 0) lines.push(`- Refs: ${p.refs.join(", ")}`);
+  lines.push(`- Created: ${p.created.toISOString()}`);
+  lines.push(`- Updated: ${p.updated.toISOString()}`);
+  if (p.body) {
+    lines.push("", "---", "", p.body);
+  }
+  return lines.join("\n");
+}
+
+export async function startMcpServer(ticketsDir: string, plansDir?: string): Promise<void> {
   const server = new McpServer({
     name: "ticketbook",
     version: "0.1.0",
@@ -543,6 +576,274 @@ export async function startMcpServer(ticketsDir: string): Promise<void> {
       };
     },
   );
+
+  // --- Plan tools ---
+  if (plansDir) {
+    // --- list_plans ---
+    server.tool(
+      "list_plans",
+      "List plans with optional filters. Plans are strategic documents (PRDs, feature specs, brainstorms) that can link to tickets.",
+      {
+        status: z
+          .enum(["draft", "active", "completed", "archived"])
+          .optional()
+          .describe("Filter by status"),
+        project: z.string().optional().describe("Filter by project name"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Filter by tags (all must match)"),
+      },
+      async (args) => {
+        const filters: Record<string, unknown> = {};
+        if (args.status) filters.status = args.status;
+        if (args.project) filters.project = args.project;
+        if (args.tags) filters.tags = args.tags;
+
+        const plans = await listPlans(
+          plansDir,
+          Object.keys(filters).length > 0 ? filters : undefined,
+        );
+
+        if (plans.length === 0) {
+          return { content: [{ type: "text", text: "No plans found." }] };
+        }
+
+        const text = plans.map((p) => planSummary(p)).join("\n");
+        return {
+          content: [
+            { type: "text", text: `${plans.length} plan(s):\n\n${text}` },
+          ],
+        };
+      },
+    );
+
+    // --- get_plan ---
+    server.tool(
+      "get_plan",
+      "Get full details of a plan by ID, including body content.",
+      {
+        id: z.string().describe("Plan ID (e.g. PLAN-001)"),
+      },
+      async (args) => {
+        const plan = await getPlan(plansDir, args.id);
+        if (!plan) {
+          return {
+            content: [{ type: "text", text: `Plan not found: ${args.id}` }],
+            isError: true,
+          };
+        }
+        return { content: [{ type: "text", text: formatPlanFull(plan) }] };
+      },
+    );
+
+    // --- create_plan ---
+    server.tool(
+      "create_plan",
+      "Create a new plan. Plans are strategic documents for brainstorming, feature specs, or PRDs.",
+      {
+        title: z.string().min(1).describe("Plan title (required)"),
+        status: z
+          .enum(["draft", "active", "completed", "archived"])
+          .optional()
+          .describe("Initial status (default: draft)"),
+        tags: z.array(z.string()).optional().describe("Tags (lowercase)"),
+        project: z.string().optional().describe("Project name"),
+        tickets: z.array(z.string()).optional().describe("Linked ticket IDs"),
+        body: z.string().optional().describe("Markdown body content"),
+      },
+      async (args) => {
+        const plan = await createPlan(ticketsDir, plansDir, args);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Created ${plan.id}: ${plan.title}\n\n${formatPlanFull(plan)}`,
+            },
+          ],
+        };
+      },
+    );
+
+    // --- update_plan ---
+    server.tool(
+      "update_plan",
+      "Update an existing plan's fields. Only provided fields are changed.",
+      {
+        id: z.string().describe("Plan ID to update"),
+        title: z.string().min(1).optional().describe("New title"),
+        status: z
+          .enum(["draft", "active", "completed", "archived"])
+          .optional()
+          .describe("New status"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("New tags (replaces existing)"),
+        project: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("New project (null to clear)"),
+        tickets: z
+          .array(z.string())
+          .optional()
+          .describe("Linked ticket IDs (replaces existing)"),
+        body: z.string().optional().describe("New markdown body content"),
+      },
+      async (args) => {
+        const { id, ...patch } = args;
+        const plan = await updatePlan(plansDir, id, patch);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Updated ${plan.id}\n\n${formatPlanFull(plan)}`,
+            },
+          ],
+        };
+      },
+    );
+
+    // --- delete_plan ---
+    server.tool(
+      "delete_plan",
+      "Delete (archive) a plan by ID.",
+      {
+        id: z.string().describe("Plan ID to delete"),
+      },
+      async (args) => {
+        await deletePlan(ticketsDir, plansDir, args.id);
+        return {
+          content: [{ type: "text", text: `Deleted plan ${args.id}` }],
+        };
+      },
+    );
+
+    // --- link_ticket_to_plan ---
+    server.tool(
+      "link_ticket_to_plan",
+      "Link a ticket ID to a plan. Adds the ticket to the plan's linked tickets list.",
+      {
+        planId: z.string().describe("Plan ID"),
+        ticketId: z.string().describe("Ticket ID to link"),
+      },
+      async (args) => {
+        const plan = await getPlan(plansDir, args.planId);
+        if (!plan) {
+          return {
+            content: [{ type: "text", text: `Plan not found: ${args.planId}` }],
+            isError: true,
+          };
+        }
+        const existingTickets = plan.tickets ?? [];
+        if (existingTickets.includes(args.ticketId)) {
+          return {
+            content: [{ type: "text", text: `Ticket ${args.ticketId} already linked to ${args.planId}` }],
+          };
+        }
+        await updatePlan(plansDir, args.planId, {
+          tickets: [...existingTickets, args.ticketId],
+        });
+        return {
+          content: [{ type: "text", text: `Linked ${args.ticketId} to plan ${args.planId}` }],
+        };
+      },
+    );
+
+    // --- cut_tickets_from_plan ---
+    server.tool(
+      "cut_tickets_from_plan",
+      "Parse unchecked checkboxes from a plan's body, create a ticket for each, link them to the plan, and check off the items. Great for converting brainstorm items into actionable tickets.",
+      {
+        planId: z.string().describe("Plan ID to cut tickets from"),
+      },
+      async (args) => {
+        const result = await cutTicketsFromPlan(ticketsDir, plansDir, args.planId);
+        if (result.createdTickets.length === 0) {
+          return {
+            content: [{ type: "text", text: `No unchecked items found in ${args.planId}` }],
+          };
+        }
+        const ticketList = result.createdTickets
+          .map((t) => `  - ${t.id}: ${t.title}`)
+          .join("\n");
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Cut ${result.createdTickets.length} ticket(s) from plan ${args.planId}:\n${ticketList}`,
+            },
+          ],
+        };
+      },
+    );
+
+    // --- Resource: plans://list ---
+    server.resource(
+      "plan-list",
+      "plans://list",
+      { description: "Full plan list in compact format", mimeType: "text/plain" },
+      async () => {
+        const plans = await listPlans(plansDir);
+        const text =
+          plans.length === 0
+            ? "No plans found."
+            : plans.map((p) => planSummary(p)).join("\n");
+        return {
+          contents: [{ uri: "plans://list", text, mimeType: "text/plain" }],
+        };
+      },
+    );
+
+    // --- Prompt: plan-context ---
+    server.prompt(
+      "plan-context",
+      "Get formatted context for working on a plan, including linked tickets",
+      { id: z.string().describe("Plan ID (e.g. PLAN-001)") },
+      async (args) => {
+        const plan = await getPlan(plansDir, args.id);
+        if (!plan) {
+          return {
+            messages: [
+              {
+                role: "user" as const,
+                content: { type: "text" as const, text: `Plan not found: ${args.id}` },
+              },
+            ],
+          };
+        }
+
+        const sections: string[] = [formatPlanFull(plan)];
+
+        // Include linked ticket summaries
+        if (plan.tickets && plan.tickets.length > 0) {
+          const ticketDetails: string[] = [];
+          for (const tid of plan.tickets) {
+            const ticket = await getTicket(ticketsDir, tid);
+            if (ticket) {
+              ticketDetails.push(ticketSummary(ticket));
+            } else {
+              ticketDetails.push(`[${tid}] (not found)`);
+            }
+          }
+          sections.push(`\n## Linked Tickets\n${ticketDetails.join("\n")}`);
+        }
+
+        return {
+          messages: [
+            {
+              role: "user" as const,
+              content: {
+                type: "text" as const,
+                text: `Here is the context for plan ${plan.id}. Review and provide input.\n\n${sections.join("\n")}`,
+              },
+            },
+          ],
+        };
+      },
+    );
+  }
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();

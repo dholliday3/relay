@@ -7,6 +7,7 @@ import { listTerminalTabs, upsertTerminalTab, deleteTerminalTab } from "./db.js"
 
 export interface ServerConfig {
   ticketsDir: string;
+  plansDir: string;
   port: number;
   staticDir?: string;
 }
@@ -36,8 +37,8 @@ function addCors(response: Response, origin: string | null): Response {
 }
 
 export function startServer(config: ServerConfig): ServerHandle {
-  const { ticketsDir, port, staticDir } = config;
-  const routes = createRoutes(ticketsDir);
+  const { ticketsDir, plansDir, port, staticDir } = config;
+  const routes = createRoutes(ticketsDir, plansDir);
 
   // Initialize terminal data dir (SQLite db lives alongside .tickets)
   setDataDir(ticketsDir);
@@ -197,12 +198,18 @@ export function startServer(config: ServerConfig): ServerHandle {
     },
   });
 
-  // Start file watcher for live SSE updates
-  const watcher = createWatcher(ticketsDir, broadcastEvent);
+  // Start file watchers for live SSE updates
+  const ticketWatcher = createWatcher(ticketsDir, (event) =>
+    broadcastEvent({ ...event, source: "ticket" }),
+  );
+  const planWatcher = createWatcher(plansDir, (event) =>
+    broadcastEvent({ ...event, source: "plan" }),
+  );
 
   process.on("SIGINT", () => {
     destroyAllSessions();
-    watcher.close();
+    ticketWatcher.close();
+    planWatcher.close();
     server.stop();
     process.exit(0);
   });
@@ -210,7 +217,8 @@ export function startServer(config: ServerConfig): ServerHandle {
   return {
     port: server.port ?? port,
     close() {
-      watcher.close();
+      ticketWatcher.close();
+      planWatcher.close();
       server.stop();
     },
   };
@@ -219,12 +227,14 @@ export function startServer(config: ServerConfig): ServerHandle {
 // Direct execution
 if (import.meta.main) {
   const ticketsDir = resolve(process.env.TICKETS_DIR ?? ".tickets");
+  const plansDir = resolve(process.env.PLANS_DIR ?? ".plans");
   const port = parseInt(process.env.PORT ?? "4242", 10);
   const staticDir = resolve(
     process.env.STATIC_DIR ?? join(import.meta.dir, "../../ui/dist"),
   );
 
-  const handle = startServer({ ticketsDir, port, staticDir });
+  const handle = startServer({ ticketsDir, plansDir, port, staticDir });
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
   console.log(`Tickets directory: ${ticketsDir}`);
+  console.log(`Plans directory: ${plansDir}`);
 }

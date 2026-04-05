@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import type { Ticket, Status, Meta } from "../types";
+import type { Ticket, Status, Meta, Plan, PlanStatus } from "../types";
 
 type FilterKey = "status" | "project" | "epic" | "sprint";
 
 interface DashboardProps {
   tickets: Ticket[];
+  plans: Plan[];
   meta: Meta;
   onNavigate: (mode: "list" | "board", filterKey?: FilterKey, filterValue?: string) => void;
+  onNavigatePlans?: () => void;
 }
 
 const STATUS_CONFIG: { key: Status; label: string; color: string }[] = [
@@ -18,7 +20,14 @@ const STATUS_CONFIG: { key: Status; label: string; color: string }[] = [
   { key: "cancelled", label: "Cancelled", color: "#ef4444" },
 ];
 
-export function Dashboard({ tickets, meta, onNavigate }: DashboardProps) {
+const PLAN_STATUS_CONFIG: { key: PlanStatus; label: string; color: string }[] = [
+  { key: "active", label: "Active", color: "#3b82f6" },
+  { key: "draft", label: "Draft", color: "#9ca3af" },
+  { key: "completed", label: "Completed", color: "#22c55e" },
+  { key: "archived", label: "Archived", color: "#6b7280" },
+];
+
+export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }: DashboardProps) {
   const statusCounts = useMemo(() => {
     const counts: Record<Status, number> = {
       draft: 0,
@@ -172,6 +181,51 @@ export function Dashboard({ tickets, meta, onNavigate }: DashboardProps) {
                 </button>
               );
             })}
+          </div>
+        </section>
+      )}
+      {/* Plans */}
+      {plans.length > 0 && (
+        <section className="dash-section">
+          <h2 className="dash-section-title">Plans</h2>
+          <div className="dash-stats">
+            <div className="dash-stat-card dash-stat-total">
+              <span className="dash-stat-value">{plans.length}</span>
+              <span className="dash-stat-label">Total</span>
+            </div>
+            {PLAN_STATUS_CONFIG.map(({ key, label, color }) => {
+              const count = plans.filter((p) => p.status === key).length;
+              if (count === 0) return null;
+              return (
+                <button
+                  key={key}
+                  className="dash-stat-card dash-stat-clickable"
+                  onClick={() => onNavigatePlans?.()}
+                >
+                  <span className="dash-stat-value" style={{ color }}>{count}</span>
+                  <span className="dash-stat-label">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="dash-ticket-list" style={{ marginTop: 12 }}>
+            {[...plans]
+              .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime())
+              .slice(0, 5)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  className="dash-ticket-row dash-plan-row"
+                  onClick={() => onNavigatePlans?.()}
+                  style={{ cursor: "pointer", background: "none", border: "none", width: "100%", textAlign: "left" }}
+                >
+                  <span className="dash-ticket-status" style={{ color: PLAN_STATUS_CONFIG.find((s) => s.key === p.status)?.color }}>
+                    {PLAN_STATUS_CONFIG.find((s) => s.key === p.status)?.label}
+                  </span>
+                  <span className="dash-ticket-title">{p.title}</span>
+                  <span className="dash-ticket-id">{p.id}</span>
+                </button>
+              ))}
           </div>
         </section>
       )}

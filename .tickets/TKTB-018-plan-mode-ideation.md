@@ -1,12 +1,12 @@
 ---
 id: TKTB-018
 title: Plan mode ideation
-status: backlog
+status: in-progress
 order: 750
 tags:
   - brainstorm
 created: '2026-04-03T21:47:13.407Z'
-updated: '2026-04-05T06:58:39.614Z'
+updated: '2026-04-05T13:30:59.615Z'
 ---
 
 We need a way to better connect plan mode with a clean UX. Right now, this is about tasks. But agents can take on large efforts, and each task should be flexible enough to handle various sizes of tasks from plans to little tickets.
@@ -24,3 +24,83 @@ A few other tangential ideas:
 - this is really circling on the idea that devs are mainly curators of ideas and plans and they're delating to agents. I'm immediately feeling the need for this tool to help me brainstorm, plan, track tickets etc. and maybe even handle my skills and other documentation, really as a command center of context, to better reflect the true mental model of building software which is now much more removed from the code and much more about project/product management.
 - The key is that, much like a coding editor or a tool like linear, you can't be too rigid. If you're too rigid but you need the right set of opinionated design and defaults so that any user can jump in and immediately get a mental model of how to use this. Especially better if this tool just fits the majority of people's mental model, similar to how a coding editor makes a lot of sense to mose. Vim doesn't make sense to most, but vscode does, whether they love it or not. Right now, people are cobbling together different tools to build projects because none of the tools seem to reflect the way that coding has evolved. Most people are managing their projects in a different platform (linear, notion) and then kicking off their coding agents from whatever terminal or agent coding gui (codex, claude code, conductor, t3 code). But there's a real disconnect between the two, and as models get more capable, the need to shift more of the workflow focus on the project/product management side. And to that note, product management is the product brainstorming, design, and even technical implementation (mainly high level system design, patterns, libraries and less so specific code implementation) and project management is about delegation, sequencing, observing, surfacing relevant context, course correcting etc. which is already happening by humans just managing various claude code sessions + PRs, which results in a ton of context switching and overwhelm.
 - The existing tools require too much jumping around. I don't want my project plans/tickets to live in a different tool, i want them close to the implementaiton to serve as context and history. I also want my coding agent to help me create plans and tickets. Of course, the limitation is git itself. Tickets should ideally be visible to all, but maybe that's a hurdle we live with. Optimize for solo devs, figure out how to build this for multiple. We're moving in a direction of solo devs being very capable, and this tool fits that model. Collaboration will eventually be useful. <https://tryhamster.com/> is a good resource for the collaboration model.
+
+---
+
+## Plan Mode — Concrete Requirements
+
+**The core insight**: Users are already doing planning with agents — they're going back and forth with claude code, writing markdown files scattered in their repo or saved locally. We need to provide a clean, first-class space for this. The key reference is Plannotator — a plugin that surfaces claude code plans in a nice UI. Humans write plans with agents doing most of the writing. They're iterating.
+
+### What we know for sure
+
+1. **Plan mode is essential**. A distinct mode/space for creating plans that live in the codebase.
+2. **Plans are collaborative artifacts** — human starts with rough ideas, agent structures them, human refines, agent adds implementation detail, etc. The back-and-forth is the feature.
+3. **Plans connect to execution** — a plan can be:
+   - Kicked off as a single agent session
+   - Split into multiple tickets that get tracked
+   - Left as documentation/context for future work
+   - Any combination — flexibility is key
+4. **Plans live in the code** — not in a separate SaaS. They're `.md` files in a `.plans/` directory (or similar), version-controlled, available as context for agents.
+5. **Project context / system instructions** — there's a need for persistent context that isn't a plan or a ticket. Things like "this project uses Bun, not Node", "always use our shared MetaFields components", "prefer SQLite over external DBs". This is closer to CLAUDE.md but surfaced in the UI.
+
+### The right abstraction
+
+The risk is over-engineering. Here's a minimal model that covers the use cases:
+
+**Three document types, one UI:**
+
+- **Tickets** (what we have) — discrete units of work with status, assignee, metadata
+- **Plans** — longer-form documents for thinking through approach before execution. A plan can reference tickets, can be converted to tickets, can be annotated.
+- **Context** — persistent project-level instructions/notes (like CLAUDE.md but editable in the UI)
+
+Plans are just markdown files with frontmatter, same as tickets. The difference is they have a different schema (no status/priority — instead they have phases, decisions, open questions) and they live in a different directory (`.plans/`).
+
+**Plan lifecycle:**
+
+1. Human creates a plan (blank or from a prompt)
+2. Human + agent iterate on the plan via the UI or terminal
+3. Plan reaches a "ready" state
+4. Human can: execute it directly, cut tickets from it, or just leave it as documentation
+5. Agent references the plan during implementation for context
+
+**What this is NOT:**
+
+- Not a full project management system
+- Not a rigid workflow engine
+- Not a replacement for documentation
+
+### Implementation approach
+
+**Phase 1 — Plans as documents:**
+
+- `.plans/` directory with markdown files + frontmatter
+- Plan schema: `id`, `title`, `status` (draft/active/completed), `created`, `updated`
+- CRUD API + MCP tools (same pattern as tickets)
+- UI: plan list + editor in a new view mode, using the same tiptap editor
+
+**Phase 2 — Plan-to-ticket flow:**
+
+- Button to "cut tickets" from a plan — parses the plan for actionable items, creates ticket drafts
+- Plans can link to tickets they spawned (like `refs`)
+- Tickets can reference their source plan
+
+**Phase 3 — Agent integration:**
+
+- MCP tools: `create_plan`, `update_plan`, `list_plans`
+- Agent can read plans for context during implementation
+- Agent can update plan status as work progresses
+
+**Phase 4 — Context documents:**
+
+- Persistent project context editable in the UI
+- Automatically included in agent prompts via MCP
+- Like CLAUDE.md but with a UI and version history
+
+---
+
+## Open Questions
+
+- Should plans and tickets share the same editor/viewer, just with different metadata? Or should plans have a more document-oriented layout (wider, no sidebar metadata)?
+- How does plan iteration with an agent actually work in the UI? Is it a chat-like interface, or just the human editing the markdown and asking the agent to review via terminal?
+- What's the right granularity for "cutting tickets"? Should the agent propose tickets and the human approves, or should it be more manual?
+- How do we handle the case where a plan evolves during implementation? The plan says one thing but the agent discovered something different — does the plan get updated automatically?

@@ -59,3 +59,43 @@ export interface CreateTicketInput {
   tags?: string[];
   body?: string;
 }
+
+// --- Plans ---
+
+export interface Plan {
+  id: string;
+  title: string;
+  status: "draft" | "active" | "completed" | "archived";
+  created: string;
+  updated: string;
+  tags?: string[];
+  project?: string;
+  tickets?: string[];
+  refs?: string[];
+  body: string;
+  filePath: string;
+}
+
+export type PlanStatus = Plan["status"];
+
+export interface PlanPatch {
+  title?: string;
+  status?: PlanStatus;
+  tags?: string[];
+  project?: string | null;
+  tickets?: string[];
+  refs?: string[];
+}
+
+export interface CreatePlanInput {
+  title: string;
+  status?: PlanStatus;
+  tags?: string[];
+  project?: string;
+  body?: string;
+}
+
+export interface PlanMeta {
+  projects: string[];
+  tags: string[];
+}

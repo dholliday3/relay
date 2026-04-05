@@ -10,7 +10,7 @@
  * but the tab list is restored — a fresh shell is spawned on reconnect).
  */
 
-import { upsertTerminalTab, deleteTerminalTab } from "./db.js";
+import { deleteTerminalTab } from "./db.js";
 
 const SCROLLBACK_SIZE = 256 * 1024; // 256 KiB per session
 const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
@@ -92,7 +92,7 @@ export function setDataDir(dir: string): void {
   dataDir = dir;
 }
 
-export function createPtySession(sessionId: string, cwd: string, cols = 80, rows = 24, title?: string): PtySession {
+export function createPtySession(sessionId: string, cwd: string, cols = 80, rows = 24): PtySession {
   const existing = sessions.get(sessionId);
   if (existing?.alive) return existing;
 
@@ -127,9 +127,6 @@ export function createPtySession(sessionId: string, cwd: string, cols = 80, rows
 
   session.proc = proc;
   sessions.set(sessionId, session);
-
-  // Persist tab metadata to SQLite
-  upsertTerminalTab(dataDir, sessionId, title ?? `Terminal ${sessions.size}`, sessions.size - 1);
 
   return session;
 }
@@ -199,17 +196,18 @@ export function reattachPtySession(sessionId: string): string | null {
 
 export function destroyPtySession(sessionId: string): void {
   const session = sessions.get(sessionId);
-  if (!session) return;
+  if (session) {
+    if (session.disconnectTimer) clearTimeout(session.disconnectTimer);
+    session.alive = false;
+    session.onData = null;
+    session.onExit = null;
+    session.scrollback.clear();
 
-  if (session.disconnectTimer) clearTimeout(session.disconnectTimer);
-  session.alive = false;
-  session.onData = null;
-  session.onExit = null;
-  session.scrollback.clear();
-
-  try { session.proc.terminal?.close(); } catch { /* already dead */ }
-  try { session.proc.kill(); } catch { /* already dead */ }
-  sessions.delete(sessionId);
+    try { session.proc.terminal?.close(); } catch { /* already dead */ }
+    try { session.proc.kill(); } catch { /* already dead */ }
+    sessions.delete(sessionId);
+  }
+  // Always remove from DB, even if PTY session wasn't in memory
   deleteTerminalTab(dataDir, sessionId);
 }
 

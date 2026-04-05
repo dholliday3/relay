@@ -30,7 +30,7 @@ export {
   getTags,
 } from "./reader.js";
 
-export { nextId, slugify, formatId, formatFilename } from "./id.js";
+export { nextId, nextIdForDir, slugify, formatId, formatFilename } from "./id.js";
 
 export {
   createTicket,
@@ -42,3 +42,37 @@ export {
 } from "./writer.js";
 
 export { reorderTicket, rebalanceOrder, sortTickets } from "./order.js";
+
+export {
+  PlanStatusEnum,
+  PlanFrontmatterSchema,
+  CreatePlanInputSchema,
+  PlanPatchSchema,
+  PlanFiltersSchema,
+} from "./plan-schema.js";
+
+export type {
+  Plan,
+  PlanFrontmatter,
+  CreatePlanInput,
+  PlanPatch,
+  PlanFilters,
+} from "./plan-types.js";
+
+export {
+  listPlans,
+  getPlan,
+  searchPlans,
+  getPlanProjects,
+  getPlanTags,
+} from "./plan-reader.js";
+
+export {
+  createPlan,
+  updatePlan,
+  deletePlan,
+  restorePlan,
+  cutTicketsFromPlan,
+} from "./plan-writer.js";
+
+export type { CutTicketsResult } from "./plan-writer.js";

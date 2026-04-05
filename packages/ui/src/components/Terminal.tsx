@@ -13,6 +13,11 @@ export function Terminal({ sessionId, isVisible }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const visibleRef = useRef(isVisible);
+  const initialResizeSentRef = useRef(false);
+
+  // Keep visibility ref in sync
+  visibleRef.current = isVisible;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -50,13 +55,9 @@ export function Terminal({ sessionId, isVisible }: TerminalProps) {
     term.loadAddon(fit);
     term.open(containerRef.current);
 
-    // Delay initial fit to let container render
-    requestAnimationFrame(() => {
-      try { fit.fit(); } catch { /* container not ready */ }
-    });
-
     xtermRef.current = term;
     fitRef.current = fit;
+    initialResizeSentRef.current = false;
 
     // Connect WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -75,11 +76,24 @@ export function Terminal({ sessionId, isVisible }: TerminalProps) {
     };
 
     ws.onopen = () => {
-      // Send initial size
-      try {
-        fit.fit();
-        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-      } catch { /* ignore */ }
+      // Only send initial resize if visible — hidden containers have
+      // zero/wrong dimensions which would corrupt the PTY's column count
+      if (!visibleRef.current) return;
+
+      let attempts = 0;
+      const sendInitialSize = () => {
+        try {
+          fit.fit();
+          if (term.cols >= 20 || attempts >= 10) {
+            ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+            initialResizeSentRef.current = true;
+          } else {
+            attempts++;
+            requestAnimationFrame(sendInitialSize);
+          }
+        } catch { /* ignore */ }
+      };
+      requestAnimationFrame(sendInitialSize);
     };
 
     // Forward user input to server
@@ -91,7 +105,7 @@ export function Terminal({ sessionId, isVisible }: TerminalProps) {
 
     // Handle resize
     const resizeDisposable = term.onResize(({ cols, rows }) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WebSocket.OPEN && visibleRef.current) {
         ws.send(JSON.stringify({ type: "resize", cols, rows }));
       }
     });
@@ -107,24 +121,46 @@ export function Terminal({ sessionId, isVisible }: TerminalProps) {
     };
   }, [sessionId]);
 
-  // Re-fit when visibility changes
+  // When becoming visible: fit and send resize (may be the first resize for this session)
   useEffect(() => {
-    if (isVisible && fitRef.current) {
-      requestAnimationFrame(() => {
-        try { fitRef.current?.fit(); } catch { /* ignore */ }
-      });
-    }
+    if (!isVisible) return;
+    const fit = fitRef.current;
+    const term = xtermRef.current;
+    const ws = wsRef.current;
+    if (!fit || !term) return;
+
+    let attempts = 0;
+    const fitAndResize = () => {
+      try {
+        fit.fit();
+        if (ws && ws.readyState === WebSocket.OPEN && (term.cols >= 20 || attempts >= 10)) {
+          ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+          initialResizeSentRef.current = true;
+        } else if (term.cols < 20 && attempts < 10) {
+          attempts++;
+          requestAnimationFrame(fitAndResize);
+        }
+      } catch { /* ignore */ }
+    };
+    requestAnimationFrame(fitAndResize);
   }, [isVisible]);
 
-  // Expose a fit method via a ResizeObserver on the container
+  // Re-fit on container resize
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const observer = new ResizeObserver(() => {
-      if (fitRef.current) {
-        try { fitRef.current.fit(); } catch { /* ignore */ }
-      }
+      const fit = fitRef.current;
+      const term = xtermRef.current;
+      const ws = wsRef.current;
+      if (!fit || !term || !visibleRef.current) return;
+      try {
+        fit.fit();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+        }
+      } catch { /* ignore */ }
     });
     observer.observe(el);
     return () => observer.disconnect();

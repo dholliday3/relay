@@ -100,41 +100,49 @@ async function resolveTicketsDir(givenPath: string): Promise<string> {
   return withTickets;
 }
 
-/** Scaffold a new .tickets/ directory */
+/** Scaffold a new .tickets/ and .plans/ directory */
 async function initTicketbook(baseDir: string): Promise<string> {
   const ticketsDir = join(baseDir, ".tickets");
-  const archiveDir = join(ticketsDir, ".archive");
+  const ticketsArchiveDir = join(ticketsDir, ".archive");
+  const plansDir = join(baseDir, ".plans");
+  const plansArchiveDir = join(plansDir, ".archive");
 
-  await mkdir(archiveDir, { recursive: true });
+  await mkdir(ticketsArchiveDir, { recursive: true });
+  await mkdir(plansArchiveDir, { recursive: true });
 
   // Create .config.yaml with defaults (skip if exists)
   const configPath = join(ticketsDir, ".config.yaml");
   try {
     await stat(configPath);
   } catch {
-    await writeFile(configPath, "prefix: TKT\ndeleteMode: archive\n", "utf-8");
+    await writeFile(configPath, "prefix: TKT\nplanPrefix: PLAN\ndeleteMode: archive\n", "utf-8");
   }
 
-  // Create .counter initialized to 0 (first ticket will be #1)
-  const counterPath = join(ticketsDir, ".counter");
-  try {
-    await stat(counterPath);
-  } catch {
-    await writeFile(counterPath, "0", "utf-8");
-  }
-
-  // Add .tickets/.archive/ to .gitignore
-  const gitignorePath = join(baseDir, ".gitignore");
-  const archivePattern = ".tickets/.archive/";
-  try {
-    const existing = await readFile(gitignorePath, "utf-8");
-    if (!existing.includes(archivePattern)) {
-      const sep = existing.endsWith("\n") ? "" : "\n";
-      await appendFile(gitignorePath, `${sep}${archivePattern}\n`);
+  // Create .counter files initialized to 0
+  for (const dir of [ticketsDir, plansDir]) {
+    const counterPath = join(dir, ".counter");
+    try {
+      await stat(counterPath);
+    } catch {
+      await writeFile(counterPath, "0", "utf-8");
     }
+  }
+
+  // Add archive dirs to .gitignore
+  const gitignorePath = join(baseDir, ".gitignore");
+  const archivePatterns = [".tickets/.archive/", ".plans/.archive/"];
+  try {
+    let existing = await readFile(gitignorePath, "utf-8");
+    for (const pattern of archivePatterns) {
+      if (!existing.includes(pattern)) {
+        const sep = existing.endsWith("\n") ? "" : "\n";
+        existing += `${sep}${pattern}\n`;
+      }
+    }
+    await writeFile(gitignorePath, existing, "utf-8");
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      await writeFile(gitignorePath, `${archivePattern}\n`, "utf-8");
+      await writeFile(gitignorePath, archivePatterns.join("\n") + "\n", "utf-8");
     } else {
       throw err;
     }
@@ -178,8 +186,9 @@ async function main(): Promise<void> {
   // --- MCP mode ---
   if (args.mcp) {
     const { startMcpServer } = await import("../packages/server/src/mcp.ts");
-    console.error(`Ticketbook MCP server (stdio) — tickets: ${ticketsDir}`);
-    await startMcpServer(ticketsDir);
+    const mcpPlansDir = join(dirname(ticketsDir), ".plans");
+    console.error(`Ticketbook MCP server (stdio) — tickets: ${ticketsDir}, plans: ${mcpPlansDir}`);
+    await startMcpServer(ticketsDir, mcpPlansDir);
     return;
   }
 
@@ -190,14 +199,19 @@ async function main(): Promise<void> {
     ? undefined
     : resolve(join(import.meta.dir, "../packages/ui/dist"));
 
+  // Derive plans dir from tickets dir (sibling .plans/ directory)
+  const plansDir = join(dirname(ticketsDir), ".plans");
+
   const handle = startServer({
     ticketsDir,
+    plansDir,
     port: args.port ?? 0,
     staticDir: uiDistDir,
   });
 
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
   console.log(`Tickets directory: ${ticketsDir}`);
+  console.log(`Plans directory: ${plansDir}`);
   if (!args.noUi && uiDistDir) {
     console.log(`UI: http://localhost:${handle.port}`);
   }

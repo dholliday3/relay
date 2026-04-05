@@ -10,6 +10,7 @@ export interface TicketChangeEvent {
   changeType: ChangeType;
   filename: string;
   timestamp: string;
+  source?: "ticket" | "plan";
 }
 
 type EventCallback = (event: TicketChangeEvent) => void;

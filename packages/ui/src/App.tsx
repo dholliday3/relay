@@ -1,14 +1,18 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { fetchTickets, subscribeSSE, createTicket, deleteTicket, fetchConfig, patchConfig, fetchMeta, reorderTicket, patchTicket } from "./api";
+import { fetchTickets, subscribeSSE, createTicket, deleteTicket, fetchConfig, patchConfig, fetchMeta, reorderTicket, patchTicket, patchPlan, fetchPlans, createPlan, deletePlan as apiDeletePlan, fetchPlanMeta } from "./api";
 import { TicketList } from "./components/TicketList";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { PlanKanbanBoard } from "./components/PlanKanbanBoard";
 import { TicketDetail } from "./components/TicketDetail";
+import { PlanList } from "./components/PlanList";
+import { PlanDetail } from "./components/PlanDetail";
 import { Dashboard } from "./components/Dashboard";
 import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./components/MetaFields";
 import { TerminalPane } from "./components/TerminalPane";
-import type { Ticket, TicketbookConfig, Status, Priority, Meta, CreateTicketInput, DebriefStyle } from "./types";
+import type { Ticket, TicketbookConfig, Status, Priority, Meta, CreateTicketInput, DebriefStyle, Plan, PlanStatus, CreatePlanInput, PlanMeta } from "./types";
 
 type ViewMode = "home" | "list" | "board";
+type Space = "tickets" | "plans";
 
 type Filters = {
   status: Status[];
@@ -19,23 +23,52 @@ type Filters = {
 
 import "./App.css";
 
+function readUrlParams(): {
+  space: Space;
+  view: ViewMode;
+  search: string;
+  filters: Filters;
+  planFilters: { status: PlanStatus[]; project: string[] };
+} {
+  const p = new URLSearchParams(window.location.search);
+  const rawSpace = p.get("space");
+  const rawView = p.get("view");
+  return {
+    space: rawSpace === "plans" ? "plans" : "tickets",
+    view: rawView === "board" ? "board" : rawView === "home" ? "home" : "list",
+    search: p.get("q") ?? "",
+    filters: {
+      status: p.getAll("status") as Status[],
+      project: p.getAll("project"),
+      epic: p.getAll("epic"),
+      sprint: p.getAll("sprint"),
+    },
+    planFilters: {
+      status: p.getAll("status") as PlanStatus[],
+      project: p.getAll("project"),
+    },
+  };
+}
+
 export function App() {
+  const initUrl = useMemo(() => readUrlParams(), []);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [createDefaultStatus, setCreateDefaultStatus] = useState<Status>("open");
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(initUrl.search);
+  const [searchQuery, setSearchQuery] = useState(initUrl.search);
   const [config, setConfig] = useState<TicketbookConfig>({ prefix: "TKT", deleteMode: "archive", debriefStyle: "very-concise" });
   const [meta, setMeta] = useState<Meta>({ projects: [], epics: [], sprints: [], tags: [] });
-  const [filters, setFilters] = useState<Filters>({ status: [], project: [], epic: [], sprint: [] });
+  const [filters, setFilters] = useState<Filters>(initUrl.filters);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const stored = localStorage.getItem("ticketbook-view-mode");
-    if (stored === "board" || stored === "home") return stored;
-    return "list";
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(initUrl.view);
+  const [space, setSpace] = useState<Space>(initUrl.space);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planMeta, setPlanMeta] = useState<PlanMeta>({ projects: [], tags: [] });
+  const [planFilters, setPlanFilters] = useState<{ status: PlanStatus[]; project: string[] }>(initUrl.planFilters);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [terminalOpen, setTerminalOpen] = useState(() => localStorage.getItem("ticketbook-terminal-open") === "true");
   const [terminalWidth, setTerminalWidth] = useState(() => parseInt(localStorage.getItem("ticketbook-terminal-width") || "400", 10));
@@ -62,20 +95,36 @@ export function App() {
     }
   }, []);
 
+  const loadPlans = useCallback(async () => {
+    try {
+      const data = await fetchPlans();
+      setPlans(data);
+    } catch (err) {
+      console.error("Failed to load plans:", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadTickets();
+    loadPlans();
     fetchConfig().then(setConfig).catch(console.error);
     fetchMeta().then(setMeta).catch(console.error);
-  }, [loadTickets]);
+    fetchPlanMeta().then(setPlanMeta).catch(console.error);
+  }, [loadTickets, loadPlans]);
 
-  // SSE: refresh ticket list and meta on any change event
+  // SSE: refresh on any change event
   useEffect(() => {
-    const unsub = subscribeSSE(() => {
-      loadTickets();
-      fetchMeta().then(setMeta).catch(console.error);
+    const unsub = subscribeSSE((event) => {
+      if (event.source === "plan") {
+        loadPlans();
+        fetchPlanMeta().then(setPlanMeta).catch(console.error);
+      } else {
+        loadTickets();
+        fetchMeta().then(setMeta).catch(console.error);
+      }
     });
     return unsub;
-  }, [loadTickets]);
+  }, [loadTickets, loadPlans]);
 
   // Debounced search (200ms)
   useEffect(() => {
@@ -87,6 +136,32 @@ export function App() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, [searchInput]);
+
+  // Sync state to URL params
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (space !== "tickets") p.set("space", space);
+    if (viewMode !== "list") p.set("view", viewMode);
+    if (searchQuery) p.set("q", searchQuery);
+
+    const activeFilters = space === "tickets" ? filters : null;
+    const activePlanFilts = space === "plans" ? planFilters : null;
+
+    if (activeFilters) {
+      for (const s of activeFilters.status) p.append("status", s);
+      for (const v of activeFilters.project) p.append("project", v);
+      for (const v of activeFilters.epic) p.append("epic", v);
+      for (const v of activeFilters.sprint) p.append("sprint", v);
+    }
+    if (activePlanFilts) {
+      for (const s of activePlanFilts.status) p.append("status", s);
+      for (const v of activePlanFilts.project) p.append("project", v);
+    }
+
+    const qs = p.toString();
+    const url = qs ? `?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, [space, viewMode, searchQuery, filters, planFilters]);
 
   // Client-side filtering: compose search + filter chips
   const filteredTickets = useMemo(() => {
@@ -107,6 +182,20 @@ export function App() {
     });
   }, [tickets, searchQuery, filters]);
 
+  const filteredPlans = useMemo(() => {
+    return plans.filter((p) => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (!p.title.toLowerCase().includes(q) && !p.body.toLowerCase().includes(q)) {
+          return false;
+        }
+      }
+      if (planFilters.status.length > 0 && !planFilters.status.includes(p.status)) return false;
+      if (planFilters.project.length > 0 && (!p.project || !planFilters.project.includes(p.project))) return false;
+      return true;
+    });
+  }, [plans, searchQuery, planFilters]);
+
   const toggleFilter = useCallback((key: keyof Filters, value: string) => {
     setFilters((prev) => {
       const current = prev[key] as string[];
@@ -122,6 +211,21 @@ export function App() {
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
     localStorage.setItem("ticketbook-view-mode", mode);
+  }, []);
+
+  const handleSpaceChange = useCallback((s: Space) => {
+    setSpace(s);
+    localStorage.setItem("ticketbook-space", s);
+  }, []);
+
+  const togglePlanFilter = useCallback((key: "status" | "project", value: string) => {
+    setPlanFilters((prev) => {
+      const current = prev[key] as string[];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, [key]: next };
+    });
   }, []);
 
   // Flat ordered ticket list for keyboard navigation
@@ -205,12 +309,16 @@ export function App() {
       // Remaining shortcuts require no editable element to be focused
       if (isEditing()) return;
 
-      // "c": create new ticket (quick shortcut, like Linear)
+      // "c": create new item (quick shortcut, like Linear)
       if (e.key === "c" && !meta && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        setCreateDefaultStatus("open");
-        setIsCreating(true);
-        setActiveTicketId(null);
+        if (space === "plans") {
+          handleNewPlan();
+        } else {
+          setCreateDefaultStatus("open");
+          setIsCreating(true);
+          setActiveTicketId(null);
+        }
         return;
       }
 
@@ -275,18 +383,22 @@ export function App() {
     if (isMobile) setMobileShowDetail(true);
   };
 
-  const handleCloseTab = useCallback((ticketId: string) => {
+  const handleCloseTab = useCallback((tabId: string) => {
     setOpenTabs((tabs) => {
-      const newTabs = tabs.filter((id) => id !== ticketId);
-      if (activeTicketId === ticketId) {
-        // Switch to adjacent tab or deselect
-        const idx = tabs.indexOf(ticketId);
+      const newTabs = tabs.filter((id) => id !== tabId);
+      if (activeTicketId === tabId) {
+        const idx = tabs.indexOf(tabId);
         const next = newTabs[Math.min(idx, newTabs.length - 1)] ?? null;
         setActiveTicketId(next);
       }
+      if (activePlanId === tabId) {
+        const idx = tabs.indexOf(tabId);
+        const next = newTabs[Math.min(idx, newTabs.length - 1)] ?? null;
+        setActivePlanId(next);
+      }
       return newTabs;
     });
-  }, [activeTicketId]);
+  }, [activeTicketId, activePlanId]);
 
   const handleNewTicket = () => {
     setCreateDefaultStatus("open");
@@ -323,13 +435,23 @@ export function App() {
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
+    const isPlan = plans.some((p) => p.id === confirmDelete);
     try {
-      await deleteTicket(confirmDelete);
-      setConfirmDelete(null);
-      setActiveTicketId(null);
-      await loadTickets();
+      if (isPlan) {
+        await apiDeletePlan(confirmDelete);
+        setConfirmDelete(null);
+        setActivePlanId(null);
+        setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
+        await loadPlans();
+      } else {
+        await deleteTicket(confirmDelete);
+        setConfirmDelete(null);
+        setActiveTicketId(null);
+        setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
+        await loadTickets();
+      }
     } catch (err) {
-      console.error("Failed to delete ticket:", err);
+      console.error("Failed to delete:", err);
     }
   };
 
@@ -427,6 +549,58 @@ export function App() {
     [tickets, loadTickets],
   );
 
+  const handleSelectPlan = (plan: Plan) => {
+    setIsCreating(false);
+    setActivePlanId(plan.id);
+    setOpenTabs((tabs) => tabs.includes(plan.id) ? tabs : [...tabs, plan.id]);
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+  const handleNewPlan = () => {
+    setIsCreating(true);
+    setActivePlanId(null);
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+  const handleCreatePlan = async (input: CreatePlanInput) => {
+    try {
+      const plan = await createPlan(input);
+      setIsCreating(false);
+      await loadPlans();
+      setActivePlanId(plan.id);
+      setOpenTabs((tabs) => tabs.includes(plan.id) ? tabs : [...tabs, plan.id]);
+    } catch (err) {
+      console.error("Failed to create plan:", err);
+    }
+  };
+
+  const handleDeletePlanRequest = (id: string) => {
+    setConfirmDelete(id);
+  };
+
+  const handlePlanTicketClick = (ticketId: string) => {
+    handleSpaceChange("tickets");
+    setActiveTicketId(ticketId);
+    setOpenTabs((tabs) => tabs.includes(ticketId) ? tabs : [...tabs, ticketId]);
+  };
+
+  const handlePlanKanbanMove = useCallback(
+    async (planId: string, newStatus: PlanStatus) => {
+      const prevPlans = plans;
+      setPlans((current) =>
+        current.map((p) => (p.id === planId ? { ...p, status: newStatus } : p)),
+      );
+      try {
+        await patchPlan(planId, { status: newStatus });
+        await loadPlans();
+      } catch (err) {
+        console.error("Failed to move plan:", err);
+        setPlans(prevPlans);
+      }
+    },
+    [plans, loadPlans],
+  );
+
   const handleMobileBack = () => {
     setMobileShowDetail(false);
     setActiveTicketId(null);
@@ -463,9 +637,12 @@ export function App() {
   }, [terminalWidth]);
 
   const activeTicket = tickets.find((t) => t.id === activeTicketId) ?? null;
-  const deleteTicketTitle = confirmDelete
-    ? tickets.find((t) => t.id === confirmDelete)?.title ?? confirmDelete
+  const deleteItemTitle = confirmDelete
+    ? tickets.find((t) => t.id === confirmDelete)?.title
+      ?? plans.find((p) => p.id === confirmDelete)?.title
+      ?? confirmDelete
     : "";
+  const deleteItemType = confirmDelete && plans.some((p) => p.id === confirmDelete) ? "plan" : "ticket";
 
   return (
     <div className={`app-layout ${viewMode === "board" ? "app-layout-board" : ""}`}>
@@ -481,6 +658,26 @@ export function App() {
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
         </button>
+        <div className="view-segmented-control" role="radiogroup" aria-label="Space">
+          <button
+            className={`segmented-btn ${space === "tickets" ? "segmented-btn-active" : ""}`}
+            onClick={() => handleSpaceChange("tickets")}
+            role="radio"
+            aria-checked={space === "tickets"}
+            aria-label="Tickets"
+          >
+            Tickets
+          </button>
+          <button
+            className={`segmented-btn ${space === "plans" ? "segmented-btn-active" : ""}`}
+            onClick={() => handleSpaceChange("plans")}
+            role="radio"
+            aria-checked={space === "plans"}
+            aria-label="Plans"
+          >
+            Plans
+          </button>
+        </div>
         <div className="view-segmented-control" role="radiogroup" aria-label="View mode">
           <button
             className={`segmented-btn ${viewMode === "list" ? "segmented-btn-active" : ""}`}
@@ -511,37 +708,56 @@ export function App() {
           </button>
         </div>
         <div className="filter-chips">
-          <FilterChip
-            label="Status"
-            options={["draft", "backlog", "open", "in-progress", "done", "cancelled"]}
-            selected={filters.status}
-            onToggle={(v) => toggleFilter("status", v)}
-          />
-          <FilterChip
-            label="Project"
-            options={meta.projects}
-            selected={filters.project}
-            onToggle={(v) => toggleFilter("project", v)}
-          />
-          <FilterChip
-            label="Epic"
-            options={meta.epics}
-            selected={filters.epic}
-            onToggle={(v) => toggleFilter("epic", v)}
-          />
-          <FilterChip
-            label="Sprint"
-            options={meta.sprints}
-            selected={filters.sprint}
-            onToggle={(v) => toggleFilter("sprint", v)}
-          />
+          {space === "tickets" ? (
+            <>
+              <FilterChip
+                label="Status"
+                options={["draft", "backlog", "open", "in-progress", "done", "cancelled"]}
+                selected={filters.status}
+                onToggle={(v) => toggleFilter("status", v)}
+              />
+              <FilterChip
+                label="Project"
+                options={meta.projects}
+                selected={filters.project}
+                onToggle={(v) => toggleFilter("project", v)}
+              />
+              <FilterChip
+                label="Epic"
+                options={meta.epics}
+                selected={filters.epic}
+                onToggle={(v) => toggleFilter("epic", v)}
+              />
+              <FilterChip
+                label="Sprint"
+                options={meta.sprints}
+                selected={filters.sprint}
+                onToggle={(v) => toggleFilter("sprint", v)}
+              />
+            </>
+          ) : (
+            <>
+              <FilterChip
+                label="Status"
+                options={["draft", "active", "completed", "archived"]}
+                selected={planFilters.status}
+                onToggle={(v) => togglePlanFilter("status", v)}
+              />
+              <FilterChip
+                label="Project"
+                options={planMeta.projects}
+                selected={planFilters.project}
+                onToggle={(v) => togglePlanFilter("project", v)}
+              />
+            </>
+          )}
         </div>
         <div className="header-spacer" />
         <button
           className="new-ticket-btn"
-          onClick={handleNewTicket}
-          title="New ticket (C)"
-          aria-label="New ticket"
+          onClick={space === "tickets" ? handleNewTicket : handleNewPlan}
+          title={space === "tickets" ? "New ticket (C)" : "New plan (C)"}
+          aria-label={space === "tickets" ? "New ticket" : "New plan"}
         >
           +
         </button>
@@ -558,9 +774,11 @@ export function App() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
-          {(searchQuery || hasActiveFilters) && (
+          {(searchQuery || hasActiveFilters || planFilters.status.length > 0 || planFilters.project.length > 0) && (
             <span className="search-result-count">
-              {filteredTickets.length} result{filteredTickets.length !== 1 ? "s" : ""}
+              {space === "tickets"
+                ? `${filteredTickets.length} result${filteredTickets.length !== 1 ? "s" : ""}`
+                : `${filteredPlans.length} result${filteredPlans.length !== 1 ? "s" : ""}`}
             </span>
           )}
           {searchInput && (
@@ -590,44 +808,77 @@ export function App() {
       {viewMode === "home" ? (
         <Dashboard
           tickets={tickets}
+          plans={plans}
           meta={meta}
           onNavigate={(mode, filterKey, filterValue) => {
             if (filterKey && filterValue) {
               setFilters({ status: [], project: [], epic: [], sprint: [], [filterKey]: [filterValue] });
             }
+            handleSpaceChange("tickets");
             handleViewModeChange(mode);
+          }}
+          onNavigatePlans={() => {
+            handleSpaceChange("plans");
+            handleViewModeChange("list");
           }}
         />
       ) : viewMode === "list" ? (
         <div className="list-content">
           {(!isMobile || !mobileShowDetail) && (
             <aside className="list-panel">
-              {tickets.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-content">
-                    <p className="empty-state-title">Welcome to Ticketbook</p>
-                    <p className="empty-state-subtitle">Create your first ticket to get started.</p>
-                    <div className="empty-state-hints">
-                      <span className="hint-row"><kbd>C</kbd> New ticket</span>
+              {space === "tickets" ? (
+                tickets.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-content">
+                      <p className="empty-state-title">Welcome to Ticketbook</p>
+                      <p className="empty-state-subtitle">Create your first ticket to get started.</p>
+                      <div className="empty-state-hints">
+                        <span className="hint-row"><kbd>C</kbd> New ticket</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : filteredTickets.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-content">
-                    <p className="empty-state-title">No tickets match</p>
-                    <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
+                ) : filteredTickets.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-content">
+                      <p className="empty-state-title">No tickets match</p>
+                      <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <TicketList
+                    tickets={filteredTickets}
+                    activeTicketId={activeTicketId}
+                    onSelect={handleSelect}
+                    onReorder={handleReorder}
+                    onMove={handleKanbanMove}
+                    onCreateInStatus={handleCreateInColumn}
+                  />
+                )
               ) : (
-                <TicketList
-                  tickets={filteredTickets}
-                  activeTicketId={activeTicketId}
-                  onSelect={handleSelect}
-                  onReorder={handleReorder}
-                  onMove={handleKanbanMove}
-                  onCreateInStatus={handleCreateInColumn}
-                />
+                plans.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-content">
+                      <p className="empty-state-title">No plans yet</p>
+                      <p className="empty-state-subtitle">Create your first plan to start brainstorming.</p>
+                      <div className="empty-state-hints">
+                        <span className="hint-row"><kbd>C</kbd> New plan</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : filteredPlans.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-content">
+                      <p className="empty-state-title">No plans match</p>
+                      <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <PlanList
+                    plans={filteredPlans}
+                    activePlanId={activePlanId}
+                    onSelect={handleSelectPlan}
+                  />
+                )
               )}
             </aside>
           )}
@@ -644,17 +895,31 @@ export function App() {
               {openTabs.length > 0 && !isMobile && (
                 <div className="tab-bar">
                   {openTabs.map((tabId) => {
-                    const t = tickets.find((tk) => tk.id === tabId);
+                    const isTicketTab = tickets.some((tk) => tk.id === tabId);
+                    const isPlanTab = plans.some((p) => p.id === tabId);
+                    const tabTitle = tickets.find((tk) => tk.id === tabId)?.title
+                      ?? plans.find((p) => p.id === tabId)?.title
+                      ?? tabId;
+                    const isActive = (space === "tickets" && tabId === activeTicketId)
+                      || (space === "plans" && tabId === activePlanId);
                     return (
                       <div
                         key={tabId}
-                        className={`tab-item ${tabId === activeTicketId ? "tab-active" : ""}`}
+                        className={`tab-item ${isActive ? "tab-active" : ""} ${isPlanTab && !isTicketTab ? "tab-plan" : ""}`}
                       >
                         <button
                           className="tab-label"
-                          onClick={() => setActiveTicketId(tabId)}
+                          onClick={() => {
+                            if (isPlanTab && !isTicketTab) {
+                              handleSpaceChange("plans");
+                              setActivePlanId(tabId);
+                            } else {
+                              handleSpaceChange("tickets");
+                              setActiveTicketId(tabId);
+                            }
+                          }}
                         >
-                          {t?.title ?? tabId}
+                          {tabTitle}
                         </button>
                         <button
                           className="tab-close"
@@ -668,21 +933,37 @@ export function App() {
                   })}
                 </div>
               )}
-              {activeTicket ? (
+              {space === "tickets" && activeTicket ? (
                 <TicketDetail
                   ticket={activeTicket}
                   meta={meta}
                   onUpdated={loadTickets}
                   onDelete={handleDeleteRequest}
                 />
+              ) : space === "plans" && activePlanId ? (
+                (() => {
+                  const activePlan = plans.find((p) => p.id === activePlanId) ?? null;
+                  return activePlan ? (
+                    <PlanDetail
+                      plan={activePlan}
+                      planMeta={planMeta}
+                      onUpdated={loadPlans}
+                      onDelete={handleDeletePlanRequest}
+                      onTicketClick={handlePlanTicketClick}
+                      onTicketsCreated={loadTickets}
+                    />
+                  ) : null;
+                })()
               ) : (
                 <div className="empty-state">
                   <div className="empty-state-content">
-                    <p className="empty-state-title">No ticket selected</p>
+                    <p className="empty-state-title">
+                      {space === "tickets" ? "No ticket selected" : "No plan selected"}
+                    </p>
                     <div className="empty-state-hints">
-                      <span className="hint-row"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> Navigate tickets</span>
-                      <span className="hint-row"><kbd>Enter</kbd> Open ticket</span>
-                      <span className="hint-row"><kbd>C</kbd> New ticket</span>
+                      <span className="hint-row"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> Navigate</span>
+                      <span className="hint-row"><kbd>Enter</kbd> Open</span>
+                      <span className="hint-row"><kbd>C</kbd> {space === "tickets" ? "New ticket" : "New plan"}</span>
                       <span className="hint-row"><kbd>Esc</kbd> Deselect</span>
                     </div>
                   </div>
@@ -690,6 +971,63 @@ export function App() {
               )}
             </main>
           )}
+        </div>
+      ) : space === "plans" ? (
+        <div className="board-content">
+          {plans.length === 0 ? (
+            <div className="empty-state" style={{ flex: 1 }}>
+              <div className="empty-state-content">
+                <p className="empty-state-title">No plans yet</p>
+                <p className="empty-state-subtitle">Create your first plan to start brainstorming.</p>
+                <div className="empty-state-hints">
+                  <span className="hint-row"><kbd>C</kbd> New plan</span>
+                </div>
+              </div>
+            </div>
+          ) : filteredPlans.length === 0 ? (
+            <div className="empty-state" style={{ flex: 1 }}>
+              <div className="empty-state-content">
+                <p className="empty-state-title">No plans match</p>
+                <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
+              </div>
+            </div>
+          ) : (
+            <PlanKanbanBoard
+              plans={filteredPlans}
+              activePlanId={activePlanId}
+              onSelect={handleSelectPlan}
+              onMove={handlePlanKanbanMove}
+            />
+          )}
+          {activePlanId && (() => {
+            const activePlan = plans.find((p) => p.id === activePlanId) ?? null;
+            if (!activePlan) return null;
+            return (
+              <>
+                <div
+                  className="board-modal-backdrop"
+                  onClick={() => setActivePlanId(null)}
+                />
+                <div className="board-modal">
+                  <button
+                    className="board-modal-close"
+                    onClick={() => setActivePlanId(null)}
+                    aria-label="Close"
+                  >
+                    &times;
+                  </button>
+                  <PlanDetail
+                    plan={activePlan}
+                    planMeta={planMeta}
+                    onUpdated={loadPlans}
+                    onDelete={handleDeletePlanRequest}
+                    onTicketClick={handlePlanTicketClick}
+                    onTicketsCreated={loadTickets}
+                  />
+                </div>
+              </>
+            );
+          })()}
         </div>
       ) : (
         <div className="board-content">
@@ -777,26 +1115,52 @@ export function App() {
 
       {/* Status bar */}
       <footer className="status-bar">
-        <span className="status-bar-item">
-          <span className="status-bar-dot status-bar-dot-total" />
-          {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
-        </span>
-        <span className="status-bar-item">
-          <span className="status-bar-dot status-bar-dot-open" />
-          {tickets.filter((t) => t.status === "open").length} open
-        </span>
-        <span className="status-bar-item">
-          <span className="status-bar-dot status-bar-dot-in-progress" />
-          {tickets.filter((t) => t.status === "in-progress").length} in progress
-        </span>
+        {space === "tickets" ? (
+          <>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-total" />
+              {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}
+            </span>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-open" />
+              {tickets.filter((t) => t.status === "open").length} open
+            </span>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-in-progress" />
+              {tickets.filter((t) => t.status === "in-progress").length} in progress
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-total" />
+              {plans.length} plan{plans.length !== 1 ? "s" : ""}
+            </span>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-open" />
+              {plans.filter((p) => p.status === "active").length} active
+            </span>
+            <span className="status-bar-item">
+              <span className="status-bar-dot status-bar-dot-in-progress" />
+              {plans.filter((p) => p.status === "draft").length} draft
+            </span>
+          </>
+        )}
       </footer>
 
-      {/* Create ticket modal */}
-      {isCreating && (
+      {/* Create modal */}
+      {isCreating && space === "tickets" && (
         <CreateTicketModal
           meta={meta}
           defaultStatus={createDefaultStatus}
           onCreate={handleCreateTicket}
+          onCancel={handleCancelCreate}
+        />
+      )}
+      {isCreating && space === "plans" && (
+        <CreatePlanModal
+          planMeta={planMeta}
+          onCreate={handleCreatePlan}
           onCancel={handleCancelCreate}
         />
       )}
@@ -819,12 +1183,12 @@ export function App() {
         <div className="dialog-overlay" onClick={handleCancelDelete}>
           <div className="dialog" onClick={(e) => e.stopPropagation()}>
             <p className="dialog-title">
-              {config.deleteMode === "archive" ? "Archive" : "Delete"} ticket?
+              {config.deleteMode === "archive" ? "Archive" : "Delete"} {deleteItemType}?
             </p>
             <p className="dialog-message">
               {config.deleteMode === "archive"
-                ? `"${deleteTicketTitle}" will be moved to the archive and can be restored later.`
-                : `"${deleteTicketTitle}" will be permanently deleted. This cannot be undone.`}
+                ? `"${deleteItemTitle}" will be moved to the archive and can be restored later.`
+                : `"${deleteItemTitle}" will be permanently deleted. This cannot be undone.`}
             </p>
             <div className="dialog-actions">
               <button className="dialog-btn dialog-btn-cancel" onClick={handleCancelDelete}>
@@ -1043,6 +1407,142 @@ function CreateTicketModal({
               { label: "Cycle", content: <ComboboxChip value={sprint} options={meta.sprints} placeholder="None" onChange={setSprint} /> },
             ]}
           />
+        </div>
+
+        <div className="dialog-actions">
+          <span className="dialog-hint">&#8984;&#x23CE; Create &middot; Esc save as draft</span>
+          <button className="dialog-btn dialog-btn-cancel" onClick={handleEscape}>
+            Cancel
+          </button>
+          <button
+            className="dialog-btn dialog-btn-primary"
+            onClick={handleSubmit}
+            disabled={!title.trim()}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreatePlanModal({
+  planMeta,
+  onCreate,
+  onCancel,
+}: {
+  planMeta: PlanMeta;
+  onCreate: (input: CreatePlanInput) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [status, setStatus] = useState<PlanStatus>("draft");
+  const [project, setProject] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [body, setBody] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    titleInputRef.current?.focus();
+  }, []);
+
+  const buildInput = (): CreatePlanInput => {
+    const trimmed = title.trim();
+    const input: CreatePlanInput = { title: trimmed || "Untitled", status };
+    if (project) input.project = project;
+    if (tags.length > 0) input.tags = tags;
+    if (body.trim()) input.body = body.trim();
+    return input;
+  };
+
+  const handleSubmit = () => {
+    if (!title.trim()) return;
+    onCreate(buildInput());
+  };
+
+  const handleEscape = () => {
+    if (title.trim() || body.trim()) {
+      onCreate(buildInput());
+    } else {
+      onCancel();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
+    } else if (e.key === "Escape") {
+      handleEscape();
+    }
+  };
+
+  const statusOptions = [
+    { value: "draft", label: "Draft" }, { value: "active", label: "Active" },
+    { value: "completed", label: "Completed" }, { value: "archived", label: "Archived" },
+  ];
+
+  return (
+    <div className="dialog-overlay" onClick={handleEscape} onKeyDown={handleKeyDown}>
+      <div
+        className={`dialog create-ticket-dialog ${expanded ? "create-ticket-expanded" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="create-ticket-header">
+          <p className="dialog-title">New plan</p>
+          <button
+            className="create-ticket-expand-btn"
+            onClick={() => setExpanded(!expanded)}
+            title={expanded ? "Collapse" : "Expand"}
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {expanded ? (
+                <>
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </>
+              ) : (
+                <>
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
+
+        <input
+          ref={titleInputRef}
+          className="create-ticket-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+            handleKeyDown(e);
+          }}
+          placeholder="Plan title"
+        />
+
+        <textarea
+          className="create-ticket-body"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Add overview, goals, tasks to cut..."
+          rows={expanded ? 12 : 5}
+        />
+
+        <div className="create-ticket-meta">
+          <SelectChip value={status} options={statusOptions} onChange={(v) => setStatus(v as PlanStatus)} />
+          <MultiComboboxChip values={tags} options={planMeta.tags} placeholder="Tags" onChange={setTags} />
+          <ComboboxChip value={project} options={planMeta.projects} placeholder="Project" onChange={setProject} />
         </div>
 
         <div className="dialog-actions">

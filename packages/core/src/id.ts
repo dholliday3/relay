@@ -49,18 +49,25 @@ export function formatFilename(id: string, title: string): string {
   return slug ? `${id}-${slug}.md` : `${id}.md`;
 }
 
-export async function nextId(
+export async function nextIdForDir(
   dir: string,
+  prefix: string,
 ): Promise<{ id: string; number: number; filename: (title: string) => string }> {
-  const config = await getConfig(dir);
   const current = await readCounter(dir);
   const next = current + 1;
   await writeCounter(dir, next);
 
-  const id = formatId(config.prefix, next);
+  const id = formatId(prefix, next);
   return {
     id,
     number: next,
     filename: (title: string) => formatFilename(id, title),
   };
+}
+
+export async function nextId(
+  dir: string,
+): Promise<{ id: string; number: number; filename: (title: string) => string }> {
+  const config = await getConfig(dir);
+  return nextIdForDir(dir, config.prefix);
 }

@@ -19,6 +19,18 @@ import {
   TicketPatchSchema,
   TicketFiltersSchema,
   TicketbookConfigSchema,
+  listPlans,
+  getPlan,
+  getPlanProjects,
+  getPlanTags,
+  createPlan,
+  updatePlan,
+  deletePlan,
+  restorePlan,
+  cutTicketsFromPlan,
+  CreatePlanInputSchema,
+  PlanPatchSchema,
+  PlanFiltersSchema,
 } from "@ticketbook/core";
 import type { TicketChangeEvent } from "./watcher.js";
 
@@ -96,7 +108,7 @@ function buildRouteRegex(path: string): { regex: RegExp; paramNames: string[] } 
   return { regex: new RegExp(`^${pattern}$`), paramNames };
 }
 
-export function createRoutes(ticketsDir: string): Route[] {
+export function createRoutes(ticketsDir: string, plansDir?: string): Route[] {
   const base = "/api";
   const routes: Route[] = [];
 
@@ -264,6 +276,95 @@ export function createRoutes(ticketsDir: string): Route[] {
     const config = await updateConfig(ticketsDir, patch);
     return json(config);
   });
+
+  // --- Plan routes ---
+  if (plansDir) {
+    // GET /api/plans/meta — aggregate plan metadata (before :id to avoid matching "meta")
+    route("GET", "/plans/meta", async () => {
+      const [projects, tags] = await Promise.all([
+        getPlanProjects(plansDir),
+        getPlanTags(plansDir),
+      ]);
+      return json({ projects, tags });
+    });
+
+    // GET /api/plans — list with optional filters
+    route("GET", "/plans", async (req) => {
+      const url = new URL(req.url);
+      const rawFilters: Record<string, unknown> = {};
+
+      const status = url.searchParams.getAll("status");
+      if (status.length === 1) rawFilters.status = status[0];
+      else if (status.length > 1) rawFilters.status = status;
+
+      for (const key of ["project", "search"] as const) {
+        const val = url.searchParams.get(key);
+        if (val) rawFilters[key] = val;
+      }
+
+      const tagsParam = url.searchParams.getAll("tags");
+      if (tagsParam.length > 0) rawFilters.tags = tagsParam;
+
+      const filters = PlanFiltersSchema.parse(rawFilters);
+      const plans = await listPlans(plansDir, filters);
+      return json(plans);
+    });
+
+    // GET /api/plans/:id
+    route("GET", "/plans/:id", async (_req, params) => {
+      const plan = await getPlan(plansDir, params.id);
+      if (!plan) return errorResponse(`Plan not found: ${params.id}`, 404);
+      return json(plan);
+    });
+
+    // POST /api/plans
+    route("POST", "/plans", async (req) => {
+      const body = await readJsonBody(req);
+      const input = CreatePlanInputSchema.parse(body);
+      const plan = await createPlan(ticketsDir, plansDir, input);
+      return json(plan, 201);
+    });
+
+    // PATCH /api/plans/:id — update frontmatter fields
+    route("PATCH", "/plans/:id", async (req, params) => {
+      const body = await readJsonBody(req);
+      const patch = PlanPatchSchema.parse(body);
+      const plan = await updatePlan(plansDir, params.id, patch);
+      return json(plan);
+    });
+
+    // PATCH /api/plans/:id/body — update plan body only
+    route("PATCH", "/plans/:id/body", async (req, params) => {
+      const body = (await readJsonBody(req)) as { body?: string };
+      if (typeof body.body !== "string") {
+        return errorResponse("Missing 'body' field", 400);
+      }
+      const plan = await updatePlan(plansDir, params.id, { body: body.body });
+      return json(plan);
+    });
+
+    // DELETE /api/plans/:id
+    route("DELETE", "/plans/:id", async (_req, params) => {
+      await deletePlan(ticketsDir, plansDir, params.id);
+      return json({ ok: true });
+    });
+
+    // POST /api/plans/:id/restore
+    route("POST", "/plans/:id/restore", async (_req, params) => {
+      const plan = await restorePlan(plansDir, params.id);
+      return json(plan);
+    });
+
+    // POST /api/plans/:id/cut-tickets — create tickets from unchecked checkboxes
+    route("POST", "/plans/:id/cut-tickets", async (_req, params) => {
+      const result = await cutTicketsFromPlan(ticketsDir, plansDir, params.id);
+      return json({
+        plan: result.plan,
+        createdTickets: result.createdTickets,
+        count: result.createdTickets.length,
+      });
+    });
+  }
 
   return routes;
 }
