@@ -5,9 +5,13 @@ Because agents, not code files, have become the core primitive, the app is focus
 The goal is to build an app that has the right level of customizability and opinionated design that allows builders to maintain the flow state of building, similar to how developers have configured their code editors to maximize flow state of handwriting code. When we build, we want clean abstractions built around the fundamental primitives of being a builder that leverages agents. Humans need to evaluate, measure, and improve their agents over time, and most tools don't make that easy to do. 
 
 # Principles 
-Be extremely open-minded and self-critical. 
-Focus on moving the needle on productivity and quality, not enforcing rigid patterns. 
-Think with first principles and take foundational, cleanly abstracted approaches. Productivity tools are a construction of primitives that users get to opt-in to some, generally not all of them. 
+- Be extremely open-minded and self-critical. 
+- Focus on moving the needle on productivity and quality, not enforcing rigid patterns. 
+- Think with first principles and take foundational, cleanly abstracted approaches. Productivity tools are a construction of primitives that users get to opt-in and customize. 
+- Customizability with thoughtful defaults. 
+- Architect systems that are pluggable, extendable, and tightly contained. Refactors, new clients, and many new features are guaranteed, our system should seamlessly support this, starting with how we architect our systems. 
+- Agents are the core primitive. As they become more productive and smarter, some features will die (that's ok). 
+
 
 ## The current landscape 
 Humans are building much more, much more quickly, and are taking on broader responsibilities; agents are the core primitive. Brainstorming and ideating are increasingly important (essentially product management and design) and are often happening in claude cowork or other tools. Developers are doing a lot more thinking about system design and architecture, often from the terminal, not a very rich visual experience. They're also using the terminal instead of code editors because terminal emulator apps are the best surface for orchestrating many parralel sessions in various git worktrees and possibly different projects. The flexibility of terminals comes with a tradeoff, it's easy to get overwhelmed and lost trying to manage the various sessions. There aren't many visual distinctions of the different agents so developing a dynamic mental model of what's happening is exhausting and quality often suffers. Additionally, terminal emulators don't have all of the tools a developer would want to accomplish their workflow. Developers are planning, but claude code output isn't clean, so there are plugins like plannotator that open claude code plans in a nicely formatted web page running locally. They need to review a lot of code, so they're opening up the code in various apps or in the github PR page (again, not natively). They need to keep track of tasks so they'll use the CLI to interact with their task tracking apps, but arguably this is the part that is mort important to have a first class experience. 

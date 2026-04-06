@@ -2,9 +2,14 @@ import { resolve, join } from "node:path";
 import { stat } from "node:fs/promises";
 import { createRoutes, matchRoute, handleError, broadcastEvent } from "./api.js";
 import { createWatcher } from "./watcher.js";
-import { createPtySession, getSession, getAliveSessions, writeToPty, resizePty, detachPtySession, reattachPtySession, destroyPtySession, destroyAllSessions, setDataDir } from "./terminal.js";
+import { BunPtyHeadlessBackend, type TerminalSession } from "./terminal/index.js";
 import { listTerminalTabs, upsertTerminalTab, getNextTabNumber, deleteTerminalTab } from "./db.js";
+import { createDebug } from "./debug.js";
+import { getConfig } from "@ticketbook/core";
 import type { ServerMessage } from "@ticketbook/core";
+
+const dbgWs = createDebug("ws");
+const dbgApi = createDebug("api");
 
 export interface ServerConfig {
   ticketsDir: string;
@@ -45,11 +50,24 @@ export function startServer(config: ServerConfig): ServerHandle {
   const { ticketsDir, plansDir, port, staticDir } = config;
   const routes = createRoutes(ticketsDir, plansDir);
 
-  // Initialize terminal data dir (SQLite db lives alongside .tickets)
-  setDataDir(ticketsDir);
+  // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy)
+  const terminalBackend = new BunPtyHeadlessBackend(ticketsDir);
 
   // Track active WebSocket connections per session for graceful teardown
   const wsConnections = new Map<string, { close(code?: number, reason?: string): void }>();
+
+  // Track the per-WS listener dispose functions so close() can clean up cleanly
+  const wsDisposers = new Map<string, Array<() => void>>();
+
+  /** Read terminalScrollback from .tickets/.config.yaml; falls back to schema default (5000). */
+  async function readScrollback(): Promise<number> {
+    try {
+      const cfg = await getConfig(ticketsDir);
+      return cfg.terminalScrollback;
+    } catch {
+      return 5000;
+    }
+  }
 
   async function tryServeStatic(pathname: string): Promise<Response | null> {
     if (!staticDir) return null;
@@ -99,9 +117,9 @@ export function startServer(config: ServerConfig): ServerHandle {
       // Terminal tab management
       if (url.pathname === "/api/terminal/sessions") {
         if (req.method === "GET") {
-          // Return persisted tabs with alive status from in-memory PTY state
+          // Return persisted tabs with alive status from the backend
           const tabs = listTerminalTabs(ticketsDir);
-          const aliveSet = new Set(getAliveSessions());
+          const aliveSet = new Set(terminalBackend.list());
           const sessions = tabs.map((t) => ({ id: t.id, title: t.title, sortOrder: t.sort_order, tabNumber: t.tab_number, alive: aliveSet.has(t.id) }));
           return addCors(new Response(JSON.stringify({ sessions }), { headers: { "Content-Type": "application/json" } }), origin);
         }
@@ -113,6 +131,7 @@ export function startServer(config: ServerConfig): ServerHandle {
           const title = `Terminal ${tabNumber}`;
           const sortOrder = body.sortOrder ?? 0;
           upsertTerminalTab(ticketsDir, id, title, sortOrder, tabNumber);
+          dbgApi("tabCreate", { id, title, tabNumber, sortOrder });
           return addCors(new Response(JSON.stringify({ id, title, tabNumber, sortOrder }), { headers: { "Content-Type": "application/json" } }), origin);
         }
         if (req.method === "DELETE") {
@@ -121,12 +140,22 @@ export function startServer(config: ServerConfig): ServerHandle {
 
           // Close WebSocket first (gracefully) to prevent ECONNRESET
           const existingWs = wsConnections.get(body.id);
+          const hadWs = !!existingWs;
           if (existingWs) {
             try { existingWs.close(1000, "session destroyed"); } catch { /* already closed */ }
             wsConnections.delete(body.id);
           }
 
-          destroyPtySession(body.id);
+          dbgApi("tabDelete", { id: body.id, hadWs });
+          // Destroy the session if it exists; the backend handles DB row cleanup
+          // via its onFullyDestroyed callback. If no session exists (e.g. server
+          // restarted), still remove the DB row.
+          const session = terminalBackend.get(body.id);
+          if (session) {
+            session.destroy();
+          } else {
+            deleteTerminalTab(ticketsDir, body.id);
+          }
           return addCors(new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } }), origin);
         }
       }
@@ -173,52 +202,80 @@ export function startServer(config: ServerConfig): ServerHandle {
         const { sessionId } = ws.data;
         // Just track the connection — PTY creation is deferred until "init" handshake
         wsConnections.set(sessionId, ws);
+        dbgWs("open", { sessionId });
       },
-      message(ws, message) {
+      async message(ws, message) {
         const { sessionId, ticketsDir: cwd } = ws.data;
         try {
           const msg = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message));
 
           if (msg.type === "init" && typeof msg.cols === "number" && typeof msg.rows === "number") {
             // Handshake: client sends its actual dimensions
-            let session = getSession(sessionId);
+            let session: TerminalSession | undefined = terminalBackend.get(sessionId);
+            const mode = session?.alive ? "reattach" : "spawn";
+            dbgWs("init", { sessionId, mode, cols: msg.cols, rows: msg.rows });
 
             if (session?.alive) {
-              // Wire callbacks BEFORE reattach so any output (resize reflow,
-              // prompt redraw) reaches the client instead of being dropped
-              session.onData = (data: string) => sendMsg(ws, { type: "output", data });
-              session.onExit = () => { try { ws.close(); } catch { /* already closed */ } };
-              // Resize PTY + clear stale scrollback buffer
-              reattachPtySession(sessionId, msg.cols, msg.rows);
-              // Send Ctrl-L to the shell — it will clear and redraw the prompt.
-              // The xterm on the client is fresh (remounted on tab switch),
-              // so we don't need to clear it ourselves.
-              writeToPty(sessionId, "\x0c");
+              // Reattach flow: cancel grace timer, resize both the PTY and
+              // the headless mirror, then send the mirror's serialized state
+              // as a single replay message. No more Ctrl-L hack — the client
+              // gets exactly what the server had on screen.
+              session.reattach();
+              session.resize(msg.cols, msg.rows);
+              sendMsg(ws, { type: "replay", data: session.serialize() });
             } else {
               // New session: spawn PTY with correct dimensions
-              session = createPtySession(sessionId, resolve(cwd, ".."), msg.cols, msg.rows);
-              session.onData = (data: string) => sendMsg(ws, { type: "output", data });
-              session.onExit = () => { try { ws.close(); } catch { /* already closed */ } };
+              const scrollback = await readScrollback();
+              session = terminalBackend.create({
+                id: sessionId,
+                cwd: resolve(cwd, ".."),
+                cols: msg.cols,
+                rows: msg.rows,
+                scrollback,
+              });
             }
+
+            // Wire output + exit listeners. onData returns a dispose fn so
+            // that when this WebSocket closes we can unregister cleanly
+            // without touching other listeners on the same session.
+            const disposeData = session.onData((data: string) => sendMsg(ws, { type: "output", data }));
+            const disposeExit = session.onExit(() => { try { ws.close(); } catch { /* already closed */ } });
+
+            // Stash the disposers keyed by sessionId so the close handler finds them
+            const existing = wsDisposers.get(sessionId) ?? [];
+            existing.push(disposeData, disposeExit);
+            wsDisposers.set(sessionId, existing);
 
             sendMsg(ws, { type: "ready" });
             return;
           }
 
+          const session = terminalBackend.get(sessionId);
+          if (!session) return;
           if (msg.type === "input" && typeof msg.data === "string") {
-            writeToPty(sessionId, msg.data);
+            session.write(msg.data);
           } else if (msg.type === "resize" && typeof msg.cols === "number" && typeof msg.rows === "number") {
-            resizePty(sessionId, msg.cols, msg.rows);
+            session.resize(msg.cols, msg.rows);
           }
         } catch {
           // ignore malformed messages
         }
       },
-      close(ws) {
+      close(ws, code, reason) {
         const { sessionId } = ws.data;
+        dbgWs("close", { sessionId, code, reason });
         wsConnections.delete(sessionId);
+        // Drop this connection's listeners
+        const disposers = wsDisposers.get(sessionId);
+        if (disposers) {
+          for (const d of disposers) {
+            try { d(); } catch { /* ignore */ }
+          }
+          wsDisposers.delete(sessionId);
+        }
         // Don't destroy — start grace timer for reconnection
-        detachPtySession(sessionId);
+        const session = terminalBackend.get(sessionId);
+        session?.detach();
       },
     },
   });
@@ -231,17 +288,20 @@ export function startServer(config: ServerConfig): ServerHandle {
     broadcastEvent({ ...event, source: "plan" }),
   );
 
-  process.on("SIGINT", () => {
-    destroyAllSessions();
+  const shutdown = () => {
+    terminalBackend.destroyAll();
     ticketWatcher.close();
     planWatcher.close();
     server.stop();
     process.exit(0);
-  });
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
   return {
     port: server.port ?? port,
     close() {
+      terminalBackend.destroyAll();
       ticketWatcher.close();
       planWatcher.close();
       server.stop();

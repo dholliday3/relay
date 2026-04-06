@@ -1,0 +1,5 @@
+# Bun test runner configuration.
+# Scope `bun test` to the packages/ directory so it doesn't try to execute
+# Playwright specs under e2e/. Playwright tests are run via `bun run test:e2e`.
+[test]
+root = "packages"

@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["**/dist/", "**/node_modules/", "packages/ui/"],
+    ignores: ["**/dist/", "**/node_modules/", "packages/ui/", "e2e/"],
   },
   {
     rules: {

@@ -84,4 +84,12 @@ export const TicketbookConfigSchema = z.object({
   planPrefix: z.string().default("PLAN"),
   deleteMode: DeleteModeEnum.default("archive"),
   debriefStyle: DebriefStyleEnum.default("very-concise"),
+  /**
+   * Terminal scrollback buffer size in lines. Controls how much output
+   * history is preserved per terminal session (visible on reconnect via
+   * the server-side headless xterm + SerializeAddon replay).
+   * Applied when new sessions are created; existing sessions keep their
+   * original scrollback.
+   */
+  terminalScrollback: z.number().int().positive().default(5000),
 });

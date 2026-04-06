@@ -6,15 +6,20 @@ import { startServer, type ServerHandle } from "./index.js";
 
 describe("REST API", () => {
   let dir: string;
+  let ticketsDir: string;
+  let plansDir: string;
   let handle: ServerHandle;
   let base: string;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-api-"));
-    await writeFile(join(dir, ".counter"), "0", "utf-8");
-    await writeFile(join(dir, ".config.yaml"), "prefix: TKT\ndeleteMode: archive\n", "utf-8");
-    await mkdir(join(dir, ".archive"), { recursive: true });
-    handle = startServer({ ticketsDir: dir, port: 0 });
+    ticketsDir = join(dir, ".tickets");
+    plansDir = join(dir, ".plans");
+    await mkdir(join(ticketsDir, ".archive"), { recursive: true });
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(ticketsDir, ".counter"), "0", "utf-8");
+    await writeFile(join(ticketsDir, ".config.yaml"), "prefix: TKT\ndeleteMode: archive\n", "utf-8");
+    handle = startServer({ ticketsDir, plansDir, port: 0 });
     base = `http://localhost:${handle.port}`;
   });
 

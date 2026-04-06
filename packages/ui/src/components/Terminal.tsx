@@ -7,6 +7,30 @@ interface TerminalProps {
   sessionId: string;
 }
 
+// E2E test instrumentation: expose xterm instances on window for Playwright.
+// Gated on DEV (always on during `bun run dev`) OR the __TICKETBOOK_E2E__ flag
+// (which Playwright sets via addInitScript before navigation). In production
+// builds without the flag, this is dead code.
+function e2eExposed(): boolean {
+  return import.meta.env.DEV || (window as unknown as { __TICKETBOOK_E2E__?: boolean }).__TICKETBOOK_E2E__ === true;
+}
+function e2eRegister(sessionId: string, term: XTerm): void {
+  if (!e2eExposed()) return;
+  const w = window as unknown as { __terminals?: Map<string, XTerm> };
+  (w.__terminals ??= new Map()).set(sessionId, term);
+}
+function e2eUnregister(sessionId: string): void {
+  if (!e2eExposed()) return;
+  const w = window as unknown as { __terminals?: Map<string, XTerm>; __terminalsReady?: Map<string, boolean> };
+  w.__terminals?.delete(sessionId);
+  w.__terminalsReady?.delete(sessionId);
+}
+function e2eMarkReady(sessionId: string): void {
+  if (!e2eExposed()) return;
+  const w = window as unknown as { __terminalsReady?: Map<string, boolean> };
+  (w.__terminalsReady ??= new Map()).set(sessionId, true);
+}
+
 export function Terminal({ sessionId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
@@ -51,6 +75,7 @@ export function Terminal({ sessionId }: TerminalProps) {
 
     xtermRef.current = term;
     fitRef.current = fit;
+    e2eRegister(sessionId, term);
 
     // Connect WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -68,6 +93,7 @@ export function Terminal({ sessionId }: TerminalProps) {
           term.write(msg.data);
         } else if (msg.type === "ready") {
           term.focus();
+          e2eMarkReady(sessionId);
         }
       } catch {
         // ignore
@@ -119,6 +145,7 @@ export function Terminal({ sessionId }: TerminalProps) {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close(1000, "tab closed");
       }
+      e2eUnregister(sessionId);
       term.dispose();
       xtermRef.current = null;
       fitRef.current = null;

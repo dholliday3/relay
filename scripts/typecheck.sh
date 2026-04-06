@@ -13,4 +13,7 @@ bunx tsc --noEmit -p packages/server/tsconfig.json
 echo "Typechecking ui..."
 bunx tsc --noEmit -p packages/ui/tsconfig.json
 
+echo "Typechecking e2e..."
+bunx tsc --noEmit -p e2e/tsconfig.json
+
 echo "All packages typecheck clean."

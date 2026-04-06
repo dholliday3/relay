@@ -74,29 +74,6 @@ function TicketsRoute() {
             onCreateInColumn={ctx.handleCreateInColumn}
           />
         )}
-        {activeTicket && (
-          <>
-            <div
-              className="board-modal-backdrop"
-              onClick={() => ctx.setActiveTicketId(null)}
-            />
-            <div className="board-modal">
-              <button
-                className="board-modal-close"
-                onClick={() => ctx.setActiveTicketId(null)}
-                aria-label="Close"
-              >
-                &times;
-              </button>
-              <TicketDetail
-                ticket={activeTicket}
-                meta={ctx.meta}
-                onUpdated={ctx.loadTickets}
-                onDelete={ctx.handleDeleteRequest}
-              />
-            </div>
-          </>
-        )}
       </div>
     );
   }

@@ -49,6 +49,17 @@ export function resetDb(dataDir: string): void {
   d.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
+/**
+ * Test-only: close and null the module-level db handle so the next getDb()
+ * call opens a fresh database. Needed because beforeEach in tests creates a
+ * new tmp dir each time, but without this reset the cached handle would
+ * still point at the previous test's file.
+ */
+export function _resetDbCacheForTests(): void {
+  db?.close();
+  db = null;
+}
+
 function dropAll(d: Database): void {
   const tables = d.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as { name: string }[];
   for (const { name } of tables) {
