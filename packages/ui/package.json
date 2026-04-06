@@ -12,6 +12,8 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@tanstack/react-router": "^1.168.10",
+    "@tanstack/router-plugin": "^1.167.12",
     "@tiptap/extension-code-block-lowlight": "^3.22.1",
     "@tiptap/extension-link": "^3.22.1",
     "@tiptap/extension-placeholder": "^3.22.1",
@@ -26,7 +28,8 @@
     "lowlight": "^3.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tiptap-markdown": "^0.9.0"
+    "tiptap-markdown": "^0.9.0",
+    "zod": "3"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
