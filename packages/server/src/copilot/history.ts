@@ -38,9 +38,14 @@ export interface HistoricalMessage {
  *   /Users/danielholliday/workspace/worktrees/ticketbook/app-copilot
  * becomes
  *   -Users-danielholliday-workspace-worktrees-ticketbook-app-copilot
+ *
+ * Trailing slashes are stripped first because Claude Code normalizes the
+ * cwd when storing (so it stores under `…app-copilot`, not `…app-copilot/`),
+ * and otherwise our encoded path would have a trailing dash that doesn't
+ * match what's on disk.
  */
 export function encodeCwdForClaude(cwd: string): string {
-  return cwd.replace(/\//g, "-");
+  return cwd.replace(/\/+$/, "").replace(/\//g, "-");
 }
 
 /** Absolute path to a conversation's JSONL file given the cwd + conversation id. */

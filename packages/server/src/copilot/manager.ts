@@ -302,7 +302,14 @@ export class CopilotManager {
 
   private defaultCwd(): string {
     // Tickets dir is .tickets/ inside the project; spawn the CLI from the
-    // project root so it can see source files, run tests, etc.
-    return this.config.ticketsDir.replace(/\.tickets\/?$/, "") || process.cwd();
+    // project root so it can see source files, run tests, etc. Strip both
+    // the .tickets segment AND any trailing slash so the cwd matches what
+    // Claude Code stores in its conversation directory tree (otherwise the
+    // history loader's encoded path won't match what's on disk).
+    return (
+      this.config.ticketsDir
+        .replace(/\/?\.tickets\/?$/, "")
+        .replace(/\/+$/, "") || process.cwd()
+    );
   }
 }

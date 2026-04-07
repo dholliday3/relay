@@ -72,6 +72,14 @@ describe("encodeCwdForClaude", () => {
       encodeCwdForClaude("/Users/danielholliday/workspace/worktrees/ticketbook/app-copilot"),
     ).toBe("-Users-danielholliday-workspace-worktrees-ticketbook-app-copilot");
   });
+
+  it("strips trailing slashes before encoding", () => {
+    // Regression: previously a trailing slash on the cwd became a trailing
+    // dash in the encoded directory name, which doesn't match what Claude
+    // Code stores on disk (it normalizes the cwd before writing).
+    expect(encodeCwdForClaude("/Users/me/proj/")).toBe("-Users-me-proj");
+    expect(encodeCwdForClaude("/Users/me/proj///")).toBe("-Users-me-proj");
+  });
 });
 
 describe("claudeConversationPath", () => {

@@ -116,7 +116,7 @@ test("sending a message streams a stub response with text + tool blocks", async 
   await expect(page.getByText("stub_echo").first()).toBeVisible();
 });
 
-test("conversation persists across page refresh and appears in the dropdown", async ({ page }) => {
+test("page refresh resumes the most recent conversation automatically", async ({ page }) => {
   await openAssistant(page);
   await sendMessage(page, "First conversation message");
   await waitForReady(page);
@@ -128,13 +128,19 @@ test("conversation persists across page refresh and appears in the dropdown", as
   expect(list.conversations).toHaveLength(1);
   expect(list.conversations[0].title).toBe("First conversation message");
 
-  // Refresh and reopen — the panel starts empty (we cleared the in-session
-  // state on unmount), but the dropdown should now show the conversation.
+  // Refresh and reopen — the panel should AUTOMATICALLY resume the most
+  // recent conversation rather than start a fresh one. The header trigger
+  // shows the conversation title, and the dropdown contains it.
   await page.reload();
   await openAssistant(page);
 
-  // Open the dropdown — the title should be "New conversation" since we
-  // started a fresh session on mount.
+  // The header trigger should now show the conversation title (not
+  // "New conversation").
+  await expect(page.getByTestId("copilot-conversation-trigger")).toContainText(
+    "First conversation message",
+  );
+
+  // The dropdown still lists it.
   await page.getByTestId("copilot-conversation-trigger").click();
   await expect(page.getByTestId("copilot-conversation-item")).toHaveCount(1);
   await expect(
@@ -142,44 +148,70 @@ test("conversation persists across page refresh and appears in the dropdown", as
   ).toBeVisible();
 });
 
-test("selecting a previous conversation resumes it and a follow-up streams", async ({ page }) => {
-  // Seed a conversation.
+test("after refresh, latest of multiple conversations is auto-resumed", async ({ page }) => {
+  // Create two conversations in sequence.
   await openAssistant(page);
-  await sendMessage(page, "Original conversation");
+  await sendMessage(page, "Older conversation");
+  await waitForReady(page);
+  await page.getByTestId("copilot-new-conversation-button").click();
+  await sendMessage(page, "Newer conversation");
   await waitForReady(page);
 
-  // Refresh.
+  // Refresh — should resume the newer one (most recent updated_at).
   await page.reload();
   await openAssistant(page);
 
-  // Open dropdown and select the conversation.
-  await page.getByTestId("copilot-conversation-trigger").click();
-  await page.getByTestId("copilot-conversation-item").first().click();
+  await expect(page.getByTestId("copilot-conversation-trigger")).toContainText(
+    "Newer conversation",
+  );
+});
 
-  // The dropdown trigger now shows the conversation title.
+test("selecting a previous conversation resumes it and a follow-up streams", async ({ page }) => {
+  // Seed two conversations so the dropdown has something to switch BETWEEN
+  // (one is auto-resumed on mount; we want to test clicking the OTHER one).
+  await openAssistant(page);
+  await sendMessage(page, "Original conversation");
+  await waitForReady(page);
+  await page.getByTestId("copilot-new-conversation-button").click();
+  await sendMessage(page, "Newer conversation");
+  await waitForReady(page);
+
+  // Refresh — auto-resumes the newer one.
+  await page.reload();
+  await openAssistant(page);
+  await expect(page.getByTestId("copilot-conversation-trigger")).toContainText(
+    "Newer conversation",
+  );
+
+  // Open dropdown and click the OLDER conversation to switch.
+  await page.getByTestId("copilot-conversation-trigger").click();
+  await page
+    .getByTestId("copilot-conversation-item")
+    .filter({ hasText: "Original conversation" })
+    .click();
+
+  // The dropdown trigger now shows the older conversation's title.
   await expect(page.getByTestId("copilot-conversation-trigger")).toContainText(
     "Original conversation",
   );
 
-  // Send a follow-up — stub streams another response.
+  // Send a follow-up — stub streams another response on the resumed session.
   await sendMessage(page, "Follow-up turn");
   await waitForReady(page);
 
-  await expect(page.getByText('you said "Follow-up turn"')).toBeVisible();
-  // The follow-up should produce one new user message + one new assistant
-  // message in the panel (the panel started empty after refresh because the
-  // stub doesn't write JSONL files for history replay — the unit tests in
-  // history.test.ts cover the JSONL parser).
+  await expect(page.getByText(/Stub reply.*Follow-up turn/).first()).toBeVisible();
+  // The follow-up produces one user message + one assistant message in the
+  // panel. The panel started empty for this resumed session because the
+  // stub provider doesn't write JSONL files (history.test.ts covers the
+  // JSONL parser end-to-end at the unit level).
   expect(await countMessages(page, "user")).toBe(1);
   expect(await countMessages(page, "assistant")).toBeGreaterThanOrEqual(1);
 
-  // The conversation row should still exist (and be bumped, but we don't
-  // assert message_count here because the title-based persistence flow
-  // isn't tied to per-turn bumps in the same way for the resume path).
+  // Both conversations should still exist in the persisted list.
   const list = await page.request
     .get("/api/copilot/conversations")
     .then((r) => r.json() as Promise<{ conversations: Array<{ id: string }> }>);
-  expect(list.conversations).toHaveLength(1);
+  expect(list.conversations).toHaveLength(2);
 });
 
 test("clicking + creates a new conversation, accumulating in the dropdown", async ({ page }) => {

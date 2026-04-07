@@ -117,6 +117,11 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
   // when resumeFromConversationId stays null (e.g., starting a fresh
   // conversation when one was already null).
   const [restartCounter, setRestartCounter] = useState(0);
+  // True once we've finished checking the persisted conversations list on
+  // first mount (so we can pre-populate resumeFromConversationId with the
+  // most recent one). The start-session effect waits for this so we don't
+  // race a new session creation against the resume target.
+  const [initializedFromHistory, setInitializedFromHistory] = useState(false);
 
   // Refs that need to outlive renders for stable callbacks.
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -184,6 +189,32 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
     [],
   );
 
+  // ─── First-mount init: pick the most recent conversation ─────────
+  // On first mount we want to RESUME the most recent conversation rather
+  // than start a fresh one — that's what the user expects on a refresh.
+  // The start-session effect is gated on `initializedFromHistory` so it
+  // doesn't race against this fetch.
+  useEffect(() => {
+    if (!active) return;
+    if (initializedFromHistory) return;
+    let cancelled = false;
+    fetch("/api/copilot/conversations")
+      .then((r) => (r.ok ? r.json() : { conversations: [] }))
+      .then((data: { conversations: Array<{ id: string }> }) => {
+        if (cancelled) return;
+        if (data.conversations.length > 0) {
+          setResumeFromConversationId(data.conversations[0].id);
+        }
+        setInitializedFromHistory(true);
+      })
+      .catch(() => {
+        if (!cancelled) setInitializedFromHistory(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, initializedFromHistory]);
+
   // ─── Health check ────────────────────────────────────────────────
 
   useEffect(() => {
@@ -212,6 +243,12 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
 
   useEffect(() => {
     if (!active) return;
+    // Wait for the init phase to finish populating resumeFromConversationId
+    // from the persisted conversations list. Without this guard the effect
+    // races: it would create a fresh session immediately, then immediately
+    // discard it when init completes and bumps the dep, leaking sessions
+    // and showing a flash of empty state.
+    if (!initializedFromHistory) return;
 
     let cancelled = false;
     let createdSessionId: string | null = null;
@@ -350,7 +387,7 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
         error: null,
       }));
     };
-  }, [active, resumeFromConversationId, restartCounter, appendPartToCurrentAssistant]);
+  }, [active, initializedFromHistory, resumeFromConversationId, restartCounter, appendPartToCurrentAssistant]);
 
   // ─── Send message ────────────────────────────────────────────────
 
