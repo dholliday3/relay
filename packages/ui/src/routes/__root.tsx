@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { AppProvider, useAppContext } from "../context/AppContext";
 import type { ViewMode } from "../context/AppContext";
 import { FilterChip } from "../components/FilterChip";
@@ -8,6 +8,13 @@ import { CreatePlanModal } from "../components/CreatePlanModal";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
 import { TerminalPane } from "../components/TerminalPane";
+
+// Lazy-loaded so the ai-elements/streamdown/shiki tree (~1MB+) only loads
+// when the user opens the assistant panel for the first time. Without this
+// the initial bundle balloons by ~5x.
+const CopilotPanel = lazy(() =>
+  import("../components/CopilotPanel").then((m) => ({ default: m.CopilotPanel })),
+);
 import { patchTicket } from "../api";
 import type { Status, Priority, Ticket } from "../types";
 import "../App.css";
@@ -516,28 +523,53 @@ function RootLayoutInner() {
           <Outlet />
         </div>
 
-        {/* Terminal pane (right side) */}
-        {!ctx.isMobile &&
-          (ctx.terminalOpen ? (
-            <>
-              <div className="terminal-drag-handle" onMouseDown={ctx.handleTerminalDragStart} />
-              <div className="terminal-side" style={{ width: ctx.terminalWidth }}>
-                <TerminalPane onClose={ctx.handleToggleTerminal} />
-              </div>
-            </>
-          ) : (
-            <button
-              className="terminal-collapsed-bar"
-              onClick={ctx.handleToggleTerminal}
-              title="Open terminal"
-              aria-label="Open terminal"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-            </button>
-          ))}
+        {/* Right rail: terminal + assistant share the same collapsible pane.
+            When expanded, only one panel is visible at a time. When collapsed,
+            two stacked icon buttons let the user open either one. */}
+        {!ctx.isMobile && (
+          <>
+            {ctx.rightRailOpen && (
+              <>
+                <div className="right-rail-drag-handle" onMouseDown={ctx.handleRightRailDragStart} />
+                <div className="right-rail-side" style={{ width: ctx.rightRailWidth }}>
+                  {ctx.terminalOpen && <TerminalPane onClose={ctx.handleToggleTerminal} />}
+                  {ctx.assistantOpen && (
+                    <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading assistant…</div>}>
+                      <CopilotPanel onClose={ctx.handleToggleAssistant} />
+                    </Suspense>
+                  )}
+                </div>
+              </>
+            )}
+            <div className="right-rail-collapsed-bar" role="toolbar" aria-label="Right rail">
+              <button
+                className={`right-rail-btn ${ctx.terminalOpen ? "right-rail-btn-active" : ""}`}
+                onClick={ctx.handleToggleTerminal}
+                title={ctx.terminalOpen ? "Close terminal" : "Open terminal"}
+                aria-label={ctx.terminalOpen ? "Close terminal" : "Open terminal"}
+                aria-pressed={ctx.terminalOpen}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+              </button>
+              <button
+                className={`right-rail-btn ${ctx.assistantOpen ? "right-rail-btn-active" : ""}`}
+                onClick={ctx.handleToggleAssistant}
+                title={ctx.assistantOpen ? "Close assistant" : "Open assistant"}
+                aria-label={ctx.assistantOpen ? "Close assistant" : "Open assistant"}
+                aria-pressed={ctx.assistantOpen}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Sparkle / assistant glyph */}
+                  <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+                  <path d="M19 16l.7 1.8L21.5 18.5l-1.8.7L19 21l-.7-1.8L16.5 18.5l1.8-.7z" />
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Status bar */}
