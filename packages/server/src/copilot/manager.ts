@@ -1,64 +1,30 @@
 import { ClaudeCodeProvider } from "./claude-code.js";
 import { buildTicketbookMcpConfig, writeMcpConfigFile } from "./mcp-config.js";
-import {
-  loadConversationHistory,
-  type HistoricalMessage,
-} from "./history.js";
 import type {
   CopilotMessagePart,
   CopilotProvider,
   CopilotProviderHealth,
+  CopilotProviderId,
   CopilotSessionEvents,
 } from "./types.js";
 import {
+  appendCopilotMessage,
   bumpCopilotConversation,
   deleteCopilotConversation,
   getCopilotConversation,
+  getCopilotConversationByProviderConversationId,
   listCopilotConversations,
+  listCopilotMessages,
   recordCopilotConversation,
   type CopilotConversationRow,
 } from "../db.js";
 
-/**
- * Single-provider session manager. Owns the Claude Code provider, allocates
- * session IDs, generates per-session MCP config files pointing back at
- * ticketbook's own MCP server, and surfaces typed `stream`/`done` events.
- *
- * Conversation persistence: each Claude conversation gets a row in SQLite
- * keyed by Claude's own conversation_id. We capture the id from the first
- * stream event (or pre-populate it when resuming) and on every `done`
- * event INSERT-or-UPDATE the row with the title (first user message,
- * truncated) and bumped updated_at + message_count. The actual chat
- * content lives in Claude Code's local store at
- * ~/.claude/projects/<encoded-cwd>/<id>.jsonl — we don't duplicate it.
- *
- * The provider abstraction is intentionally inlined here rather than spread
- * across an interface + registry. There is one provider today; when Codex
- * lands, we factor out the seam at that point — not before.
- */
-
 export interface CopilotManagerConfig {
-  /**
-   * Absolute path to the .tickets directory the surrounding server is
-   * managing. Used to wire up ticketbook's own MCP server so the spawned
-   * `claude` can read and create tickets, AND as the SQLite db location
-   * for conversation metadata.
-   */
   ticketsDir: string;
-  /**
-   * Absolute path to the bin/ticketbook.ts entry script. If omitted, the
-   * copilot still works but won't auto-wire ticketbook's MCP — useful for
-   * tests where we don't want to spawn the real CLI.
-   */
   binPath?: string;
-  /** Optional working dir for spawned CLIs. Defaults to the project root (parent of ticketsDir). */
   cwd?: string;
-  /**
-   * Optional provider override. Defaults to a new ClaudeCodeProvider.
-   * E2E tests inject a StubCopilotProvider so they don't burn real LLM
-   * tokens or require Claude Code to be installed.
-   */
-  provider?: CopilotProvider;
+  providers?: CopilotProvider[];
+  defaultProviderId?: CopilotProviderId;
 }
 
 export interface StartCopilotSessionResult {
@@ -66,37 +32,37 @@ export interface StartCopilotSessionResult {
 }
 
 export interface StartCopilotSessionOptions {
+  providerId?: CopilotProviderId;
   /**
-   * Pre-existing Claude conversation ID to resume. When set, the very first
-   * sendMessage call will pass `--resume <id>` and Claude reloads the prior
-   * conversation history into the agent's context. Used by the UI when the
-   * user picks an old conversation from the dropdown.
+   * App-level persisted conversation ID. The manager resolves this to the
+   * provider-native thread/conversation ID before starting the provider
+   * session.
    */
   conversationId?: string;
 }
 
 export interface CopilotSessionMetadata {
   id: string;
+  providerId: CopilotProviderId;
   conversationId: string | null;
+  providerConversationId: string | null;
+  createdAt: number;
+}
+
+interface StoredTranscriptMessage {
+  id: string;
+  role: "user" | "assistant";
+  parts: CopilotMessagePart[];
   createdAt: number;
 }
 
 interface InternalSessionMeta extends CopilotSessionMetadata {
   cleanupMcp: () => Promise<void>;
-  /**
-   * The first user message text for this session, captured during the first
-   * sendMessage call. Used as the conversation title when the row is first
-   * INSERTed into SQLite (which happens on the first `done` event since
-   * that's when we know Claude's conversationId). Cleared after the first
-   * record.
-   */
   pendingTitle: string | null;
-  /**
-   * True once we've INSERTed (or confirmed via lookup) a row for this
-   * session's conversationId in SQLite. Subsequent done events bump
-   * instead of insert.
-   */
-  conversationRecorded: boolean;
+  stagedMessages: StoredTranscriptMessage[];
+  currentAssistantMessageId: string | null;
+  currentAssistantParts: CopilotMessagePart[];
+  currentAssistantCreatedAt: number | null;
 }
 
 const SYSTEM_PROMPT = `You are the Ticketbook copilot — an in-app assistant that helps the user plan, write, and edit tickets and plans for their project.
@@ -113,8 +79,28 @@ function truncateTitle(text: string): string {
   return trimmed.slice(0, TITLE_MAX_LENGTH - 1).trimEnd() + "…";
 }
 
+function mergeStreamingParts(parts: CopilotMessagePart[], part: CopilotMessagePart): CopilotMessagePart[] {
+  const last = parts.at(-1);
+  if (
+    last &&
+    (last.type === "text" || last.type === "thinking") &&
+    last.type === part.type
+  ) {
+    return [
+      ...parts.slice(0, -1),
+      {
+        ...last,
+        content: last.content + part.content,
+      },
+    ];
+  }
+  return [...parts, part];
+}
+
 export class CopilotManager {
-  private provider: CopilotProvider;
+  private providers: Map<CopilotProviderId, CopilotProvider>;
+  private providerOverride: CopilotProvider | null = null;
+  private defaultProviderId: CopilotProviderId;
   private sessions = new Map<string, InternalSessionMeta>();
   private listeners = new Set<{
     stream: CopilotSessionEvents["stream"];
@@ -122,59 +108,89 @@ export class CopilotManager {
   }>();
 
   constructor(private config: CopilotManagerConfig) {
-    this.provider = config.provider ?? new ClaudeCodeProvider();
-    // Fan provider events out to subscribers (the WebSocket bridge in index.ts).
-    this.provider.on("stream", (sessionId, part, messageId) => {
-      for (const l of this.listeners) l.stream(sessionId, part, messageId);
-    });
-    this.provider.on("done", (sessionId) => {
-      this.recordConversationOnDone(sessionId);
-      for (const l of this.listeners) l.done(sessionId);
-    });
-  }
+    const configuredProviders = config.providers ?? [new ClaudeCodeProvider()];
+    this.providers = new Map(
+      configuredProviders
+        .filter((provider): provider is CopilotProvider & { id: CopilotProviderId } => provider.id !== "stub")
+        .map((provider) => [provider.id, provider]),
+    );
 
-  // ─── Session lifecycle ────────────────────────────────────
+    if (this.providers.size === 0 && configuredProviders.length === 1) {
+      const stub = configuredProviders[0];
+      this.providerOverride = stub;
+      this.defaultProviderId = "claude-code";
+      stub.on("stream", (sessionId, part, messageId) => this.handleStream(sessionId, part, messageId));
+      stub.on("done", (sessionId) => this.handleDone(sessionId));
+      return;
+    }
+
+    this.defaultProviderId =
+      config.defaultProviderId ??
+      (this.providers.has("claude-code")
+        ? "claude-code"
+        : Array.from(this.providers.keys())[0]);
+
+    for (const provider of configuredProviders) {
+      provider.on("stream", (sessionId, part, messageId) =>
+        this.handleStream(sessionId, part, messageId),
+      );
+      provider.on("done", (sessionId) => this.handleDone(sessionId));
+    }
+  }
 
   async startSession(
     opts: StartCopilotSessionOptions = {},
   ): Promise<StartCopilotSessionResult> {
     const sessionId = `cop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let providerId = opts.providerId ?? this.defaultProviderId;
+    let providerConversationId: string | null = null;
+    let conversationId: string | null = null;
+    let mcpConfig: Record<string, unknown> | undefined;
+
+    if (opts.conversationId) {
+      const row = getCopilotConversation(this.config.ticketsDir, opts.conversationId);
+      if (!row) {
+        throw new Error(`Copilot conversation not found: ${opts.conversationId}`);
+      }
+      providerId = row.provider_id;
+      providerConversationId = row.provider_conversation_id;
+      conversationId = row.id;
+    }
+
+    const provider = this.getProvider(providerId);
 
     let mcpConfigPath: string | undefined;
     let cleanupMcp: () => Promise<void> = async () => {};
     if (this.config.binPath) {
-      const config = buildTicketbookMcpConfig({
+      mcpConfig = buildTicketbookMcpConfig({
         binPath: this.config.binPath,
         ticketsDir: this.config.ticketsDir,
       });
-      const written = await writeMcpConfigFile(config);
+      const written = await writeMcpConfigFile(mcpConfig);
       mcpConfigPath = written.path;
       cleanupMcp = written.cleanup;
     }
 
-    this.provider.startSession(sessionId, {
+    provider.startSession(sessionId, {
       cwd: this.config.cwd ?? this.defaultCwd(),
       systemPrompt: SYSTEM_PROMPT,
+      mcpConfig,
       mcpConfigPath,
-      conversationId: opts.conversationId,
+      conversationId: providerConversationId ?? undefined,
     });
-
-    // If we're resuming a known conversation, mark it as already recorded
-    // so the first done event bumps instead of inserts.
-    const isResume = !!opts.conversationId;
-    let conversationRecorded = false;
-    if (isResume && opts.conversationId) {
-      const existing = getCopilotConversation(this.config.ticketsDir, opts.conversationId);
-      conversationRecorded = !!existing;
-    }
 
     this.sessions.set(sessionId, {
       id: sessionId,
-      conversationId: opts.conversationId ?? null,
+      providerId,
+      conversationId,
+      providerConversationId,
       createdAt: Date.now(),
       cleanupMcp,
       pendingTitle: null,
-      conversationRecorded,
+      stagedMessages: [],
+      currentAssistantMessageId: null,
+      currentAssistantParts: [],
+      currentAssistantCreatedAt: null,
     });
 
     return { sessionId };
@@ -186,21 +202,30 @@ export class CopilotManager {
       throw new Error(`Copilot session not found: ${sessionId}`);
     }
 
-    // Capture the first user message as the pending title — used when the
-    // row is first INSERTed on the next `done` event.
-    if (session.pendingTitle === null && !session.conversationRecorded) {
+    if (session.pendingTitle === null && session.conversationId === null) {
       session.pendingTitle = truncateTitle(text);
     }
 
-    await this.provider.sendMessage(sessionId, text);
-    // Refresh the conversation ID — it may have just been assigned.
-    session.conversationId = this.provider.getConversationId(sessionId);
+    session.stagedMessages.push({
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      role: "user",
+      parts: [{ type: "text", content: text }],
+      createdAt: Date.now(),
+    });
+    session.currentAssistantMessageId = null;
+    session.currentAssistantParts = [];
+    session.currentAssistantCreatedAt = null;
+
+    const provider = this.getProvider(session.providerId);
+    await provider.sendMessage(sessionId, text);
+    session.providerConversationId = provider.getConversationId(sessionId);
+    this.ensureConversationRecord(session);
   }
 
   async stopSession(sessionId: string): Promise<void> {
     const meta = this.sessions.get(sessionId);
     if (!meta) return;
-    this.provider.stopSession(sessionId);
+    this.getProvider(meta.providerId).stopSession(sessionId);
     await meta.cleanupMcp();
     this.sessions.delete(sessionId);
   }
@@ -209,85 +234,61 @@ export class CopilotManager {
     for (const id of Array.from(this.sessions.keys())) {
       await this.stopSession(id);
     }
-    this.provider.stopAll();
+    for (const provider of this.providers.values()) {
+      provider.stopAll();
+    }
   }
 
   getSession(sessionId: string): CopilotSessionMetadata | null {
     const meta = this.sessions.get(sessionId);
     if (!meta) return null;
-    return { id: meta.id, conversationId: meta.conversationId, createdAt: meta.createdAt };
+    return {
+      id: meta.id,
+      providerId: meta.providerId,
+      conversationId: meta.conversationId,
+      providerConversationId: meta.providerConversationId,
+      createdAt: meta.createdAt,
+    };
   }
 
   listSessions(): CopilotSessionMetadata[] {
-    return Array.from(this.sessions.values()).map((m) => ({
-      id: m.id,
-      conversationId: m.conversationId,
-      createdAt: m.createdAt,
+    return Array.from(this.sessions.values()).map((meta) => ({
+      id: meta.id,
+      providerId: meta.providerId,
+      conversationId: meta.conversationId,
+      providerConversationId: meta.providerConversationId,
+      createdAt: meta.createdAt,
     }));
   }
 
-  async checkHealth(): Promise<CopilotProviderHealth> {
-    return this.provider.checkHealth();
+  async listProviderHealth(): Promise<CopilotProviderHealth[]> {
+    if (this.providerOverride) {
+      return [await this.providerOverride.checkHealth()];
+    }
+    return Promise.all(Array.from(this.providers.values()).map((provider) => provider.checkHealth()));
   }
 
-  // ─── Conversation persistence ─────────────────────────────
-
-  /** List all persisted conversations for this ticketbook instance, newest first. */
-  listConversations(): CopilotConversationRow[] {
-    return listCopilotConversations(this.config.ticketsDir);
+  getDefaultProviderId(): CopilotProviderId {
+    return this.defaultProviderId;
   }
 
-  /** Delete a conversation row. The actual JSONL in Claude Code's store is left alone. */
+  listConversations(providerId?: CopilotProviderId): CopilotConversationRow[] {
+    return listCopilotConversations(this.config.ticketsDir, providerId);
+  }
+
   deleteConversation(id: string): void {
     deleteCopilotConversation(this.config.ticketsDir, id);
   }
 
-  /**
-   * Load prior messages for a conversation by reading Claude Code's local
-   * JSONL store. Returns an empty array if the file doesn't exist (e.g.,
-   * the user wiped their store) — the panel will still work for new turns
-   * because Claude Code is the source of truth and `--resume` will reload
-   * the agent context regardless.
-   */
-  async loadConversationMessages(id: string): Promise<HistoricalMessage[]> {
-    return loadConversationHistory(this.config.cwd ?? this.defaultCwd(), id);
+  async loadConversationMessages(id: string): Promise<StoredTranscriptMessage[]> {
+    return listCopilotMessages(this.config.ticketsDir, id).map((row) => ({
+      id: row.id,
+      role: row.role,
+      parts: row.parts,
+      createdAt: row.created_at,
+    }));
   }
 
-  /**
-   * Called from the provider's `done` event. If we have a conversationId
-   * (captured from the first turn's stream events) and the row hasn't
-   * been recorded yet, INSERT it with the pending title. Otherwise bump
-   * the existing row's updated_at and message_count.
-   */
-  private recordConversationOnDone(sessionId: string): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
-    // The provider may have just captured the conversation ID during the
-    // turn; refresh from the source of truth.
-    session.conversationId = this.provider.getConversationId(sessionId);
-    const conversationId = session.conversationId;
-    if (!conversationId) return;
-
-    if (!session.conversationRecorded) {
-      const title = session.pendingTitle ?? "Untitled";
-      recordCopilotConversation(this.config.ticketsDir, {
-        id: conversationId,
-        title,
-      });
-      session.conversationRecorded = true;
-      session.pendingTitle = null;
-    } else {
-      bumpCopilotConversation(this.config.ticketsDir, conversationId);
-    }
-  }
-
-  // ─── Subscription bridge ──────────────────────────────────
-
-  /**
-   * Subscribe to stream and done events for *all* sessions. Returns a dispose
-   * function. The WebSocket bridge in index.ts uses this to forward events to
-   * the connected client; the client filters by sessionId.
-   */
   subscribe(handlers: {
     stream: (sessionId: string, part: CopilotMessagePart, messageId: string) => void;
     done: (sessionId: string) => void;
@@ -298,14 +299,118 @@ export class CopilotManager {
     };
   }
 
-  // ─── Internals ────────────────────────────────────────────
+  private handleStream(sessionId: string, part: CopilotMessagePart, messageId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const provider = this.getProvider(session.providerId);
+    session.providerConversationId = provider.getConversationId(sessionId);
+    this.ensureConversationRecord(session);
+
+    if (session.currentAssistantMessageId !== messageId) {
+      this.flushAssistantMessage(session);
+      session.currentAssistantMessageId = messageId;
+      session.currentAssistantParts = [];
+      session.currentAssistantCreatedAt = Date.now();
+    }
+    session.currentAssistantParts = mergeStreamingParts(session.currentAssistantParts, part);
+
+    for (const listener of this.listeners) {
+      listener.stream(sessionId, part, messageId);
+    }
+  }
+
+  private handleDone(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const provider = this.getProvider(session.providerId);
+    session.providerConversationId = provider.getConversationId(sessionId);
+    this.ensureConversationRecord(session);
+    this.flushAssistantMessage(session);
+
+    if (session.conversationId) {
+      bumpCopilotConversation(this.config.ticketsDir, session.conversationId);
+    }
+
+    for (const listener of this.listeners) {
+      listener.done(sessionId);
+    }
+  }
+
+  private ensureConversationRecord(session: InternalSessionMeta): void {
+    if (!session.providerConversationId) return;
+    if (!session.conversationId) {
+      const existing = getCopilotConversationByProviderConversationId(
+        this.config.ticketsDir,
+        session.providerId,
+        session.providerConversationId,
+      );
+      const row =
+        existing ??
+        recordCopilotConversation(this.config.ticketsDir, {
+          providerId: session.providerId,
+          providerConversationId: session.providerConversationId,
+          title: session.pendingTitle ?? "Untitled",
+        });
+      session.conversationId = row.id;
+      session.pendingTitle = null;
+    }
+
+    if (!session.conversationId) return;
+    if (session.stagedMessages.length > 0) {
+      for (const message of session.stagedMessages) {
+        appendCopilotMessage(this.config.ticketsDir, {
+          id: message.id,
+          conversationId: session.conversationId,
+          role: message.role,
+          parts: message.parts,
+          createdAt: message.createdAt,
+        });
+      }
+      session.stagedMessages = [];
+    }
+  }
+
+  private flushAssistantMessage(session: InternalSessionMeta): void {
+    if (!session.currentAssistantMessageId || session.currentAssistantParts.length === 0) {
+      return;
+    }
+
+    const message: StoredTranscriptMessage = {
+      id: `assistant-${session.currentAssistantMessageId}`,
+      role: "assistant",
+      parts: session.currentAssistantParts,
+      createdAt: session.currentAssistantCreatedAt ?? Date.now(),
+    };
+
+    if (session.conversationId) {
+      appendCopilotMessage(this.config.ticketsDir, {
+        id: message.id,
+        conversationId: session.conversationId,
+        role: message.role,
+        parts: message.parts,
+        createdAt: message.createdAt,
+      });
+    } else {
+      session.stagedMessages.push(message);
+    }
+
+    session.currentAssistantMessageId = null;
+    session.currentAssistantParts = [];
+    session.currentAssistantCreatedAt = null;
+  }
+
+  private getProvider(providerId: CopilotProviderId): CopilotProvider {
+    if (this.providerOverride) return this.providerOverride;
+    const provider = this.providers.get(providerId);
+    if (!provider) {
+      throw new Error(`Copilot provider not configured: ${providerId}`);
+    }
+    return provider;
+  }
 
   private defaultCwd(): string {
-    // Tickets dir is .tickets/ inside the project; spawn the CLI from the
-    // project root so it can see source files, run tests, etc. Strip both
-    // the .tickets segment AND any trailing slash so the cwd matches what
-    // Claude Code stores in its conversation directory tree (otherwise the
-    // history loader's encoded path won't match what's on disk).
     return (
       this.config.ticketsDir
         .replace(/\/?\.tickets\/?$/, "")

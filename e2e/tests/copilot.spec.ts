@@ -200,12 +200,10 @@ test("selecting a previous conversation resumes it and a follow-up streams", asy
   await waitForReady(page);
 
   await expect(page.getByText(/Stub reply.*Follow-up turn/).first()).toBeVisible();
-  // The follow-up produces one user message + one assistant message in the
-  // panel. The panel started empty for this resumed session because the
-  // stub provider doesn't write JSONL files (history.test.ts covers the
-  // JSONL parser end-to-end at the unit level).
-  expect(await countMessages(page, "user")).toBe(1);
-  expect(await countMessages(page, "assistant")).toBeGreaterThanOrEqual(1);
+  // Resumed conversations now preload app-stored normalized transcript
+  // history, so the original turn is visible before the new follow-up.
+  expect(await countMessages(page, "user")).toBe(2);
+  expect(await countMessages(page, "assistant")).toBeGreaterThanOrEqual(2);
 
   // Both conversations should still exist in the persisted list.
   const list = await page.request
