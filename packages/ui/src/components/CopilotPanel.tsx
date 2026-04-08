@@ -46,6 +46,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCopilotSession, type CopilotPart } from "@/hooks/useCopilotSession";
 import { useCopilotConversations } from "@/hooks/useCopilotConversations";
@@ -124,11 +131,16 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
     await deleteConversation(id);
   };
 
+  const activeProvider =
+    session.selectedProviderId
+      ? session.providers.find((provider) => provider.providerId === session.selectedProviderId) ?? null
+      : null;
+
   const canSubmit =
     !session.isStarting &&
     !session.isStreaming &&
     session.sessionId !== null &&
-    session.health?.status === "ready";
+    activeProvider?.status === "ready";
 
   const statusLabel = session.isStreaming
     ? "Streaming…"
@@ -136,8 +148,8 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
       ? "Starting…"
       : session.sessionId
         ? "Ready"
-        : session.health?.status === "not_installed"
-          ? "Claude Code not installed"
+        : activeProvider?.status === "not_installed"
+          ? `${providerLabel(session.selectedProviderId)} not installed`
           : "Not connected";
 
   const isEmpty = session.messages.length === 0;
@@ -161,9 +173,14 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
             >
               <SparkleIcon className="size-3.5 shrink-0" />
               <span className="truncate font-semibold">{headerTitle}</span>
-              {session.health?.cliVersion && !activeConversation && (
+              {activeConversation && (
                 <span className="shrink-0 text-muted-foreground/60">
-                  · {session.health.cliVersion.replace(/\s*\(.*\)$/, "")}
+                  · {providerLabel(activeConversation.provider_id)}
+                </span>
+              )}
+              {activeProvider?.cliVersion && !activeConversation && (
+                <span className="shrink-0 text-muted-foreground/60">
+                  · {activeProvider.cliVersion.replace(/\s*\(.*\)$/, "")}
                 </span>
               )}
               <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
@@ -192,7 +209,7 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
                     return (
                       <DropdownMenuItem
                         key={c.id}
-                        onSelect={() => session.switchConversation(c.id)}
+                        onSelect={() => session.switchConversation(c.id, c.provider_id)}
                         data-testid="copilot-conversation-item"
                         data-conversation-id={c.id}
                         className={cn(
@@ -203,7 +220,7 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{c.title}</div>
                           <div className="text-[10px] text-muted-foreground">
-                            {formatRelative(c.updated_at)} · {c.message_count}{" "}
+                            {providerLabel(c.provider_id)} · {formatRelative(c.updated_at)} · {c.message_count}{" "}
                             {c.message_count === 1 ? "turn" : "turns"}
                           </div>
                         </div>
@@ -222,6 +239,23 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          <Select
+            value={session.selectedProviderId ?? "claude-code"}
+            onValueChange={(value) =>
+              session.setProviderId(value as "claude-code" | "codex")
+            }
+          >
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {session.providers.map((provider) => (
+                <SelectItem key={provider.providerId} value={provider.providerId}>
+                  {providerLabel(provider.providerId)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
@@ -331,6 +365,11 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
   );
 }
 
+function providerLabel(providerId: "claude-code" | "codex" | null): string {
+  if (providerId === "codex") return "Codex";
+  return "Claude Code";
+}
+
 // ─── Part renderers ────────────────────────────────────────────────
 
 /**
@@ -366,9 +405,7 @@ function CopilotPartView({
       return <ToolBlock kind="use" name={part.toolName} body={part.content} />;
 
     case "tool_result":
-      // For tool_result the server stuffs the tool_use_id into toolName, so
-      // we don't have a friendly name to show — just label as "Result".
-      return <ToolBlock kind="result" body={part.content} />;
+      return <ToolBlock kind="result" name={part.toolName} body={part.content} />;
 
     case "error":
       return (
@@ -407,7 +444,7 @@ function ToolBlock({
       <div className="flex items-center gap-2 border-b border-border px-2.5 py-1.5">
         <WrenchIcon className="size-3 text-muted-foreground" />
         <span className="font-medium text-muted-foreground">
-          {kind === "use" ? (name ?? "tool call") : "result"}
+          {kind === "use" ? (name ?? "tool call") : (name ?? "result")}
         </span>
       </div>
       <pre className="overflow-x-auto px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/80">

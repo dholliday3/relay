@@ -5,7 +5,12 @@ import { createWatcher } from "./watcher.js";
 import { BunPtyHeadlessBackend, type TerminalSession } from "./terminal/index.js";
 import { listTerminalTabs, upsertTerminalTab, getNextTabNumber, deleteTerminalTab } from "./db.js";
 import { createDebug } from "./debug.js";
-import { CopilotManager, type CopilotMessagePart } from "./copilot/index.js";
+import {
+  ClaudeCodeProvider,
+  CodexProvider,
+  CopilotManager,
+  type CopilotMessagePart,
+} from "./copilot/index.js";
 import { StubCopilotProvider } from "./copilot/stub-provider.js";
 import { getConfig } from "@ticketbook/core";
 import type { ServerMessage } from "@ticketbook/core";
@@ -73,7 +78,7 @@ export function startServer(config: ServerConfig): ServerHandle {
   const copilot = new CopilotManager({
     ticketsDir,
     binPath,
-    provider: useStub ? new StubCopilotProvider() : undefined,
+    providers: useStub ? [new StubCopilotProvider()] : [new ClaudeCodeProvider(), new CodexProvider()],
   });
 
   const routes = createRoutes(ticketsDir, plansDir, copilot);
@@ -263,8 +268,16 @@ export function startServer(config: ServerConfig): ServerHandle {
             },
             done: (sid: string) => {
               if (sid !== sessionId) return;
+              const session = copilot.getSession(sid);
               try {
-                ws.send(JSON.stringify({ type: "copilot.done", sessionId: sid }));
+                ws.send(
+                  JSON.stringify({
+                    type: "copilot.done",
+                    sessionId: sid,
+                    conversationId: session?.conversationId ?? null,
+                    providerId: session?.providerId ?? null,
+                  }),
+                );
               } catch {
                 /* socket closed */
               }

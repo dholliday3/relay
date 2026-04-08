@@ -13,4 +13,5 @@ export type {
   CopilotSessionOptions,
 } from "./types.js";
 export { ClaudeCodeProvider } from "./claude-code.js";
+export { CodexProvider } from "./codex.js";
 export { buildTicketbookMcpConfig } from "./mcp-config.js";

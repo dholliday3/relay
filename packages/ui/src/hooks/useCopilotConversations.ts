@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CopilotProviderId } from "./useCopilotSession";
 
 export interface CopilotConversationSummary {
   id: string;
+  provider_id: CopilotProviderId;
+  provider_conversation_id: string;
   title: string;
   created_at: number;
   updated_at: number;
@@ -18,7 +21,10 @@ interface ListResponse {
  * whenever a turn finishes, so freshly created or updated conversations
  * appear in the dropdown without a manual reload.
  */
-export function useCopilotConversations(active: boolean, refreshKey: number = 0): {
+export function useCopilotConversations(
+  active: boolean,
+  refreshKey: number = 0,
+): {
   conversations: CopilotConversationSummary[];
   isLoading: boolean;
   error: string | null;

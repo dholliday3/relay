@@ -33,7 +33,7 @@ import {
   PlanFiltersSchema,
 } from "@ticketbook/core";
 import type { TicketChangeEvent } from "./watcher.js";
-import type { CopilotManager } from "./copilot/index.js";
+import type { CopilotManager, CopilotProviderId } from "./copilot/index.js";
 
 type RouteHandler = (
   req: Request,
@@ -376,9 +376,12 @@ export function createRoutes(
   // delivered over the WebSocket bridge in index.ts (frames `copilot.stream`
   // and `copilot.done`); these REST routes only handle session lifecycle.
   if (copilot) {
-    route("GET", "/copilot/health", async () => {
-      const health = await copilot.checkHealth();
-      return json(health);
+    route("GET", "/copilot/providers", async () => {
+      const providers = await copilot.listProviderHealth();
+      return json({
+        defaultProviderId: copilot.getDefaultProviderId(),
+        providers,
+      });
     });
 
     route("GET", "/copilot/sessions", async () => {
@@ -387,27 +390,27 @@ export function createRoutes(
 
     route("POST", "/copilot/sessions", async (req) => {
       const body = (await readJsonBody(req).catch(() => ({}))) as {
+        providerId?: string;
         conversationId?: string;
       };
-      const conversationId =
-        typeof body.conversationId === "string" && body.conversationId.length > 0
-          ? body.conversationId
+      const providerId =
+        body.providerId === "claude-code" || body.providerId === "codex"
+          ? body.providerId
           : undefined;
-      const result = await copilot.startSession({ conversationId });
+      const conversationId = typeof body.conversationId === "string" ? body.conversationId : undefined;
+      const result = await copilot.startSession({ providerId, conversationId });
       const meta = copilot.getSession(result.sessionId);
       return json({ sessionId: result.sessionId, session: meta }, 201);
     });
 
-    // List persisted conversations (newest first). The actual chat content
-    // lives in Claude Code's local store; we only return metadata.
-    route("GET", "/copilot/conversations", async () => {
-      return json({ conversations: copilot.listConversations() });
+    route("GET", "/copilot/conversations", async (req) => {
+      const url = new URL(req.url);
+      const providerId = url.searchParams.get("providerId");
+      const parsedProviderId: CopilotProviderId | undefined =
+        providerId === "claude-code" || providerId === "codex" ? providerId : undefined;
+      return json({ conversations: copilot.listConversations(parsedProviderId) });
     });
 
-    // Load prior messages for a conversation from Claude Code's local
-    // JSONL store. Returns { messages: [] } if the file doesn't exist on
-    // this machine (the panel will still work — Claude Code is the source
-    // of truth and --resume will reload the agent context).
     route("GET", "/copilot/conversations/:id/messages", async (_req, params) => {
       const messages = await copilot.loadConversationMessages(params.id);
       return json({ messages });

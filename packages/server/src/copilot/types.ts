@@ -16,7 +16,7 @@ export type CopilotMessagePart =
   | { type: "tool_result"; content: string; toolName?: string }
   | { type: "error"; content: string };
 
-export type CopilotProviderId = "claude-code";
+export type CopilotProviderId = "claude-code" | "codex";
 
 export type CopilotProviderStatus = "ready" | "not_installed" | "not_authenticated" | "error";
 
@@ -69,13 +69,6 @@ export interface CopilotSessionOptions {
    * any other servers the user has configured).
    */
   mcpConfig?: Record<string, unknown>;
-  /**
-   * Optional Claude Code conversation/session ID to resume from. When set,
-   * the very first sendMessage call will pass `--resume <id>` to claude
-   * instead of starting a fresh conversation. This is how we restore prior
-   * conversations across page refreshes — Claude Code persists every
-   * conversation as JSONL on disk, and `--resume` reloads the full history
-   * into the agent's context.
-   */
+  /** Optional provider-native conversation/thread ID to resume from. */
   conversationId?: string;
 }

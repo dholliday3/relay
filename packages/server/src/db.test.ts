@@ -4,14 +4,17 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   _resetDbCacheForTests,
+  appendCopilotMessage,
   bumpCopilotConversation,
   deleteCopilotConversation,
   getCopilotConversation,
+  getCopilotConversationByProviderConversationId,
   listCopilotConversations,
+  listCopilotMessages,
   recordCopilotConversation,
 } from "./db.js";
 
-describe("copilot_conversations DB ops", () => {
+describe("copilot conversation persistence", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -24,84 +27,135 @@ describe("copilot_conversations DB ops", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("list returns empty array when nothing recorded", () => {
-    expect(listCopilotConversations(dir)).toEqual([]);
-  });
-
-  it("record + list roundtrips a conversation", () => {
-    recordCopilotConversation(dir, { id: "abc-1", title: "First chat" });
-    const rows = listCopilotConversations(dir);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      id: "abc-1",
+  it("records provider ownership and returns the persisted conversation row", () => {
+    const row = recordCopilotConversation(dir, {
+      providerId: "claude-code",
+      providerConversationId: "conv-1",
       title: "First chat",
-      message_count: 1,
     });
-    expect(typeof rows[0].created_at).toBe("number");
-    expect(typeof rows[0].updated_at).toBe("number");
+    expect(row).toMatchObject({
+      id: "claude-code:conv-1",
+      provider_id: "claude-code",
+      provider_conversation_id: "conv-1",
+      title: "First chat",
+      message_count: 0,
+    });
+    expect(getCopilotConversation(dir, row.id)?.provider_id).toBe("claude-code");
   });
 
-  it("getCopilotConversation returns null for unknown id and the row otherwise", () => {
-    expect(getCopilotConversation(dir, "missing")).toBeNull();
-    recordCopilotConversation(dir, { id: "abc-2", title: "Hello" });
-    const row = getCopilotConversation(dir, "abc-2");
-    expect(row).not.toBeNull();
-    expect(row?.id).toBe("abc-2");
+  it("finds a conversation by provider-native conversation id", () => {
+    recordCopilotConversation(dir, {
+      providerId: "codex",
+      providerConversationId: "thread-123",
+      title: "Codex chat",
+    });
+    expect(
+      getCopilotConversationByProviderConversationId(dir, "codex", "thread-123"),
+    ).toMatchObject({
+      id: "codex:thread-123",
+      provider_id: "codex",
+    });
   });
 
-  it("record is INSERT OR IGNORE — second call with same id does not overwrite", () => {
-    recordCopilotConversation(dir, { id: "abc-3", title: "Original" });
-    recordCopilotConversation(dir, { id: "abc-3", title: "Different" });
-    const row = getCopilotConversation(dir, "abc-3");
-    expect(row?.title).toBe("Original");
+  it("lists conversations filtered by provider", () => {
+    recordCopilotConversation(dir, {
+      providerId: "claude-code",
+      providerConversationId: "conv-1",
+      title: "Claude",
+    });
+    recordCopilotConversation(dir, {
+      providerId: "codex",
+      providerConversationId: "thread-1",
+      title: "Codex",
+    });
+    expect(listCopilotConversations(dir)).toHaveLength(2);
+    expect(listCopilotConversations(dir, "claude-code").map((row) => row.id)).toEqual([
+      "claude-code:conv-1",
+    ]);
+    expect(listCopilotConversations(dir, "codex").map((row) => row.id)).toEqual([
+      "codex:thread-1",
+    ]);
   });
 
-  it("bumpCopilotConversation increments message_count and updates updated_at", async () => {
-    recordCopilotConversation(dir, { id: "abc-4", title: "Bumpable" });
-    const before = getCopilotConversation(dir, "abc-4");
-    expect(before?.message_count).toBe(1);
-
-    // Sleep a millisecond so updated_at actually changes
-    await new Promise((r) => setTimeout(r, 5));
-
-    bumpCopilotConversation(dir, "abc-4");
-    const after = getCopilotConversation(dir, "abc-4");
-    expect(after?.message_count).toBe(2);
+  it("bumps message_count and updated_at for an existing conversation", async () => {
+    const row = recordCopilotConversation(dir, {
+      providerId: "claude-code",
+      providerConversationId: "conv-2",
+      title: "Bumpable",
+    });
+    const before = getCopilotConversation(dir, row.id);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    bumpCopilotConversation(dir, row.id);
+    const after = getCopilotConversation(dir, row.id);
+    expect(before?.message_count).toBe(0);
+    expect(after?.message_count).toBe(1);
     expect(after!.updated_at).toBeGreaterThan(before!.updated_at);
   });
 
-  it("bumpCopilotConversation is a no-op for unknown ids", () => {
-    bumpCopilotConversation(dir, "does-not-exist");
-    expect(listCopilotConversations(dir)).toEqual([]);
+  it("stores normalized transcript messages in order", () => {
+    const row = recordCopilotConversation(dir, {
+      providerId: "codex",
+      providerConversationId: "thread-2",
+      title: "Transcript",
+    });
+    appendCopilotMessage(dir, {
+      id: "user-1",
+      conversationId: row.id,
+      role: "user",
+      parts: [{ type: "text", content: "Hello" }],
+      createdAt: 100,
+    });
+    appendCopilotMessage(dir, {
+      id: "assistant-1",
+      conversationId: row.id,
+      role: "assistant",
+      parts: [
+        { type: "tool_use", content: "pwd", toolName: "command_execution", toolInput: "pwd" },
+        { type: "tool_result", content: "/tmp", toolName: "command_execution" },
+        { type: "text", content: "Done." },
+      ],
+      createdAt: 200,
+    });
+
+    expect(listCopilotMessages(dir, row.id)).toEqual([
+      {
+        id: "user-1",
+        conversation_id: row.id,
+        role: "user",
+        parts: [{ type: "text", content: "Hello" }],
+        created_at: 100,
+        sort_order: 0,
+      },
+      {
+        id: "assistant-1",
+        conversation_id: row.id,
+        role: "assistant",
+        parts: [
+          { type: "tool_use", content: "pwd", toolName: "command_execution", toolInput: "pwd" },
+          { type: "tool_result", content: "/tmp", toolName: "command_execution" },
+          { type: "text", content: "Done." },
+        ],
+        created_at: 200,
+        sort_order: 1,
+      },
+    ]);
   });
 
-  it("list orders by updated_at desc", async () => {
-    recordCopilotConversation(dir, { id: "old", title: "Old" });
-    await new Promise((r) => setTimeout(r, 5));
-    recordCopilotConversation(dir, { id: "mid", title: "Mid" });
-    await new Promise((r) => setTimeout(r, 5));
-    recordCopilotConversation(dir, { id: "new", title: "New" });
-
-    expect(listCopilotConversations(dir).map((r) => r.id)).toEqual([
-      "new",
-      "mid",
-      "old",
-    ]);
-
-    // Bumping the oldest moves it to the front.
-    await new Promise((r) => setTimeout(r, 5));
-    bumpCopilotConversation(dir, "old");
-    expect(listCopilotConversations(dir).map((r) => r.id)).toEqual([
-      "old",
-      "new",
-      "mid",
-    ]);
-  });
-
-  it("deleteCopilotConversation removes the row", () => {
-    recordCopilotConversation(dir, { id: "abc-5", title: "Doomed" });
-    expect(listCopilotConversations(dir)).toHaveLength(1);
-    deleteCopilotConversation(dir, "abc-5");
-    expect(listCopilotConversations(dir)).toEqual([]);
+  it("deletes transcript rows when deleting a conversation", () => {
+    const row = recordCopilotConversation(dir, {
+      providerId: "claude-code",
+      providerConversationId: "conv-3",
+      title: "Delete me",
+    });
+    appendCopilotMessage(dir, {
+      id: "user-1",
+      conversationId: row.id,
+      role: "user",
+      parts: [{ type: "text", content: "Hello" }],
+      createdAt: 100,
+    });
+    deleteCopilotConversation(dir, row.id);
+    expect(getCopilotConversation(dir, row.id)).toBeNull();
+    expect(listCopilotMessages(dir, row.id)).toEqual([]);
   });
 });

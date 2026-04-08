@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Normalized parts emitted by the copilot manager. Mirrors
- * packages/server/src/copilot/types.ts — kept as a duplicate type rather than
- * a workspace import because @ticketbook/core doesn't currently re-export
- * server types and we don't want to drag them into the wire contract package
- * yet. If we add Codex or another provider this is the place to widen the
- * union.
- */
+export type CopilotProviderId = "claude-code" | "codex";
+
 export type CopilotPart =
   | { type: "text"; content: string }
   | { type: "thinking"; content: string }
@@ -16,20 +10,14 @@ export type CopilotPart =
   | { type: "error"; content: string };
 
 export interface CopilotMessage {
-  /** Stable id used as the React key. */
   id: string;
   role: "user" | "assistant";
-  /**
-   * Ordered list of parts. Consecutive parts of the same type are merged
-   * (text/thinking accumulators) so a streaming turn renders as one chunk
-   * per modality rather than dozens of tiny fragments.
-   */
   parts: CopilotPart[];
   createdAt: number;
 }
 
 export interface CopilotHealth {
-  providerId: string;
+  providerId: CopilotProviderId;
   status: "ready" | "not_installed" | "not_authenticated" | "error";
   cliVersion: string | null;
   error: string | null;
@@ -37,21 +25,21 @@ export interface CopilotHealth {
 
 interface UseCopilotSessionState {
   sessionId: string | null;
-  /** Claude's conversation_id once the first turn captures it. */
   conversationId: string | null;
+  providerConversationId: string | null;
+  selectedProviderId: CopilotProviderId | null;
+  providers: CopilotHealth[];
   messages: CopilotMessage[];
   isStreaming: boolean;
   isStarting: boolean;
-  health: CopilotHealth | null;
   error: string | null;
 }
 
 export interface UseCopilotSessionApi extends UseCopilotSessionState {
   sendMessage: (text: string) => Promise<void>;
-  /** Start a fresh conversation (no resume). Tears down the current session. */
   startNew: () => void;
-  /** Switch to a previously persisted conversation by Claude conversation ID. */
-  switchConversation: (conversationId: string) => void;
+  switchConversation: (conversationId: string, providerId: CopilotProviderId) => void;
+  setProviderId: (providerId: CopilotProviderId) => void;
 }
 
 interface StreamFrame {
@@ -64,6 +52,8 @@ interface StreamFrame {
 interface DoneFrame {
   type: "copilot.done";
   sessionId: string;
+  conversationId: string | null;
+  providerId: CopilotProviderId | null;
 }
 
 interface ReadyFrame {
@@ -81,64 +71,60 @@ interface HistoryResponse {
   }>;
 }
 
-/**
- * Owns the lifecycle of one copilot session: starts it via REST on mount,
- * subscribes to /api/copilot/<sessionId> over WebSocket, sends turns via
- * POST, normalizes streaming parts into a message list, and tears the
- * session down on unmount.
- *
- * Stream merging: Claude Code emits one delta per token via the server, so
- * we collapse consecutive text/thinking parts within the same messageId
- * into one accumulating part. tool_use, tool_result and error parts are
- * always pushed as their own entries.
- *
- * Conversation resume: callers can switch to a previously persisted
- * conversation via switchConversation(id), which triggers the start-session
- * effect to tear down the current session and create a new one with the
- * given conversationId pre-set on the server. The hook also fetches the
- * prior message history from /api/copilot/conversations/<id>/messages so
- * the panel renders the full chat (not just an empty resume).
- */
+interface ProvidersResponse {
+  defaultProviderId: CopilotProviderId;
+  providers: CopilotHealth[];
+}
+
+interface ConversationListResponse {
+  conversations: Array<{
+    id: string;
+    provider_id: CopilotProviderId;
+  }>;
+}
+
+const LOCAL_STORAGE_KEY = "ticketbook.copilot.provider";
+
 export function useCopilotSession(active: boolean): UseCopilotSessionApi {
   const [state, setState] = useState<UseCopilotSessionState>({
     sessionId: null,
     conversationId: null,
+    providerConversationId: null,
+    selectedProviderId: null,
+    providers: [],
     messages: [],
     isStreaming: false,
     isStarting: false,
-    health: null,
     error: null,
   });
-
-  // Which Claude conversation to resume on the next start. null = brand new.
-  // Bumping this triggers the start-session effect to re-run.
   const [resumeFromConversationId, setResumeFromConversationId] = useState<string | null>(null);
-  // Bumped by startNew() to force the start-session effect to re-run even
-  // when resumeFromConversationId stays null (e.g., starting a fresh
-  // conversation when one was already null).
   const [restartCounter, setRestartCounter] = useState(0);
-  // True once we've finished checking the persisted conversations list on
-  // first mount (so we can pre-populate resumeFromConversationId with the
-  // most recent one). The start-session effect waits for this so we don't
-  // race a new session creation against the resume target.
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const [initializedFromHistory, setInitializedFromHistory] = useState(false);
 
-  // Refs that need to outlive renders for stable callbacks.
   const currentAssistantIdRef = useRef<string | null>(null);
   const currentMessageIdRef = useRef<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
-  // ─── Stream merging ──────────────────────────────────────────────
+  const clearLiveSession = useCallback(() => {
+    sessionIdRef.current = null;
+    currentAssistantIdRef.current = null;
+    currentMessageIdRef.current = null;
+    setState((prev) => ({
+      ...prev,
+      sessionId: null,
+      conversationId: null,
+      providerConversationId: null,
+      messages: [],
+      isStreaming: false,
+      isStarting: true,
+      error: null,
+    }));
+  }, []);
 
   const appendPartToCurrentAssistant = useCallback(
     (messageId: string, part: CopilotPart) => {
-      // Resolve the target assistant message id and update the per-turn
-      // refs OUTSIDE the setState callback. The setState updater must be
-      // pure — React 19's concurrent rendering can call updaters multiple
-      // times for a single dispatch, and side-effects-in-the-updater would
-      // produce duplicate messages on the second invocation. Computing the
-      // assistantId and ref state once up front keeps the updater idempotent.
       const isNewTurn = currentMessageIdRef.current !== messageId;
       let assistantId = currentAssistantIdRef.current;
       if (isNewTurn || !assistantId) {
@@ -149,8 +135,6 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
       const targetId = assistantId;
 
       setState((prev) => {
-        // Pure updater: relies only on `prev`, `targetId`, and `part`. Safe
-        // to be called multiple times by React without producing duplicates.
         const exists = prev.messages.some((m) => m.id === targetId);
         const messages = exists
           ? prev.messages
@@ -163,25 +147,26 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
                 createdAt: Date.now(),
               },
             ];
+
         return {
           ...prev,
-          messages: messages.map((m) => {
-            if (m.id !== targetId) return m;
-            const last = m.parts[m.parts.length - 1];
+          messages: messages.map((message) => {
+            if (message.id !== targetId) return message;
+            const last = message.parts.at(-1);
             if (
               last &&
               (last.type === "text" || last.type === "thinking") &&
               last.type === part.type
             ) {
               return {
-                ...m,
+                ...message,
                 parts: [
-                  ...m.parts.slice(0, -1),
+                  ...message.parts.slice(0, -1),
                   { ...last, content: last.content + part.content },
                 ],
               };
             }
-            return { ...m, parts: [...m.parts, part] };
+            return { ...message, parts: [...message.parts, part] };
           }),
         };
       });
@@ -189,21 +174,59 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
     [],
   );
 
-  // ─── First-mount init: pick the most recent conversation ─────────
-  // On first mount we want to RESUME the most recent conversation rather
-  // than start a fresh one — that's what the user expects on a refresh.
-  // The start-session effect is gated on `initializedFromHistory` so it
-  // doesn't race against this fetch.
   useEffect(() => {
     if (!active) return;
-    if (initializedFromHistory) return;
+    let cancelled = false;
+    fetch("/api/copilot/providers")
+      .then((response) => response.json())
+      .then((data: ProvidersResponse) => {
+        if (cancelled) return;
+        const storedProvider =
+          (window.localStorage.getItem(LOCAL_STORAGE_KEY) as CopilotProviderId | null) ?? null;
+        const validStoredProvider = data.providers.some((provider) => provider.providerId === storedProvider)
+          ? storedProvider
+          : null;
+        const selectedProviderId =
+          validStoredProvider ??
+          data.defaultProviderId ??
+          data.providers[0]?.providerId ??
+          null;
+        setState((prev) => ({
+          ...prev,
+          providers: data.providers,
+          selectedProviderId,
+        }));
+        setProvidersLoaded(true);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            error: err instanceof Error ? err.message : String(err),
+          }));
+          setProvidersLoaded(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (!active || !providersLoaded || initializedFromHistory || !state.selectedProviderId) return;
     let cancelled = false;
     fetch("/api/copilot/conversations")
-      .then((r) => (r.ok ? r.json() : { conversations: [] }))
-      .then((data: { conversations: Array<{ id: string }> }) => {
+      .then((response) => (response.ok ? response.json() : { conversations: [] }))
+      .then((data: ConversationListResponse) => {
         if (cancelled) return;
         if (data.conversations.length > 0) {
-          setResumeFromConversationId(data.conversations[0].id);
+          const latest = data.conversations[0];
+          window.localStorage.setItem(LOCAL_STORAGE_KEY, latest.provider_id);
+          setResumeFromConversationId(latest.id);
+          setState((prev) => ({
+            ...prev,
+            selectedProviderId: latest.provider_id,
+          }));
         }
         setInitializedFromHistory(true);
       })
@@ -213,55 +236,24 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
     return () => {
       cancelled = true;
     };
-  }, [active, initializedFromHistory]);
-
-  // ─── Health check ────────────────────────────────────────────────
+  }, [active, providersLoaded, initializedFromHistory, state.selectedProviderId]);
 
   useEffect(() => {
     if (!active) return;
-    let cancelled = false;
-    fetch("/api/copilot/health")
-      .then((r) => r.json())
-      .then((h: CopilotHealth) => {
-        if (!cancelled) setState((p) => ({ ...p, health: h }));
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setState((p) => ({
-            ...p,
-            health: null,
-            error: err instanceof Error ? err.message : String(err),
-          }));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
-
-  // ─── Session lifecycle ───────────────────────────────────────────
-
-  useEffect(() => {
-    if (!active) return;
-    // Wait for the init phase to finish populating resumeFromConversationId
-    // from the persisted conversations list. Without this guard the effect
-    // races: it would create a fresh session immediately, then immediately
-    // discard it when init completes and bumps the dep, leaking sessions
-    // and showing a flash of empty state.
-    if (!initializedFromHistory) return;
+    if (!providersLoaded || !initializedFromHistory || !state.selectedProviderId) return;
 
     let cancelled = false;
     let createdSessionId: string | null = null;
     const targetConversationId = resumeFromConversationId;
+    const providerId = state.selectedProviderId;
 
-    setState((p) => ({
-      ...p,
+    setState((prev) => ({
+      ...prev,
       isStarting: true,
       error: null,
-      // Clear messages immediately so switching feels instant. They get
-      // refilled by the history fetch below for resumed conversations.
       messages: [],
       conversationId: targetConversationId,
+      providerConversationId: null,
     }));
 
     (async () => {
@@ -269,14 +261,22 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
         const startRes = await fetch("/api/copilot/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            targetConversationId ? { conversationId: targetConversationId } : {},
-          ),
+          body: JSON.stringify({
+            providerId,
+            ...(targetConversationId ? { conversationId: targetConversationId } : {}),
+          }),
         });
         if (!startRes.ok) {
           throw new Error(`Failed to start session: HTTP ${startRes.status}`);
         }
-        const { sessionId } = (await startRes.json()) as { sessionId: string };
+
+        const { sessionId, session } = (await startRes.json()) as {
+          sessionId: string;
+          session?: {
+            providerId?: CopilotProviderId | null;
+            providerConversationId?: string | null;
+          };
+        };
         if (cancelled) {
           void fetch(`/api/copilot/sessions/${sessionId}`, { method: "DELETE" });
           return;
@@ -284,46 +284,35 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
         createdSessionId = sessionId;
         sessionIdRef.current = sessionId;
 
-        // If we're resuming, fetch the prior history. Best-effort — empty
-        // result is fine, the panel still works for new turns.
         let historyMessages: CopilotMessage[] = [];
         if (targetConversationId) {
           try {
-            const histRes = await fetch(
-              `/api/copilot/conversations/${targetConversationId}/messages`,
-            );
+            const histRes = await fetch(`/api/copilot/conversations/${targetConversationId}/messages`);
             if (histRes.ok) {
               const data = (await histRes.json()) as HistoryResponse;
-              historyMessages = data.messages.map((m) => ({
-                id: m.id,
-                role: m.role,
-                parts: m.parts,
-                createdAt: m.createdAt,
+              historyMessages = data.messages.map((message) => ({
+                id: message.id,
+                role: message.role,
+                parts: message.parts,
+                createdAt: message.createdAt,
               }));
             }
           } catch {
-            // ignore — panel will just be empty until next turn
+            // ignore
           }
         }
         if (cancelled) return;
 
-        // We have the sessionId and (optionally) the history, but the
-        // panel isn't *truly* ready until the server-side WS subscriber
-        // is in place. Otherwise the next sendMessage fires before any
-        // subscriber exists and the stream events get dropped on the
-        // floor. We pre-load the messages here but keep `isStarting`
-        // true until the server pushes its `ready` frame.
-        setState((p) => ({
-          ...p,
+        setState((prev) => ({
+          ...prev,
           sessionId,
           messages: historyMessages,
+          selectedProviderId: session?.providerId ?? prev.selectedProviderId,
+          providerConversationId: session?.providerConversationId ?? null,
         }));
 
-        // Open the WS bridge for streaming.
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${protocol}//${window.location.host}/api/copilot/${sessionId}`,
-        );
+        const ws = new WebSocket(`${protocol}//${window.location.host}/api/copilot/${sessionId}`);
         wsRef.current = ws;
 
         ws.addEventListener("message", (event) => {
@@ -333,25 +322,34 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
           } catch {
             return;
           }
+
           if (frame.type === "ready") {
-            // Server-side subscriber is in place — safe to send turns.
-            setState((p) => ({ ...p, isStarting: false }));
-          } else if (frame.type === "copilot.stream") {
-            appendPartToCurrentAssistant(frame.messageId, frame.part);
-          } else if (frame.type === "copilot.done") {
-            currentAssistantIdRef.current = null;
-            currentMessageIdRef.current = null;
-            setState((p) => ({ ...p, isStreaming: false }));
+            setState((prev) => ({ ...prev, isStarting: false }));
+            return;
           }
+
+          if (frame.type === "copilot.stream") {
+            appendPartToCurrentAssistant(frame.messageId, frame.part);
+            return;
+          }
+
+          currentAssistantIdRef.current = null;
+          currentMessageIdRef.current = null;
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            conversationId: frame.conversationId ?? prev.conversationId,
+            selectedProviderId: frame.providerId ?? prev.selectedProviderId,
+          }));
         });
 
         ws.addEventListener("error", () => {
-          setState((p) => ({ ...p, error: "WebSocket error" }));
+          setState((prev) => ({ ...prev, error: "WebSocket error" }));
         });
       } catch (err) {
         if (cancelled) return;
-        setState((p) => ({
-          ...p,
+        setState((prev) => ({
+          ...prev,
           isStarting: false,
           error: err instanceof Error ? err.message : String(err),
         }));
@@ -372,24 +370,26 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
       sessionIdRef.current = null;
       currentAssistantIdRef.current = null;
       currentMessageIdRef.current = null;
-      // Reset session-specific state but PRESERVE the health check —
-      // the health effect is gated on [active] and doesn't re-run on
-      // restart, so wiping health here would leave it null forever and
-      // permanently disable the submit button. Errors are also cleared
-      // so a stale message doesn't bleed into the new session.
-      setState((p) => ({
-        ...p,
+      setState((prev) => ({
+        ...prev,
         sessionId: null,
         conversationId: null,
+        providerConversationId: null,
         messages: [],
         isStreaming: false,
         isStarting: false,
         error: null,
       }));
     };
-  }, [active, initializedFromHistory, resumeFromConversationId, restartCounter, appendPartToCurrentAssistant]);
-
-  // ─── Send message ────────────────────────────────────────────────
+  }, [
+    active,
+    appendPartToCurrentAssistant,
+    initializedFromHistory,
+    providersLoaded,
+    restartCounter,
+    resumeFromConversationId,
+    state.selectedProviderId,
+  ]);
 
   const sendMessage = useCallback(async (text: string): Promise<void> => {
     const trimmed = text.trim();
@@ -397,12 +397,12 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
     const id = sessionIdRef.current;
     if (!id) throw new Error("Copilot session not ready");
 
-    setState((p) => ({
-      ...p,
+    setState((prev) => ({
+      ...prev,
       isStreaming: true,
       error: null,
       messages: [
-        ...p.messages,
+        ...prev.messages,
         {
           id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           role: "user",
@@ -413,18 +413,18 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
     }));
 
     try {
-      const res = await fetch(`/api/copilot/sessions/${id}/messages`, {
+      const response = await fetch(`/api/copilot/sessions/${id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${response.status}`);
       }
     } catch (err) {
-      setState((p) => ({
-        ...p,
+      setState((prev) => ({
+        ...prev,
         isStreaming: false,
         error: err instanceof Error ? err.message : String(err),
       }));
@@ -432,21 +432,37 @@ export function useCopilotSession(active: boolean): UseCopilotSessionApi {
   }, []);
 
   const startNew = useCallback(() => {
-    // Clear any resume target and bump the restart counter so the
-    // start-session effect re-runs even when resumeFromConversationId is
-    // already null (which is the common "I just opened the panel" case).
+    clearLiveSession();
     setResumeFromConversationId(null);
-    setRestartCounter((n) => n + 1);
-  }, []);
+    setRestartCounter((count) => count + 1);
+  }, [clearLiveSession]);
 
-  const switchConversation = useCallback((conversationId: string) => {
+  const switchConversation = useCallback((conversationId: string, providerId: CopilotProviderId) => {
+    clearLiveSession();
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, providerId);
+    setState((prev) => ({
+      ...prev,
+      selectedProviderId: providerId,
+    }));
     setResumeFromConversationId(conversationId);
-  }, []);
+  }, [clearLiveSession]);
+
+  const setProviderId = useCallback((providerId: CopilotProviderId) => {
+    clearLiveSession();
+    window.localStorage.setItem(LOCAL_STORAGE_KEY, providerId);
+    setResumeFromConversationId(null);
+    setState((prev) => ({
+      ...prev,
+      selectedProviderId: providerId,
+    }));
+    setRestartCounter((count) => count + 1);
+  }, [clearLiveSession]);
 
   return {
     ...state,
     sendMessage,
     startNew,
     switchConversation,
+    setProviderId,
   };
 }
