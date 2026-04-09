@@ -1,15 +1,15 @@
 ---
 id: TKTB-051
 title: Project soul and developer philosophy
-status: open
-created: '2026-04-05T08:15:00.000Z'
-updated: '2026-04-05T08:15:00.000Z'
+status: backlog
 tags:
   - agent-experience
   - important
 relatedTo:
   - TKTB-049
   - TKTB-018
+created: '2026-04-05T08:15:00.000Z'
+updated: '2026-04-09T12:12:17.927Z'
 ---
 
 ## The Gap

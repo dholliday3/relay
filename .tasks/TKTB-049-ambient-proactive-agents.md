@@ -1,13 +1,13 @@
 ---
 id: TKTB-049
 title: Ambient and proactive agents
-status: open
+status: backlog
 tags:
   - agent-experience
   - important
   - deferred-desktop
 created: '2026-04-05T07:45:00.000Z'
-updated: '2026-04-08T05:19:38.239Z'
+updated: '2026-04-09T12:12:17.919Z'
 ---
 
 ## The Idea

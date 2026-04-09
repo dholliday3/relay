@@ -1,11 +1,11 @@
 ---
 id: TKTB-048
 title: Saved prompts with smart suggestions
-status: open
-created: '2026-04-05T07:30:00.000Z'
-updated: '2026-04-05T07:30:00.000Z'
+status: backlog
 tags:
   - agent-experience
+created: '2026-04-05T07:30:00.000Z'
+updated: '2026-04-09T12:12:17.931Z'
 ---
 
 ## Overview

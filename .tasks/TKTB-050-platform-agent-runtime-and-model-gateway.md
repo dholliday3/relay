@@ -1,7 +1,7 @@
 ---
 id: TKTB-050
 title: Platform agent runtime and model gateway
-status: open
+status: backlog
 tags:
   - agent-experience
   - architecture
@@ -11,7 +11,7 @@ relatedTo:
   - TKTB-049
   - TKTB-047
 created: '2026-04-05T08:00:00.000Z'
-updated: '2026-04-08T05:19:37.704Z'
+updated: '2026-04-09T12:12:17.924Z'
 ---
 
 ## The Problem

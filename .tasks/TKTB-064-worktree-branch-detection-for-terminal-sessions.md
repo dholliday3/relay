@@ -1,7 +1,7 @@
 ---
 id: TKTB-064
 title: Worktree/branch detection for terminal sessions
-status: open
+status: backlog
 tags:
   - terminal
   - workspace
@@ -13,7 +13,7 @@ relatedTo:
   - TKTB-054
   - TKTB-055
 created: '2026-04-08T05:17:35.220Z'
-updated: '2026-04-08T05:17:35.220Z'
+updated: '2026-04-09T12:16:35.373Z'
 ---
 
 ## Context
