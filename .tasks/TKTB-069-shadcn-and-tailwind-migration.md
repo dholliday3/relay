@@ -1,7 +1,7 @@
 ---
 id: TKTB-069
 title: Migrate UI off legacy App.css onto shadcn + Tailwind
-status: in-progress
+status: done
 tags:
   - ui
   - tech-debt
@@ -10,7 +10,7 @@ tags:
 relatedTo:
   - TKTB-068
 created: '2026-04-08T00:00:00.000Z'
-updated: '2026-04-09T09:00:00.000Z'
+updated: '2026-04-09T10:00:00.000Z'
 ---
 
 ## Context
@@ -109,14 +109,14 @@ Surfaces to migrate (rough estimate, in order of effort):
 | 21 | ☑ | Kanban board + cards (`KanbanBoard.tsx` + `PlanKanbanBoard.tsx`) | Tailwind utilities + shadcn `Badge`/`Button` + Phosphor `CaretDoubleLeft`/`Plus`; dnd-kit multi-container drag preserved; [writing-mode:vertical-rl] for collapsed column labels (commit `ea80701`) |
 | 22 | ☑ | Dashboard | Tailwind utilities + shadcn `Button` with extracted `StatCard`/`StatButton`/`GroupCard`/`DashListRow`/`SectionTitle` helpers (commit `789727a`) |
 | 23 | ☑ | Right rail + terminal chrome | Tailwind utilities + shadcn `Button` + Phosphor `Terminal`/`Sparkle`/`Plus`/`X` (commit `a71a36c`) |
-| 24 | ☐ | Tiptap editor styles | Move to `styles/tiptap.css`, rewrite on shadcn vars; replace hand-rolled `hljs-*` theme |
+| 24 | ☑ | Tiptap editor styles | Moved to `packages/ui/src/styles/tiptap.css`, rewritten against shadcn tokens (`var(--background)`/`var(--foreground)`/`var(--card)`/`var(--muted)`/`var(--primary)`/`var(--accent)`/`var(--border)`). `.hljs-*` syntax palette left as-is (tracked as follow-up). App.css deleted entirely (commit `db6a508`) |
 | 25 | ☑ | Board modal (plans kanban detail overlay) | shadcn `Dialog` (commit `3a61090`) — added during migration; was not in original list |
 
 Also fixed during this work: split `html, body, #root { font-size: 13px }` so `font-size: 13px` is scoped to `#root` only. The original cascade shrunk every Tailwind rem-based utility (`text-sm`, `h-7`, `gap-2`, etc.) by `13/16×`, which is why shadcn primitives initially rendered undersized.
 
 Each row is its own PR. Mark off as completed inline in this ticket as they land.
 
-**Progress:** 24 of 25 rows complete (96%). App.css down from ~2,800 lines → 290 lines (90% reduction). Only row #24 (TipTap editor content styles) remains — those target ProseMirror's emitted DOM and have to live in a CSS file, so the task is to move them to `styles/tiptap.css` against shadcn tokens rather than delete them.
+**Progress:** 25 of 25 rows complete (100%). **App.css deleted — down from ~2,800 lines to zero.** All remaining content-level styling lives in `packages/ui/src/styles/tiptap.css` (only because TipTap emits its own DOM) and resolves through the shadcn token pipeline. Every legacy `--bg*` / `--tb-*` / `--text*` var reference is gone.
 
 ### Phase 3 — delete the shim
 
