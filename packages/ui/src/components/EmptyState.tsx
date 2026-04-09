@@ -2,8 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Centered message for empty/zero-data panels.
- * Replaces legacy .empty-state / .empty-state-content / .empty-state-title /
- * .empty-state-subtitle / .empty-state-hints / .hint-row from App.css.
+ * Used by the tasks and plans list/board views.
  */
 export function EmptyState({
   title,

@@ -45,7 +45,6 @@ const CopilotPanel = lazy(() =>
 );
 import { patchTask } from "../api";
 import type { Status, Priority, Task } from "../types";
-import "../App.css";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -395,7 +394,7 @@ function RootLayoutInner() {
         <ButtonGroup aria-label="Space">
           <Button
             variant={isTasks ? "default" : "outline"}
-            onClick={() => navigate({ to: "/tasks", search: { view: "list", status: [], project: [], epic: [], sprint: [] } })}
+            onClick={() => navigate({ to: "/tasks", search: { view: currentView === "board" ? "board" : "list" as const, status: [], project: [], epic: [], sprint: [] } })}
             role="radio"
             aria-checked={isTasks}
             aria-label="Tasks"
@@ -404,7 +403,7 @@ function RootLayoutInner() {
           </Button>
           <Button
             variant={isPlans ? "default" : "outline"}
-            onClick={() => navigate({ to: "/plans", search: { view: "list", status: [], project: [] } })}
+            onClick={() => navigate({ to: "/plans", search: { view: currentView === "board" ? "board" : "list" as const, status: [], project: [] } })}
             role="radio"
             aria-checked={isPlans}
             aria-label="Plans"
@@ -444,7 +443,7 @@ function RootLayoutInner() {
           >
             <div className="flex items-center gap-1 overflow-x-auto">
               <CollapsibleContent
-                className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-right-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right-2"
+                className="overflow-hidden [animation-duration:240ms] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-right-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right-2"
               >
                 <div className="flex items-center gap-1 pr-1">
                   {isTasks ? (

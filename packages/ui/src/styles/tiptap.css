@@ -1,94 +1,43 @@
-/* Reset removed: Tailwind v4's preflight (loaded via index.css) already
-   provides `box-sizing: border-box` on all elements and a sensible margin
-   reset on body. Re-adding `* { margin: 0; padding: 0 }` here is actively
-   hostile because it's UNLAYERED CSS, and per Tailwind v4 cascade rules
-   unlayered styles beat every layered utility regardless of specificity —
-   it silently clobbers `.ml-auto`, `.p-3`, every `m-*` and `p-*` Tailwind
-   class on shadcn/ai-elements components, breaking message alignment and
-   padding throughout the copilot panel. */
-
 /*
- * Legacy theme compatibility shim — TKTB-069.
+ * TipTap editor content styles.
  *
- * Every selector below this block (~366 of them, ~2,800 lines) was written
- * against a hand-rolled `--bg`/`--bg-panel`/`--text`/`--tb-*` palette of
- * hardcoded hex values. Rather than touch every selector at once, we alias
- * those legacy var names to the active shadcn theme tokens (defined in
- * `./themes/<active>.css` and exposed by `./index.css`). This means the
- * entire legacy surface picks up the active theme automatically — caffeine
- * by default — and the copilot panel no longer looks like a transplant.
+ * These selectors target ProseMirror's rendered DOM — TipTap emits the
+ * content HTML itself, so we can't compose this through Tailwind utility
+ * classes the way we do for the rest of the app. The rules are scoped to
+ * `.tiptap-editor .tiptap` so they never leak onto other surfaces.
  *
- * NEW UI MUST NOT consume these vars or the legacy class names below.
- * See CLAUDE.md "UI conventions" — use shadcn primitives + Tailwind utility
- * classes (`bg-background`, `text-foreground`, `border-border`, etc.) that
- * resolve to the same shadcn tokens directly.
+ * Palette: every color resolves against the active shadcn theme tokens
+ * (--background/--foreground/--card/--muted/etc.), so swapping themes in
+ * `./themes/<active>.css` automatically recolors the editor.
  *
- * The long-term goal (TKTB-069 phase 2/3) is to migrate every selector below
- * to shadcn + Tailwind, then delete this file entirely.
+ * Known follow-up: the hljs-* syntax theme at the bottom is hand-picked
+ * (One Dark Pro-ish) and does NOT resolve against theme tokens. Replacing
+ * it with a themeable syntax palette is tracked separately.
  */
-:root {
-  --bg: var(--background);
-  --bg-panel: var(--card);
-  --bg-hover: var(--accent);
-  --bg-active: var(--accent);
-  --tb-border: var(--border);
-  --text: var(--foreground);
-  --text-muted: var(--muted-foreground);
-  --text-dim: var(--muted-foreground);
-  --tb-accent: var(--primary);
-  --chip-bg: var(--secondary);
-  --chip-text: var(--secondary-foreground);
-  /* Latent bug fix: `var(--hover)` was referenced by some selectors but
-     never defined in the original palette — it silently fell back to unset. */
-  --hover: var(--accent);
-  --tb-font-sans: var(--font-sans);
-  /* --font-mono is already defined by the active theme. */
-}
 
-html,
-body {
-  height: 100%;
-}
-
-/* Legacy surfaces in this file expect 13px to cascade from #root.
- * Do NOT move font-size up to html/body — that would shrink 1rem and
- * scale every shadcn/Tailwind rem-based size (text-sm, h-7, gap-2, …)
- * to 13/16 of intended. Keep font-size scoped to #root so legacy
- * inheritance stays intact while shadcn primitives render at the
- * sizes Tailwind ships. */
-#root {
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--tb-font-sans);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-/* Tiptap editor */
 .tiptap-editor .tiptap {
   width: 100%;
   min-height: 300px;
   padding: 12px;
-  border: 1px solid var(--tb-border);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text);
-  font-family: var(--tb-font-sans);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.6;
   outline: none;
 }
 
 .tiptap-editor .tiptap:focus {
-  border-color: var(--tb-accent);
+  border-color: var(--primary);
 }
 
 /* Placeholder */
 .tiptap-editor .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: var(--text-dim);
+  color: var(--muted-foreground);
   pointer-events: none;
   height: 0;
 }
@@ -153,7 +102,7 @@ body {
   appearance: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid var(--text-dim);
+  border: 1.5px solid var(--muted-foreground);
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
@@ -161,8 +110,8 @@ body {
 }
 
 .tiptap-editor .tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
-  background: var(--tb-accent);
-  border-color: var(--tb-accent);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .tiptap-editor .tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
@@ -172,14 +121,14 @@ body {
   top: 1px;
   width: 5px;
   height: 9px;
-  border: solid #fff;
+  border: solid var(--primary-foreground);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 
 .tiptap-editor .tiptap ul[data-type="taskList"] li[data-checked="true"] > div > p {
   text-decoration: line-through;
-  color: var(--text-dim);
+  color: var(--muted-foreground);
 }
 
 /* Nested task lists */
@@ -187,19 +136,19 @@ body {
   padding-left: 24px;
 }
 
-/* Code */
+/* Inline code */
 .tiptap-editor .tiptap code {
   font-family: var(--font-mono);
   font-size: 12px;
-  background: var(--bg-hover);
+  background: var(--accent);
   padding: 1px 4px;
   border-radius: 3px;
-  color: #e9967a;
+  color: var(--primary);
 }
 
 /* Code block */
 .tiptap-editor .tiptap pre {
-  background: #1a1a2e;
+  background: var(--muted);
   border-radius: 6px;
   padding: 12px 16px;
   margin: 8px 0;
@@ -210,29 +159,29 @@ body {
   background: none;
   padding: 0;
   border-radius: 0;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 1.5;
 }
 
 /* Blockquote */
 .tiptap-editor .tiptap blockquote {
-  border-left: 3px solid var(--tb-border);
+  border-left: 3px solid var(--border);
   padding-left: 12px;
   margin: 8px 0;
-  color: var(--text-muted);
+  color: var(--muted-foreground);
 }
 
 /* Horizontal rule */
 .tiptap-editor .tiptap hr {
   border: none;
-  border-top: 1px solid var(--tb-border);
+  border-top: 1px solid var(--border);
   margin: 16px 0;
 }
 
 /* Links */
 .tiptap-editor .tiptap a {
-  color: var(--tb-accent);
+  color: var(--primary);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -246,7 +195,12 @@ body {
   font-style: italic;
 }
 
-/* Lowlight syntax highlighting */
+/*
+ * Lowlight syntax highlighting.
+ *
+ * Hand-picked One Dark Pro-ish palette — NOT themeable via shadcn tokens.
+ * Tracked as a follow-up in TKTB-069 non-goals.
+ */
 .tiptap-editor .tiptap pre .hljs-comment,
 .tiptap-editor .tiptap pre .hljs-quote {
   color: #6a737d;
@@ -286,5 +240,3 @@ body {
 .tiptap-editor .tiptap pre .hljs-function {
   color: #61afef;
 }
-
-
