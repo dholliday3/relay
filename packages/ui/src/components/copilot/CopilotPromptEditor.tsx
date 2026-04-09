@@ -367,8 +367,8 @@ export const CopilotPromptEditor = forwardRef<
             <MentionPopover
               items={mentionState.items}
               activeIndex={activeMentionIndex}
-              category={null}
-              query={mentionState.query}
+              category={mentionState.category}
+              query={mentionState.needle}
               onSelect={handleMentionSelect}
               onHover={setActiveMentionIndex}
             />

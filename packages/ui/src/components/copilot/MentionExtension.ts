@@ -26,16 +26,49 @@ export interface MentionMenuState {
   command: ((item: MentionItem) => void) | null;
   clientRect: (() => DOMRect | null) | null;
   query: string;
+  /** Parsed category prefix — null when the user hasn't typed `@task `/`@plan `. */
+  category: ContextRefKind | null;
+  /** The search term after stripping any category prefix. */
+  needle: string;
 }
 
+/** Exposed so the popover can show the parsed category / needle. */
+export { parseQuery };
+
 const MAX_RESULTS = 5;
+
+/**
+ * Parse a mention query for an optional category prefix. Supports
+ * both singular and plural forms:
+ *
+ *   "task TKT"      → { category: "task", needle: "tkt" }
+ *   "tasks foo"     → { category: "task", needle: "foo" }
+ *   "plan "         → { category: "plan", needle: "" }
+ *   "TKT-025"       → { category: null,   needle: "tkt-025" }
+ *
+ * The space after the category keyword is required — typing just
+ * "task" matches a task whose title contains "task" (no narrowing).
+ */
+function parseQuery(query: string): {
+  category: ContextRefKind | null;
+  needle: string;
+} {
+  const match = /^(tasks?|plans?)\s+(.*)$/i.exec(query);
+  if (!match) {
+    return { category: null, needle: query.toLowerCase() };
+  }
+  const kind: ContextRefKind = match[1].toLowerCase().startsWith("task")
+    ? "task"
+    : "plan";
+  return { category: kind, needle: match[2].toLowerCase() };
+}
 
 function filterItems(
   query: string,
   tasks: Task[],
   plans: Plan[],
 ): MentionItem[] {
-  const needle = query.toLowerCase();
+  const { category, needle } = parseQuery(query);
   const matches: MentionItem[] = [];
 
   const pushIfMatches = (
@@ -55,8 +88,12 @@ function filterItems(
     }
   };
 
-  for (const task of tasks) pushIfMatches("task", task.id, task.title);
-  for (const plan of plans) pushIfMatches("plan", plan.id, plan.title);
+  if (category === null || category === "task") {
+    for (const task of tasks) pushIfMatches("task", task.id, task.title);
+  }
+  if (category === null || category === "plan") {
+    for (const plan of plans) pushIfMatches("plan", plan.id, plan.title);
+  }
 
   // Prioritise exact ID prefix hits so typing a partial ID jumps the
   // match to the top even if title matches come alphabetically first.
@@ -96,7 +133,12 @@ export function createMentionExtension({
         Suggestion({
           editor: this.editor,
           char: "@",
-          allowSpaces: false,
+          // Keep the suggestion alive across spaces so the user can
+          // type a category prefix (`@task `, `@plan `) followed by a
+          // search term. The suggestion still terminates on newline,
+          // selection, Escape, or when the user deletes back past the
+          // `@` trigger.
+          allowSpaces: true,
           startOfLine: false,
           items: ({ query }: { query: string }) =>
             filterItems(query, getTasks(), getPlans()),
@@ -129,19 +171,25 @@ export function createMentionExtension({
           },
           render: () => ({
             onStart: (props: SuggestionProps<MentionItem, MentionItem>) => {
+              const { category, needle } = parseQuery(props.query);
               onStateChange({
                 items: props.items,
                 command: props.command,
                 clientRect: props.clientRect ?? null,
                 query: props.query,
+                category,
+                needle,
               });
             },
             onUpdate: (props: SuggestionProps<MentionItem, MentionItem>) => {
+              const { category, needle } = parseQuery(props.query);
               onStateChange({
                 items: props.items,
                 command: props.command,
                 clientRect: props.clientRect ?? null,
                 query: props.query,
+                category,
+                needle,
               });
             },
             onKeyDown: (props: SuggestionKeyDownProps) => {

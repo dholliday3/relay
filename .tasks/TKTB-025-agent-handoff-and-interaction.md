@@ -1,13 +1,13 @@
 ---
 id: TKTB-025
-title: Copilot context refs — @-mentions, quick-add, and hand-off presets
-status: backlog
+title: 'Copilot context refs — @-mentions, quick-add, and hand-off presets'
+status: in-progress
 priority: high
 tags:
   - ideas
   - copilot
 created: '2026-04-03T22:28:31.700Z'
-updated: '2026-04-09T12:00:00.000Z'
+updated: '2026-04-09T12:08:20.075Z'
 ---
 
 I want rich primitive references in the copilot chat. When I'm talking to the agent I should be able to pull tasks and plans in as first-class context — inline via `@`-mentions in the input, and via one-click "Add to chat" buttons on detail views. Referenced primitives should render as chips (both in the input and in sent messages) with hovercards so I can glance at them without navigating away, and the agent should receive the full, current content of each referenced primitive when the message is forwarded.
@@ -71,7 +71,7 @@ The copilot input is a Tiptap-based contenteditable editor (not a plain textarea
 - Matches across tasks **and** plans, on ID substring + title substring, prioritising exact ID prefix hits
 - Arrow keys navigate, Enter selects, Escape closes
 - On select, the `@query` text is replaced with a `contextRef` node at the caret plus a trailing space
-- *(Category prefix filter `@tasks `/`@plans ` — deferred, not compatible with the single-word query model of @tiptap/suggestion without extra work. Follow-up ticket if we want it back.)*
+- **Category prefix filter:** typing `@task ` / `@tasks ` narrows results to tasks; `@plan ` / `@plans ` narrows to plans; without a prefix the popover searches across both. Both singular and plural forms accepted. Enabled via `allowSpaces: true` on the Suggestion plugin + a `parseQuery` helper in `MentionExtension` that splits the query into `{ category, needle }` before filtering
 
 ### Quick-add button on detail views
 
@@ -136,7 +136,7 @@ The user reviews and edits before sending. These buttons live next to "Add to ch
 - Bulk "kick off all open tickets"
 - Session linking (owned by TKTB-055, TKTB-067)
 - Worktree-aware agent launching (owned by TKTB-064)
-- Category prefix filter (`@tasks `/`@plans `) — incompatible with @tiptap/suggestion's single-word query model; follow-up if we want it back
+- Fuzzy (fzf-style) search ranking — currently substring with ID-prefix priority
 
 ## Open questions
 

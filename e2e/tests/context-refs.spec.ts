@@ -242,6 +242,55 @@ test.describe("@-mention popover", () => {
     expect(text).toContain(task.id);
   });
 
+  test("typing '@plan ' narrows results to plans only and keeps the popover open", async ({ page }) => {
+    const task = await createTask(page, "Noise task");
+    const plan = await createPlan(page, "Target plan");
+
+    await page.goto("/tasks");
+    await openAssistant(page);
+    await waitForCopilotReady(page);
+
+    await editor(page).click();
+    await page.keyboard.type("@plan ");
+
+    // Popover stays open across the space because allowSpaces: true
+    const popover = page.getByRole("listbox", { name: "Context reference search" });
+    await expect(popover).toBeVisible();
+    // Only plans should be listed now.
+    await expect(popover.getByText(plan.id)).toBeVisible();
+    await expect(popover.getByText(task.id)).toHaveCount(0);
+
+    // Continue typing a partial search term — popover must still follow
+    // keystrokes past the initial space.
+    await page.keyboard.type("tar");
+    await expect(popover.getByText(plan.id)).toBeVisible();
+
+    // Select it
+    await page.keyboard.press("Enter");
+    const chip = editor(page).getByTestId(CHIP_TEST_ID);
+    await expect(chip).toHaveCount(1);
+    await expect(chip).toHaveAttribute("data-id", plan.id);
+    await expect(chip).toHaveAttribute("data-kind", "plan");
+  });
+
+  test("typing '@task ' narrows results to tasks only", async ({ page }) => {
+    const task = await createTask(page, "Target task");
+    await createPlan(page, "Noise plan");
+
+    await page.goto("/tasks");
+    await openAssistant(page);
+    await waitForCopilotReady(page);
+
+    await editor(page).click();
+    await page.keyboard.type("@task ");
+
+    const popover = page.getByRole("listbox", { name: "Context reference search" });
+    await expect(popover).toBeVisible();
+    await expect(popover.getByText(task.id)).toBeVisible();
+    // The noise plan shouldn't appear.
+    await expect(popover.getByText(/PLAN-/)).toHaveCount(0);
+  });
+
   test("Escape closes the popover without inserting", async ({ page }) => {
     await createTask(page, "Escape test");
     await page.goto("/tasks");
