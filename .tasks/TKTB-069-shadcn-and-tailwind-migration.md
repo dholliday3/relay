@@ -10,7 +10,7 @@ tags:
 relatedTo:
   - TKTB-068
 created: '2026-04-08T00:00:00.000Z'
-updated: '2026-04-09T06:00:00.000Z'
+updated: '2026-04-09T07:00:00.000Z'
 ---
 
 ## Context
@@ -106,7 +106,7 @@ Surfaces to migrate (rough estimate, in order of effort):
 | 18 | ☑ | Task list rows (`TaskList.tsx` + `PlanList.tsx`) | Tailwind utilities + shadcn `Badge` + Phosphor `CaretDown`/`DotsSixVertical`/`Plus` icons; dnd-kit sortable preserved (commit `b8bcd2b`) |
 | 19 | ☐ | Task detail view | Tailwind utilities |
 | 20 | ☑ | New ticket button + create dialog | shadcn `Dialog` (`CreateTicketModal` + `CreatePlanModal`) (commit `7fae3ee`) |
-| 21 | ☐ | Kanban board + cards | Tailwind utilities |
+| 21 | ☑ | Kanban board + cards (`KanbanBoard.tsx` + `PlanKanbanBoard.tsx`) | Tailwind utilities + shadcn `Badge`/`Button` + Phosphor `CaretDoubleLeft`/`Plus`; dnd-kit multi-container drag preserved; [writing-mode:vertical-rl] for collapsed column labels (commit `ea80701`) |
 | 22 | ☐ | Dashboard | Tailwind utilities |
 | 23 | ☐ | Right rail + terminal chrome | Tailwind utilities |
 | 24 | ☐ | Tiptap editor styles | Move to `styles/tiptap.css`, rewrite on shadcn vars; replace hand-rolled `hljs-*` theme |
@@ -116,7 +116,7 @@ Also fixed during this work: split `html, body, #root { font-size: 13px }` so `f
 
 Each row is its own PR. Mark off as completed inline in this ticket as they land.
 
-**Progress:** 14 of 25 rows complete (56%). App.css down from ~2,800 lines → 1,674 lines.
+**Progress:** 15 of 25 rows complete (60%). App.css down from ~2,800 lines → 1,401 lines.
 
 ### Phase 3 — delete the shim
 
