@@ -93,6 +93,7 @@ function TasksRoute() {
                 meta={ctx.meta}
                 onUpdated={ctx.loadTasks}
                 onDelete={ctx.handleDeleteRequest}
+                onRequestClose={() => ctx.setActiveTaskId(null)}
               />
             )}
           </DialogContent>

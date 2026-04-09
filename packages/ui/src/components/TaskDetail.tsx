@@ -47,10 +47,18 @@ interface TaskDetailProps {
   meta: Meta;
   onUpdated: () => void;
   onDelete?: (id: string) => void;
+  /**
+   * Called when a hand-off button (Add / Review) wants its containing
+   * surface to close — set by the route when TaskDetail is rendered
+   * inside a modal Dialog, so clicking those buttons drops the modal
+   * and hands focus to the copilot editor. Leave undefined in the
+   * inline list-view case to keep the detail in place.
+   */
+  onRequestClose?: () => void;
 }
 
-export function TaskDetail({ task, meta, onUpdated, onDelete }: TaskDetailProps) {
-  const { insertIntoCopilotInput, prefillCopilotInput } = useAppContext();
+export function TaskDetail({ task, meta, onUpdated, onDelete, onRequestClose }: TaskDetailProps) {
+  const { insertIntoCopilotInput } = useAppContext();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -160,7 +168,8 @@ export function TaskDetail({ task, meta, onUpdated, onDelete }: TaskDetailProps)
       title: task.title,
     });
     insertIntoCopilotInput(marker);
-  }, [task.id, task.title, insertIntoCopilotInput]);
+    onRequestClose?.();
+  }, [task.id, task.title, insertIntoCopilotInput, onRequestClose]);
 
   const handleGetFeedback = useCallback(() => {
     const marker = renderContextRefMarker({
@@ -168,10 +177,11 @@ export function TaskDetail({ task, meta, onUpdated, onDelete }: TaskDetailProps)
       id: task.id,
       title: task.title,
     });
-    prefillCopilotInput(
+    insertIntoCopilotInput(
       `Please review ${marker} and give me feedback on scope, approach, and any gaps.`,
     );
-  }, [task.id, task.title, prefillCopilotInput]);
+    onRequestClose?.();
+  }, [task.id, task.title, insertIntoCopilotInput, onRequestClose]);
 
   return (
     <div className="flex max-w-[800px] flex-col gap-4">
@@ -192,21 +202,23 @@ export function TaskDetail({ task, meta, onUpdated, onDelete }: TaskDetailProps)
           )}
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleAddToChat}
             title="Add to copilot chat"
             aria-label="Add to copilot chat"
           >
             <ChatCircleTextIcon />
+            Add
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleGetFeedback}
-            title="Get agent feedback on this task"
-            aria-label="Get agent feedback on this task"
+            title="Review this task with the agent"
+            aria-label="Review this task"
           >
             <SparkleIcon />
+            Review
           </Button>
           <Button
             variant={copyStatus === "copied" ? "secondary" : "outline"}

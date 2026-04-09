@@ -86,6 +86,7 @@ function PlansRoute() {
                 onDelete={ctx.handleDeleteRequest}
                 onTaskClick={ctx.handlePlanTaskClick}
                 onTasksCreated={ctx.loadTasks}
+                onRequestClose={() => ctx.setActivePlanId(null)}
               />
             )}
           </DialogContent>

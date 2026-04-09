@@ -171,7 +171,7 @@ test.describe('"Get feedback" preset on task detail', () => {
     const task = await createTask(page, "Feedback me");
     await openTaskDetail(page, task);
 
-    await page.getByRole("button", { name: "Get agent feedback on this task" }).click();
+    await page.getByRole("button", { name: "Review this task" }).click();
     await waitForCopilotReady(page);
 
     const chip = editor(page).getByTestId(CHIP_TEST_ID);

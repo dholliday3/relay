@@ -29,10 +29,18 @@ interface PlanDetailProps {
   onDelete?: (id: string) => void;
   onTaskClick?: (taskId: string) => void;
   onTasksCreated?: () => void;
+  /**
+   * Called when a hand-off button (Add / Brainstorm / Review) wants
+   * its containing surface to close — set by the route when PlanDetail
+   * is rendered inside a modal Dialog, so clicking those buttons drops
+   * the modal and hands focus to the copilot editor. Leave undefined
+   * in the inline list-view case to keep the detail in place.
+   */
+  onRequestClose?: () => void;
 }
 
-export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, onTasksCreated }: PlanDetailProps) {
-  const { insertIntoCopilotInput, prefillCopilotInput } = useAppContext();
+export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, onTasksCreated, onRequestClose }: PlanDetailProps) {
+  const { insertIntoCopilotInput } = useAppContext();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(plan.title);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -116,7 +124,8 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       title: plan.title,
     });
     insertIntoCopilotInput(marker);
-  }, [plan.id, plan.title, insertIntoCopilotInput]);
+    onRequestClose?.();
+  }, [plan.id, plan.title, insertIntoCopilotInput, onRequestClose]);
 
   const handleGetFeedback = useCallback(() => {
     const marker = renderContextRefMarker({
@@ -124,10 +133,11 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       id: plan.id,
       title: plan.title,
     });
-    prefillCopilotInput(
+    insertIntoCopilotInput(
       `Please review ${marker} and give me feedback on scope, approach, and any gaps.`,
     );
-  }, [plan.id, plan.title, prefillCopilotInput]);
+    onRequestClose?.();
+  }, [plan.id, plan.title, insertIntoCopilotInput, onRequestClose]);
 
   const handleBrainstorm = useCallback(() => {
     const marker = renderContextRefMarker({
@@ -135,10 +145,11 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       id: plan.id,
       title: plan.title,
     });
-    prefillCopilotInput(
+    insertIntoCopilotInput(
       `Let's brainstorm ${marker}. Walk me through your thinking and help me refine it.`,
     );
-  }, [plan.id, plan.title, prefillCopilotInput]);
+    onRequestClose?.();
+  }, [plan.id, plan.title, insertIntoCopilotInput, onRequestClose]);
 
   const handleBodyChange = useCallback(
     (newBody: string) => {
@@ -180,30 +191,33 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleAddToChat}
             title="Add to copilot chat"
             aria-label="Add to copilot chat"
           >
             <ChatCircleTextIcon />
+            Add
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleBrainstorm}
             title="Brainstorm this plan with the agent"
             aria-label="Brainstorm this plan with the agent"
           >
             <BrainIcon />
+            Brainstorm
           </Button>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleGetFeedback}
-            title="Get agent feedback on this plan"
-            aria-label="Get agent feedback on this plan"
+            title="Review this plan with the agent"
+            aria-label="Review this plan"
           >
             <SparkleIcon />
+            Review
           </Button>
           <Button
             variant="outline"

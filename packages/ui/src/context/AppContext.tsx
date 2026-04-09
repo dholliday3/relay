@@ -100,17 +100,15 @@ interface AppContextValue {
   rightRailOpen: boolean;
 
   // Copilot input insertion — drives @-mention quick-add and preset
-  // hand-off buttons. Detail views call `insertIntoCopilotInput(marker)`
-  // or `prefillCopilotInput(text)` and the CopilotPanel consumes the
-  // pending insertion on mount / when it changes.
+  // hand-off buttons. Detail views call `insertIntoCopilotInput(text)`
+  // and the CopilotPanel consumes the pending insertion on mount /
+  // when it changes.
   pendingCopilotInsertion:
     | { kind: "append"; text: string }
     | { kind: "replace"; text: string }
     | null;
   /** Append a marker (or other text) to the current copilot input at the end, with a leading space if needed. Opens the assistant panel. */
   insertIntoCopilotInput: (text: string) => void;
-  /** Replace the full copilot input with a pre-filled template (e.g. "Get feedback"). Opens the assistant panel. */
-  prefillCopilotInput: (text: string) => void;
   /** Called by CopilotPanel after it has consumed a pending insertion. */
   consumePendingCopilotInsertion: () => void;
 
@@ -559,14 +557,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [openAssistant],
   );
 
-  const prefillCopilotInput = useCallback(
-    (text: string) => {
-      openAssistant();
-      setPendingCopilotInsertion({ kind: "replace", text });
-    },
-    [openAssistant],
-  );
-
   const consumePendingCopilotInsertion = useCallback(() => {
     setPendingCopilotInsertion(null);
   }, []);
@@ -643,7 +633,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     handleRightRailDragStart,
     pendingCopilotInsertion,
     insertIntoCopilotInput,
-    prefillCopilotInput,
     consumePendingCopilotInsertion,
     handleSelect,
     handleSelectPlan,
