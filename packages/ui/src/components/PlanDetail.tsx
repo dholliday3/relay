@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ScissorsIcon, TrashIcon } from "@phosphor-icons/react";
 import { patchPlan, patchPlanBody, cutTasksFromPlan } from "../api";
 import type { Plan, PlanStatus, PlanMeta } from "../types";
 import { TiptapEditor } from "./TiptapEditor";
 import { SelectChip, ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "Draft" },
@@ -119,43 +122,43 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
   );
 
   return (
-    <div className="ticket-detail">
+    <div className="flex max-w-[800px] flex-col gap-4">
       {/* Plan ID + save indicator + action buttons */}
-      <div className="detail-header-row">
-        <span className="detail-ticket-id">{plan.id}</span>
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs text-muted-foreground">{plan.id}</span>
         {saveStatus !== "idle" && (
-          <span className={`save-indicator ${saveStatus}`}>
+          <span
+            className={cn(
+              "ml-2 text-[11px] transition-opacity",
+              saveStatus === "saving" && "text-muted-foreground",
+              saveStatus === "saved" && "text-emerald-400",
+            )}
+          >
             {saveStatus === "saving" ? "Saving..." : "Saved"}
           </span>
         )}
-        <div className="detail-header-actions">
-          <button
-            className="plan-cut-tickets-btn"
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleCutTasks}
             disabled={cutting}
             title="Cut tasks from unchecked checkboxes"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <line x1="20" y1="4" x2="8.12" y2="15.88" />
-              <line x1="14.47" y1="14.48" x2="20" y2="20" />
-              <line x1="8.12" y1="8.12" x2="12" y2="12" />
-            </svg>
+            <ScissorsIcon />
             {cutting ? "Cutting..." : "Cut Tasks"}
-          </button>
+          </Button>
           {onDelete && (
-            <button
-              className="delete-btn"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => onDelete(plan.id)}
+              className="text-muted-foreground hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
               title="Delete plan"
               aria-label="Delete plan"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-              </svg>
-            </button>
+              <TrashIcon />
+            </Button>
           )}
         </div>
       </div>
@@ -164,7 +167,7 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       {editingTitle ? (
         <input
           ref={titleInputRef}
-          className="detail-title-input"
+          className="w-full border-0 border-b border-primary bg-transparent py-0.5 font-sans text-2xl font-bold leading-tight text-foreground outline-none"
           value={titleDraft}
           onChange={(e) => setTitleDraft(e.target.value)}
           onBlur={handleTitleSave}
@@ -172,7 +175,7 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
         />
       ) : (
         <h1
-          className="detail-title"
+          className="cursor-text border-b border-transparent py-0.5 text-2xl font-bold leading-tight transition-colors hover:border-border"
           onClick={() => setEditingTitle(true)}
           title="Click to edit"
         >
@@ -188,7 +191,7 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       />
 
       {/* Metadata row — same pattern as TaskDetail */}
-      <div className="detail-meta-row">
+      <div className="flex flex-wrap gap-2">
         <SelectChip
           value={plan.status}
           options={STATUS_OPTIONS}
@@ -209,16 +212,18 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
       </div>
 
       {plan.tasks && plan.tasks.length > 0 && (
-        <div className="plan-linked-tasks">
-          <span className="plan-linked-label">Linked tasks:</span>
+        <div className="flex flex-wrap items-center gap-1.5 px-6 py-2">
+          <span className="text-xs text-muted-foreground">Linked tasks:</span>
           {plan.tasks.map((tid) => (
-            <button
+            <Button
               key={tid}
-              className="plan-ticket-chip"
+              variant="outline"
+              size="sm"
+              className="h-auto px-2 py-0.5 font-mono text-[11px] text-primary"
               onClick={() => onTaskClick?.(tid)}
             >
               {tid}
-            </button>
+            </Button>
           ))}
         </div>
       )}
