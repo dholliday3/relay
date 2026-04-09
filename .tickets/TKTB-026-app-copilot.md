@@ -1,12 +1,12 @@
 ---
 id: TKTB-026
 title: App copilot
-status: in-progress
+status: done
 tags:
   - ideas
   - agent-experience
 created: '2026-04-03T22:34:41.396Z'
-updated: '2026-04-07T00:00:00.000Z'
+updated: '2026-04-09T03:02:28.989Z'
 ---
 
 It would be awesome to have an in-app copilot that can interact with any context in the app (add tickets or plans) and take actions. It should run a coding agent headlessly so a user can use their own personal subscription instead of an API key.
@@ -37,4 +37,3 @@ First implementation landed on the `app-copilot` branch.
 - Pair `tool_use` and `tool_result` parts on the server so we can switch the panel from the custom `ToolBlock` to ai-elements' canonical `<Tool>` component
 - Codex provider (when needed) — extract `ClaudeCodeProvider` into a thin interface
 - Persist conversation state across panel toggles (currently re-mounts unmount the session — UX papercut, not a bug)
-

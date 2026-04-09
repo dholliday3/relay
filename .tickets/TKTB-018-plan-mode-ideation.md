@@ -1,12 +1,12 @@
 ---
 id: TKTB-018
 title: Plan mode ideation
-status: in-progress
+status: done
 order: 750
 tags:
   - brainstorm
 created: '2026-04-03T21:47:13.407Z'
-updated: '2026-04-05T13:30:59.615Z'
+updated: '2026-04-09T03:03:17.241Z'
 ---
 
 We need a way to better connect plan mode with a clean UX. Right now, this is about tasks. But agents can take on large efforts, and each task should be flexible enough to handle various sizes of tasks from plans to little tickets.
