@@ -10,7 +10,7 @@ tags:
 relatedTo:
   - TKTB-068
 created: '2026-04-08T00:00:00.000Z'
-updated: '2026-04-09T05:56:32.768Z'
+updated: '2026-04-09T09:00:00.000Z'
 ---
 
 ## Context
@@ -86,29 +86,29 @@ Surfaces to migrate (rough estimate, in order of effort):
 
 | # | ✓ | Surface | Notes |
 |---|---|---|---|
-| 1 | ☐ | Scrollbar theming | Move to `styles/scrollbar.css` on shadcn vars |
-| 2 | ☐ | `kbd` element | Tailwind utilities |
-| 3 | ☐ | Mobile back button | Tailwind utilities |
+| 1 | ☑ | Scrollbar theming | Moved to `index.css` `@layer base` on shadcn tokens (`var(--border)` / `var(--muted-foreground)`) (commit `bf69278`) |
+| 2 | ☑ | `kbd` element | `@layer base` rule in `index.css` on theme tokens — all existing `<kbd>` tags pick it up automatically (commit `bf69278`) |
+| 3 | ☑ | Mobile back button | shadcn `Button` + Phosphor `CaretLeft` (commit `bf69278`) |
 | 4 | ☑ | Status bar | Tailwind utilities + `StatusBarItem` helper (commit `3a61090`) |
 | 5 | ☑ | Slash menu | Tailwind utilities + `bg-popover`/`bg-accent`; kept `createPortal` for TipTap suggestion plugin (commit `3a61090`) |
 | 6 | ☑ | Home button / shared header | shadcn `Button` + `ButtonGroup` + `InputGroup` (commit `7fae3ee`) |
 | 7 | ☑ | View segmented control | shadcn `ButtonGroup` (commit `7fae3ee`) |
 | 8 | ☑ | Filter chips | shadcn `DropdownMenu` + `Button` + `Badge` (commit `7fae3ee`) |
 | 9 | ☑ | Search container | shadcn `InputGroup` family (commit `7fae3ee`) |
-| 10 | ☐ | Tab bar | shadcn `Tabs` or utilities |
+| 10 | ☑ | Tab bar | Inline Tailwind utilities with `[scrollbar-width:none] [&::-webkit-scrollbar]:hidden`, bordered active tab, hover-to-reveal close (commit `bf69278`) |
 | 11 | ☑ | Dialogs (delete confirm, generic) | shadcn `Dialog` (commit `7fae3ee`) |
 | 12 | ☑ | Settings dialog | shadcn `Dialog` + `Input` + `ButtonGroup` (commit `7fae3ee`) |
 | 13 | ☑ | Combobox + tag input | shadcn `Popover` + `Command` + `Badge` in `MetaFields.tsx` (commit `7fae3ee`) |
 | 14 | ☑ | Meta dropdowns + kebab | shadcn `Select` + `Popover` in `MetaFields.tsx` (commit `7fae3ee`) |
-| 15 | ☐ | Empty state | Tailwind utilities |
-| 16 | ☐ | App layout shells | Tailwind utilities |
-| 17 | ☐ | Agent notes / refs | Tailwind utilities |
+| 15 | ☑ | Empty state | New `<EmptyState>` + `<HintRow>` helper component shared by both routes (commit `bf69278`) |
+| 16 | ☑ | App layout shells | Inline Tailwind for `.app-layout` / `.list-panel` / `.detail-panel` / `.list-content` / `.board-content` + dropped dead `.app-layout-board` conditional (commit `bf69278`) |
+| 17 | ☑ | Agent notes / refs | Handled during row #19 (`TaskDetail.tsx` refactor) |
 | 18 | ☑ | Task list rows (`TaskList.tsx` + `PlanList.tsx`) | Tailwind utilities + shadcn `Badge` + Phosphor `CaretDown`/`DotsSixVertical`/`Plus` icons; dnd-kit sortable preserved (commit `b8bcd2b`) |
 | 19 | ☑ | Task detail view (`TaskDetail.tsx` + `PlanDetail.tsx`) | Tailwind utilities + shadcn `Collapsible`/`Button`/`Input`/`Textarea`/`Badge` + Phosphor `CaretDown`/`Trash`/`Scissors`/`X`; also purged orphan `.meta-*` / `.combobox-*` blocks (commit `fc61b28`) |
 | 20 | ☑ | New ticket button + create dialog | shadcn `Dialog` (`CreateTicketModal` + `CreatePlanModal`) (commit `7fae3ee`) |
 | 21 | ☑ | Kanban board + cards (`KanbanBoard.tsx` + `PlanKanbanBoard.tsx`) | Tailwind utilities + shadcn `Badge`/`Button` + Phosphor `CaretDoubleLeft`/`Plus`; dnd-kit multi-container drag preserved; [writing-mode:vertical-rl] for collapsed column labels (commit `ea80701`) |
 | 22 | ☑ | Dashboard | Tailwind utilities + shadcn `Button` with extracted `StatCard`/`StatButton`/`GroupCard`/`DashListRow`/`SectionTitle` helpers (commit `789727a`) |
-| 23 | ☐ | Right rail + terminal chrome | Tailwind utilities |
+| 23 | ☑ | Right rail + terminal chrome | Tailwind utilities + shadcn `Button` + Phosphor `Terminal`/`Sparkle`/`Plus`/`X` (commit `a71a36c`) |
 | 24 | ☐ | Tiptap editor styles | Move to `styles/tiptap.css`, rewrite on shadcn vars; replace hand-rolled `hljs-*` theme |
 | 25 | ☑ | Board modal (plans kanban detail overlay) | shadcn `Dialog` (commit `3a61090`) — added during migration; was not in original list |
 
@@ -116,7 +116,7 @@ Also fixed during this work: split `html, body, #root { font-size: 13px }` so `f
 
 Each row is its own PR. Mark off as completed inline in this ticket as they land.
 
-**Progress:** 17 of 25 rows complete (68%). App.css down from ~2,800 lines → 727 lines (74% reduction).
+**Progress:** 24 of 25 rows complete (96%). App.css down from ~2,800 lines → 290 lines (90% reduction). Only row #24 (TipTap editor content styles) remains — those target ProseMirror's emitted DOM and have to live in a CSS file, so the task is to move them to `styles/tiptap.css` against shadcn tokens rather than delete them.
 
 ### Phase 3 — delete the shim
 
