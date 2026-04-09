@@ -1,6 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
+
 import type { PlanStatus, CreatePlanInput, PlanMeta } from "../types";
 import { SelectChip, ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function CreatePlanModal({
   planMeta,
@@ -18,10 +28,6 @@ export function CreatePlanModal({
   const [body, setBody] = useState("");
   const [expanded, setExpanded] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    titleInputRef.current?.focus();
-  }, []);
 
   const buildInput = (): CreatePlanInput => {
     const trimmed = title.trim();
@@ -49,8 +55,6 @@ export function CreatePlanModal({
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSubmit();
-    } else if (e.key === "Escape") {
-      handleEscape();
     }
   };
 
@@ -60,42 +64,40 @@ export function CreatePlanModal({
   ];
 
   return (
-    <div className="dialog-overlay" onClick={handleEscape} onKeyDown={handleKeyDown}>
-      <div
-        className={`dialog create-ticket-dialog ${expanded ? "create-ticket-expanded" : ""}`}
-        onClick={(e) => e.stopPropagation()}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) handleEscape();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className={
+          expanded
+            ? "flex h-[85vh] max-h-[85vh] w-full max-w-[680px] flex-col gap-3 sm:max-w-[680px]"
+            : "flex max-h-[85vh] w-full max-w-[680px] flex-col gap-3 sm:max-w-[680px]"
+        }
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          titleInputRef.current?.focus();
+        }}
       >
-        <div className="create-ticket-header">
-          <p className="dialog-title">New plan</p>
-          <button
-            className="create-ticket-expand-btn"
+        <DialogHeader className="flex-row items-center justify-between gap-2">
+          <DialogTitle>New plan</DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setExpanded(!expanded)}
             title={expanded ? "Collapse" : "Expand"}
             aria-label={expanded ? "Collapse" : "Expand"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {expanded ? (
-                <>
-                  <polyline points="4 14 10 14 10 20" />
-                  <polyline points="20 10 14 10 14 4" />
-                  <line x1="14" y1="10" x2="21" y2="3" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </>
-              ) : (
-                <>
-                  <polyline points="15 3 21 3 21 9" />
-                  <polyline points="9 21 3 21 3 15" />
-                  <line x1="21" y1="3" x2="14" y2="10" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </>
-              )}
-            </svg>
-          </button>
-        </div>
+            {expanded ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+          </Button>
+        </DialogHeader>
 
         <input
           ref={titleInputRef}
-          className="create-ticket-title"
+          className="w-full border-0 border-b border-border bg-transparent py-2 text-base font-semibold text-foreground outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground focus:border-ring"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
@@ -106,7 +108,7 @@ export function CreatePlanModal({
         />
 
         <textarea
-          className="create-ticket-body"
+          className="w-full flex-1 resize-none border-0 bg-transparent py-1 text-xs/relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -114,26 +116,26 @@ export function CreatePlanModal({
           rows={expanded ? 12 : 5}
         />
 
-        <div className="create-ticket-meta">
+        <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
           <SelectChip value={status} options={statusOptions} onChange={(v) => setStatus(v as PlanStatus)} />
           <MultiComboboxChip values={tags} options={planMeta.tags} placeholder="Tags" onChange={setTags} />
           <ComboboxChip value={project} options={planMeta.projects} placeholder="Project" onChange={setProject} />
         </div>
 
-        <div className="dialog-actions">
-          <span className="dialog-hint">&#8984;&#x23CE; Create &middot; Esc save as draft</span>
-          <button className="dialog-btn dialog-btn-cancel" onClick={handleEscape}>
-            Cancel
-          </button>
-          <button
-            className="dialog-btn dialog-btn-primary"
-            onClick={handleSubmit}
-            disabled={!title.trim()}
-          >
-            Create
-          </button>
-        </div>
-      </div>
-    </div>
+        <DialogFooter className="items-center sm:justify-between">
+          <span className="text-[11px] text-muted-foreground">
+            &#8984;&#x23CE; Create &middot; Esc save as draft
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleEscape}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={!title.trim()}>
+              Create
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

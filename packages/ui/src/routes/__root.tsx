@@ -1,5 +1,14 @@
 import { createRootRoute, Outlet, useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+import {
+  GearIcon,
+  HouseIcon,
+  KanbanIcon,
+  ListIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { AppProvider, useAppContext } from "../context/AppContext";
 import type { ViewMode } from "../context/AppContext";
 import { FilterChip } from "../components/FilterChip";
@@ -8,6 +17,15 @@ import { CreatePlanModal } from "../components/CreatePlanModal";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
 import { TerminalPane } from "../components/TerminalPane";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 
 // Lazy-loaded so the ai-elements/streamdown/shiki tree (~1MB+) only loads
 // when the user opens the assistant panel for the first time. Without this
@@ -352,71 +370,63 @@ function RootLayoutInner() {
 
   return (
     <div className={`app-layout ${currentView === "board" && !isHome ? "app-layout-board" : ""}`}>
-      <header className="shared-header">
-        <button
-          className={`home-btn ${isHome ? "home-btn-active" : ""}`}
+      <header className="z-10 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-1.5 md:flex-nowrap">
+        <Button
+          variant={isHome ? "secondary" : "ghost"}
+          size="icon"
           onClick={() => navigate({ to: "/" })}
           title="Home"
           aria-label="Home"
+          aria-current={isHome ? "page" : undefined}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-          </svg>
-        </button>
-        <div className="view-segmented-control" role="radiogroup" aria-label="Space">
-          <button
-            className={`segmented-btn ${isTickets ? "segmented-btn-active" : ""}`}
+          <HouseIcon weight={isHome ? "fill" : "regular"} />
+        </Button>
+        <ButtonGroup aria-label="Space">
+          <Button
+            variant={isTickets ? "default" : "outline"}
             onClick={() => navigate({ to: "/tickets", search: { view: "list", status: [], project: [], epic: [], sprint: [] } })}
             role="radio"
             aria-checked={isTickets}
             aria-label="Tickets"
           >
             Tickets
-          </button>
-          <button
-            className={`segmented-btn ${isPlans ? "segmented-btn-active" : ""}`}
+          </Button>
+          <Button
+            variant={isPlans ? "default" : "outline"}
             onClick={() => navigate({ to: "/plans", search: { view: "list", status: [], project: [] } })}
             role="radio"
             aria-checked={isPlans}
             aria-label="Plans"
           >
             Plans
-          </button>
-        </div>
+          </Button>
+        </ButtonGroup>
         {!isHome && (
-          <div className="view-segmented-control" role="radiogroup" aria-label="View mode">
-            <button
-              className={`segmented-btn ${currentView === "list" ? "segmented-btn-active" : ""}`}
+          <ButtonGroup aria-label="View mode">
+            <Button
+              variant={currentView === "list" ? "default" : "outline"}
               onClick={() => handleViewModeChange("list")}
               role="radio"
               aria-checked={currentView === "list"}
               aria-label="List view"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
+              <ListIcon />
               List
-            </button>
-            <button
-              className={`segmented-btn ${currentView === "board" ? "segmented-btn-active" : ""}`}
+            </Button>
+            <Button
+              variant={currentView === "board" ? "default" : "outline"}
               onClick={() => handleViewModeChange("board")}
               role="radio"
               aria-checked={currentView === "board"}
               aria-label="Board view"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="18" rx="1" />
-                <rect x="14" y="3" width="7" height="18" rx="1" />
-              </svg>
+              <KanbanIcon />
               Board
-            </button>
-          </div>
+            </Button>
+          </ButtonGroup>
         )}
         {!isHome && (
-          <div className="filter-chips">
+          <div className="order-10 flex w-full shrink-0 items-center gap-1 overflow-x-auto md:order-none md:w-auto">
             {isTickets ? (
               <>
                 <FilterChip
@@ -462,60 +472,59 @@ function RootLayoutInner() {
             ) : null}
           </div>
         )}
-        <div className="header-spacer" />
+        <div className="flex-1" />
         {!isHome && (
-          <button
-            className="new-ticket-btn"
+          <Button
+            variant="outline"
+            size="icon"
             onClick={isPlans ? ctx.handleNewPlan : ctx.handleNewTicket}
             title={isPlans ? "New plan (C)" : "New ticket (C)"}
             aria-label={isPlans ? "New plan" : "New ticket"}
           >
-            +
-          </button>
+            <PlusIcon />
+          </Button>
         )}
         {!isHome && (
-          <div className="search-container">
-            <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
+          <InputGroup className="w-52">
+            <InputGroupInput
               ref={ctx.searchInputRef}
-              className="search-input"
               type="text"
               placeholder="Search..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
-            {(currentQ || hasActiveFilters) && (
-              <span className="search-result-count">
-                {isTickets
-                  ? `${filteredTicketCount} result${filteredTicketCount !== 1 ? "s" : ""}`
-                  : `${filteredPlanCount} result${filteredPlanCount !== 1 ? "s" : ""}`}
-              </span>
-            )}
-            {searchInput && (
-              <button
-                className="search-clear"
-                onClick={() => setSearchInput("")}
-                aria-label="Clear search"
-              >
-                &times;
-              </button>
-            )}
-          </div>
+            <InputGroupAddon align="inline-start">
+              <MagnifyingGlassIcon className="opacity-60" />
+            </InputGroupAddon>
+            <InputGroupAddon align="inline-end">
+              {(currentQ || hasActiveFilters) && (
+                <InputGroupText className="text-[11px] tabular-nums">
+                  {isTickets
+                    ? `${filteredTicketCount} result${filteredTicketCount !== 1 ? "s" : ""}`
+                    : `${filteredPlanCount} result${filteredPlanCount !== 1 ? "s" : ""}`}
+                </InputGroupText>
+              )}
+              {searchInput && (
+                <InputGroupButton
+                  size="icon-xs"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                >
+                  <XIcon />
+                </InputGroupButton>
+              )}
+            </InputGroupAddon>
+          </InputGroup>
         )}
-        <button
-          className="settings-btn"
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => ctx.setShowSettings(true)}
           title="Settings"
           aria-label="Settings"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
+          <GearIcon />
+        </Button>
       </header>
 
       <div className="main-with-terminal">

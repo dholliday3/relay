@@ -1,5 +1,22 @@
 import { useState } from "react";
 import type { TicketbookConfig, DebriefStyle } from "../types";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+const debriefStyles: DebriefStyle[] = ["very-concise", "concise", "detailed", "lengthy"];
+
+function debriefLabel(style: DebriefStyle): string {
+  if (style === "very-concise") return "Very concise";
+  return style.charAt(0).toUpperCase() + style.slice(1);
+}
 
 export function SettingsDialog({
   config,
@@ -26,77 +43,91 @@ export function SettingsDialog({
   };
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog settings-dialog" onClick={(e) => e.stopPropagation()}>
-        <p className="dialog-title">Settings</p>
-        <div className="settings-field">
-          <label className="settings-label" htmlFor="settings-prefix">
-            Ticket ID prefix
-          </label>
-          <input
-            id="settings-prefix"
-            className="settings-input"
-            type="text"
-            value={prefix}
-            onChange={(e) => setPrefix(e.target.value)}
-            placeholder="e.g. TKT, ART"
-          />
-          <span className="settings-hint">
-            New tickets will be created as {prefix || "TKT"}-001, {prefix || "TKT"}-002, etc.
-          </span>
-        </div>
-        <div className="settings-field">
-          <label className="settings-label">Delete behavior</label>
-          <div className="settings-toggle-group">
-            <button
-              className={`settings-toggle-btn ${deleteMode === "archive" ? "settings-toggle-active" : ""}`}
-              onClick={() => setDeleteMode("archive")}
-            >
-              Archive
-            </button>
-            <button
-              className={`settings-toggle-btn ${deleteMode === "hard" ? "settings-toggle-active" : ""}`}
-              onClick={() => setDeleteMode("hard")}
-            >
-              Hard delete
-            </button>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="settings-prefix" className="text-xs font-medium text-foreground">
+              Ticket ID prefix
+            </label>
+            <Input
+              id="settings-prefix"
+              type="text"
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+              placeholder="e.g. TKT, ART"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              New tickets will be created as {prefix || "TKT"}-001, {prefix || "TKT"}-002, etc.
+            </span>
           </div>
-          <span className="settings-hint">
-            {deleteMode === "archive"
-              ? "Deleted tickets are moved to an archive and can be restored."
-              : "Deleted tickets are permanently removed from disk."}
-          </span>
-        </div>
-        <div className="settings-field">
-          <label className="settings-label">Agent debrief style</label>
-          <div className="settings-toggle-group">
-            {(["very-concise", "concise", "detailed", "lengthy"] as const).map((style) => (
-              <button
-                key={style}
-                className={`settings-toggle-btn ${debriefStyle === style ? "settings-toggle-active" : ""}`}
-                onClick={() => setDebriefStyle(style)}
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Delete behavior</label>
+            <ButtonGroup className="w-full">
+              <Button
+                variant={deleteMode === "archive" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setDeleteMode("archive")}
+                aria-pressed={deleteMode === "archive"}
               >
-                {style === "very-concise" ? "Very concise" : style.charAt(0).toUpperCase() + style.slice(1)}
-              </button>
-            ))}
+                Archive
+              </Button>
+              <Button
+                variant={deleteMode === "hard" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setDeleteMode("hard")}
+                aria-pressed={deleteMode === "hard"}
+              >
+                Hard delete
+              </Button>
+            </ButtonGroup>
+            <span className="text-[11px] text-muted-foreground">
+              {deleteMode === "archive"
+                ? "Deleted tickets are moved to an archive and can be restored."
+                : "Deleted tickets are permanently removed from disk."}
+            </span>
           </div>
-          <span className="settings-hint">
-            Controls how detailed agent debriefs are when writing to agent notes.
-          </span>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-foreground">Agent debrief style</label>
+            <ButtonGroup className="w-full">
+              {debriefStyles.map((style) => (
+                <Button
+                  key={style}
+                  variant={debriefStyle === style ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setDebriefStyle(style)}
+                  aria-pressed={debriefStyle === style}
+                >
+                  {debriefLabel(style)}
+                </Button>
+              ))}
+            </ButtonGroup>
+            <span className="text-[11px] text-muted-foreground">
+              Controls how detailed agent debriefs are when writing to agent notes.
+            </span>
+          </div>
         </div>
-        <div className="dialog-actions">
-          <button className="dialog-btn dialog-btn-cancel" onClick={onClose}>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            className="dialog-btn dialog-btn-primary"
-            onClick={handleSave}
-            disabled={saving}
-          >
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

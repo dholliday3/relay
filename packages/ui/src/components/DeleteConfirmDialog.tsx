@@ -1,4 +1,13 @@
 import type { TicketbookConfig } from "../types";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function DeleteConfirmDialog({
   itemTitle,
@@ -13,29 +22,39 @@ export function DeleteConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const isHard = config.deleteMode === "hard";
+
   return (
-    <div className="dialog-overlay" onClick={onCancel}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <p className="dialog-title">
-          {config.deleteMode === "archive" ? "Archive" : "Delete"} {itemType}?
-        </p>
-        <p className="dialog-message">
-          {config.deleteMode === "archive"
-            ? `"${itemTitle}" will be moved to the archive and can be restored later.`
-            : `"${itemTitle}" will be permanently deleted. This cannot be undone.`}
-        </p>
-        <div className="dialog-actions">
-          <button className="dialog-btn dialog-btn-cancel" onClick={onCancel}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {isHard ? "Delete" : "Archive"} {itemType}?
+          </DialogTitle>
+          <DialogDescription>
+            {isHard
+              ? `"${itemTitle}" will be permanently deleted. This cannot be undone.`
+              : `"${itemTitle}" will be moved to the archive and can be restored later.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
             Cancel
-          </button>
-          <button
-            className={`dialog-btn ${config.deleteMode === "hard" ? "dialog-btn-danger" : "dialog-btn-primary"}`}
+          </Button>
+          <Button
+            variant={isHard ? "destructive" : "default"}
             onClick={onConfirm}
           >
-            {config.deleteMode === "archive" ? "Archive" : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
+            {isHard ? "Delete" : "Archive"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

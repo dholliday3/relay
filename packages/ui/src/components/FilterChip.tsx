@@ -1,4 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { CaretDownIcon } from "@phosphor-icons/react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function FilterChip({
   label,
@@ -11,53 +20,42 @@ export function FilterChip({
   selected: string[];
   onToggle: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
   const active = selected.length > 0;
 
   return (
-    <div className="filter-chip-wrapper" ref={ref}>
-      <button
-        className={`filter-chip-btn ${active ? "filter-chip-active" : ""}`}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        {label}
-        {active && <span className="filter-chip-count">{selected.length}</span>}
-        <svg className="filter-chip-chevron" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
-          <path d="M0 0l5 6 5-6z" />
-        </svg>
-      </button>
-      {open && (
-        <div className="filter-chip-dropdown">
-          {options.length === 0 ? (
-            <div className="filter-chip-empty">No options</div>
-          ) : (
-            options.map((opt) => (
-              <button
-                key={opt}
-                className={`filter-chip-option ${selected.includes(opt) ? "filter-chip-option-selected" : ""}`}
-                onClick={() => onToggle(opt)}
-              >
-                <span className="filter-chip-check">{selected.includes(opt) ? "\u2713" : ""}</span>
-                {opt}
-              </button>
-            ))
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant={active ? "secondary" : "outline"}
+          aria-label={`Filter by ${label}`}
+        >
+          {label}
+          {active && (
+            <Badge variant="default" className="h-4 px-1.5">
+              {selected.length}
+            </Badge>
           )}
-        </div>
-      )}
-    </div>
+          <CaretDownIcon data-icon="inline-end" className="opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-40">
+        {options.length === 0 ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+            No options
+          </div>
+        ) : (
+          options.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt}
+              checked={selected.includes(opt)}
+              onCheckedChange={() => onToggle(opt)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {opt}
+            </DropdownMenuCheckboxItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
