@@ -52,7 +52,9 @@ export async function getActiveSessionId(page: Page): Promise<string | null> {
 
 /**
  * Wait until the terminal with the given sessionId has completed its
- * handshake with the server (ready message received).
+ * handshake with the server. Prefer the explicit ready marker, but treat a
+ * populated buffer as ready too because replayed terminals after reload can
+ * race the test harness and render before the marker is observed.
  */
 export async function waitForTerminalReady(
   page: Page,
@@ -63,7 +65,18 @@ export async function waitForTerminalReady(
   while (Date.now() - start < timeoutMs) {
     const ready = await page.evaluate((id) => {
       const w = window as unknown as WindowWithTerminals;
-      return w.__terminalsReady?.get(id) === true;
+      if (w.__terminalsReady?.get(id) === true) return true;
+
+      const term = w.__terminals?.get(id);
+      if (!term) return false;
+
+      const buf = term.buffer.active;
+      for (let i = 0; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (line && line.translateToString(true).trim().length > 0) return true;
+      }
+
+      return false;
     }, sessionId);
     if (ready) return;
     await page.waitForTimeout(50);

@@ -120,10 +120,10 @@ export class ClaudeCodeProvider extends EventEmitter {
       "bypassPermissions",
       // Restrict the agent to ticketbook's MCP tools + read-only project
       // navigation. No Bash, Edit, Write, or web access — the copilot is a
-      // ticket/plan assistant, not a coding agent. If the user wants the
+      // task/plan assistant, not a coding agent. If the user wants the
       // full coding-agent powerset they should "Open in terminal" and run
       // claude there. We allow Read/Glob/Grep so the agent can pull repo
-      // context (CLAUDE.md, prd.md, etc.) when reasoning about tickets.
+      // context (CLAUDE.md, prd.md, etc.) when reasoning about tasks.
       "--allowed-tools",
       "mcp__ticketbook__*,Read,Glob,Grep,WebSearch",
       "--disallowed-tools",

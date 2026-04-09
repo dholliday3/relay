@@ -8,7 +8,7 @@ tags:
   - agent-experience
   - architecture
 project: ticketbook
-tickets:
+tasks:
   - TKTB-054
   - TKTB-055
   - TKTB-064
@@ -45,23 +45,22 @@ A session is NOT an agent — it's the environment an agent runs in. Claude Code
 
 A workspace is a discovered git context: `{ repoRoot, worktree?, branch }`. Workspaces are discovered lazily — when a terminal session starts, we resolve its cwd to a git repo/worktree/branch and that becomes its workspace. No config, no scanning.
 
-Within a workspace, sessions are the children. Tickets and plans can also be scoped to a workspace (the project already maps to this loosely). The workspace is the natural grouping because it's how developers already organize: one worktree per task, one branch per feature.
+Within a workspace, sessions are the children. Tasks and plans can also be scoped to a workspace (the project already maps to this loosely). The workspace is the natural grouping because it's how developers already organize: one worktree per task, one branch per feature.
 
 **For graphite stacks + worktrees:** a repo is the parent workspace, and each worktree is a sub-context within it. The UI can show the stack relationship (branch parent chain) alongside the worktree grouping.
 
-### 3. Session-ticket linking
+### 3. Session-task linking
 
-A session can be linked to a ticket. This can happen:
-
-- **Automatically:** if a ticket was "active" in the UI when the terminal session started
+A session can be linked to a task. This can happen:
+- **Automatically:** if a task was "active" in the UI when the terminal session started
 - **Manually:** user links via a chip in the terminal pane or via MCP tool
-- **By agent:** the agent calls `link_session_to_ticket` via MCP
+- **By agent:** the agent calls `link_session_to_task` via MCP
 
-This is what makes "what did the agent do on this ticket?" answerable.
+This is what makes "what did the agent do on this task?" answerable.
 
 ### 4. Agent feedback loop
 
-When an agent finishes work on a ticket, the session data (commands run, exit codes, files changed) feeds into the review workflow. The `feedback` status between `in-progress` and `done` signals the human to validate. The diff review UI is scoped by session — showing exactly what changed during that session, not a raw git range.
+When an agent finishes work on a task, the session data (commands run, exit codes, files changed) feeds into the review workflow. The `feedback` status between `in-progress` and `done` signals the human to validate. The diff review UI is scoped by session — showing exactly what changed during that session, not a raw git range.
 
 ## Phases
 
@@ -70,7 +69,7 @@ When an agent finishes work on a ticket, the session data (commands run, exit co
 The data foundation. Terminal emits structured events, we persist them.
 
 - **TKTB-054** — OSC 133/633 shell integration (emit structured SessionEvents)
-- **TKTB-055** — SessionRecord model in SQLite (persist events, link to tickets)
+- **TKTB-055** — SessionRecord model in SQLite (persist events, link to tasks)
 - **New: Worktree/branch detection** — resolve session cwd → git repo/worktree/branch automatically
 
 ### Phase 2: Workspace grouping & UI
@@ -105,8 +104,8 @@ Make sessions a first-class primitive for agents to interact with.
 - Terminal sessions automatically tagged with repo/worktree/branch
 - Sessions persisted with structured event streams in SQLite
 - Sessions groupable by workspace in the UI
-- Sessions linkable to tickets (manual + automatic + via MCP)
-- `feedback` status in the ticket lifecycle with agent debrief
+- Sessions linkable to tasks (manual + automatic + via MCP)
+- `feedback` status in the task lifecycle with agent debrief
 - Diff review scoped by session
 - MCP tools for session CRUD and queries
 - All data models and APIs ready to be consumed by a native Mac app client

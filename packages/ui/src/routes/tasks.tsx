@@ -2,9 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
 import { useAppContext } from "../context/AppContext";
-import { TicketList } from "../components/TicketList";
+import { TaskList } from "../components/TaskList";
 import { KanbanBoard } from "../components/KanbanBoard";
-import { TicketDetail } from "../components/TicketDetail";
+import { TaskDetail } from "../components/TaskDetail";
 import {
   Dialog,
   DialogContent,
@@ -12,9 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
-import type { Status, Ticket } from "../types";
+import type { Status, Task } from "../types";
 
-const ticketsSearchSchema = z.object({
+const tasksSearchSchema = z.object({
   view: z.enum(["list", "board"]).catch("list"),
   status: z.array(z.string()).catch([]),
   project: z.array(z.string()).catch([]),
@@ -23,19 +23,19 @@ const ticketsSearchSchema = z.object({
   q: z.string().optional().catch(undefined),
 });
 
-export const Route = createFileRoute("/tickets")({
-  validateSearch: (search) => ticketsSearchSchema.parse(search),
-  component: TicketsRoute,
+export const Route = createFileRoute("/tasks")({
+  validateSearch: (search) => tasksSearchSchema.parse(search),
+  component: TasksRoute,
 });
 
-function TicketsRoute() {
+function TasksRoute() {
   const ctx = useAppContext();
   const navigate = useNavigate();
   const { view, status, project, epic, sprint, q } = Route.useSearch();
 
-  // Filter tickets
-  const filteredTickets = useMemo(() => {
-    return ctx.tickets.filter((t) => {
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    return ctx.tasks.filter((t) => {
       if (q) {
         const query = q.toLowerCase();
         if (!t.title.toLowerCase().includes(query) && !t.body.toLowerCase().includes(query)) {
@@ -48,51 +48,51 @@ function TicketsRoute() {
       if (sprint.length > 0 && (!t.sprint || !sprint.includes(t.sprint))) return false;
       return true;
     });
-  }, [ctx.tickets, q, status, project, epic, sprint]);
+  }, [ctx.tasks, q, status, project, epic, sprint]);
 
-  const activeTicket = ctx.tickets.find((t) => t.id === ctx.activeTicketId) ?? null;
+  const activeTask = ctx.tasks.find((t) => t.id === ctx.activeTaskId) ?? null;
 
   if (view === "board") {
     return (
       <div className="board-content">
-        {ctx.tickets.length === 0 ? (
+        {ctx.tasks.length === 0 ? (
           <div className="empty-state" style={{ flex: 1 }}>
             <div className="empty-state-content">
               <p className="empty-state-title">Welcome to Ticketbook</p>
-              <p className="empty-state-subtitle">Create your first ticket to get started.</p>
+              <p className="empty-state-subtitle">Create your first task to get started.</p>
               <div className="empty-state-hints">
-                <span className="hint-row"><kbd>C</kbd> New ticket</span>
+                <span className="hint-row"><kbd>C</kbd> New task</span>
               </div>
             </div>
           </div>
-        ) : filteredTickets.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <div className="empty-state" style={{ flex: 1 }}>
             <div className="empty-state-content">
-              <p className="empty-state-title">No tickets match</p>
+              <p className="empty-state-title">No tasks match</p>
               <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
             </div>
           </div>
         ) : (
           <KanbanBoard
-            tickets={filteredTickets}
-            activeTicketId={ctx.activeTicketId}
+            tasks={filteredTasks}
+            activeTaskId={ctx.activeTaskId}
             onSelect={ctx.handleSelect}
             onMove={ctx.handleKanbanMove}
             onCreateInColumn={ctx.handleCreateInColumn}
           />
         )}
         <Dialog
-          open={activeTicket != null}
+          open={activeTask != null}
           onOpenChange={(open) => {
-            if (!open) ctx.setActiveTicketId(null);
+            if (!open) ctx.setActiveTaskId(null);
           }}
         >
           <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-6 pt-10">
-            {activeTicket && (
-              <TicketDetail
-                ticket={activeTicket}
+            {activeTask && (
+              <TaskDetail
+                task={activeTask}
                 meta={ctx.meta}
-                onUpdated={ctx.loadTickets}
+                onUpdated={ctx.loadTasks}
                 onDelete={ctx.handleDeleteRequest}
               />
             )}
@@ -107,27 +107,27 @@ function TicketsRoute() {
     <div className="list-content">
       {(!ctx.isMobile || !ctx.mobileShowDetail) && (
         <aside className="list-panel">
-          {ctx.tickets.length === 0 ? (
+          {ctx.tasks.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-content">
                 <p className="empty-state-title">Welcome to Ticketbook</p>
-                <p className="empty-state-subtitle">Create your first ticket to get started.</p>
+                <p className="empty-state-subtitle">Create your first task to get started.</p>
                 <div className="empty-state-hints">
-                  <span className="hint-row"><kbd>C</kbd> New ticket</span>
+                  <span className="hint-row"><kbd>C</kbd> New task</span>
                 </div>
               </div>
             </div>
-          ) : filteredTickets.length === 0 ? (
+          ) : filteredTasks.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-content">
-                <p className="empty-state-title">No tickets match</p>
+                <p className="empty-state-title">No tasks match</p>
                 <p className="empty-state-subtitle">Try adjusting your search or filters.</p>
               </div>
             </div>
           ) : (
-            <TicketList
-              tickets={filteredTickets}
-              activeTicketId={ctx.activeTicketId}
+            <TaskList
+              tasks={filteredTasks}
+              activeTaskId={ctx.activeTaskId}
               onSelect={ctx.handleSelect}
               onReorder={ctx.handleReorder}
               onMove={ctx.handleKanbanMove}
@@ -149,21 +149,21 @@ function TicketsRoute() {
           {ctx.openTabs.length > 0 && !ctx.isMobile && (
             <TabBar />
           )}
-          {activeTicket ? (
-            <TicketDetail
-              ticket={activeTicket}
+          {activeTask ? (
+            <TaskDetail
+              task={activeTask}
               meta={ctx.meta}
-              onUpdated={ctx.loadTickets}
+              onUpdated={ctx.loadTasks}
               onDelete={ctx.handleDeleteRequest}
             />
           ) : (
             <div className="empty-state">
               <div className="empty-state-content">
-                <p className="empty-state-title">No ticket selected</p>
+                <p className="empty-state-title">No task selected</p>
                 <div className="empty-state-hints">
                   <span className="hint-row"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> Navigate</span>
                   <span className="hint-row"><kbd>Enter</kbd> Open</span>
-                  <span className="hint-row"><kbd>C</kbd> New ticket</span>
+                  <span className="hint-row"><kbd>C</kbd> New task</span>
                   <span className="hint-row"><kbd>Esc</kbd> Deselect</span>
                 </div>
               </div>
@@ -182,26 +182,26 @@ function TabBar() {
   return (
     <div className="tab-bar">
       {ctx.openTabs.map((tabId) => {
-        const isTicketTab = ctx.tickets.some((tk) => tk.id === tabId);
+        const isTaskTab = ctx.tasks.some((tk) => tk.id === tabId);
         const isPlanTab = ctx.plans.some((p) => p.id === tabId);
         const tabTitle =
-          ctx.tickets.find((tk) => tk.id === tabId)?.title ??
+          ctx.tasks.find((tk) => tk.id === tabId)?.title ??
           ctx.plans.find((p) => p.id === tabId)?.title ??
           tabId;
-        const isActive = tabId === ctx.activeTicketId;
+        const isActive = tabId === ctx.activeTaskId;
         return (
           <div
             key={tabId}
-            className={`tab-item ${isActive ? "tab-active" : ""} ${isPlanTab && !isTicketTab ? "tab-plan" : ""}`}
+            className={`tab-item ${isActive ? "tab-active" : ""} ${isPlanTab && !isTaskTab ? "tab-plan" : ""}`}
           >
             <button
               className="tab-label"
               onClick={() => {
-                if (isPlanTab && !isTicketTab) {
+                if (isPlanTab && !isTaskTab) {
                   navigate({ to: "/plans", search: { view: "list", status: [], project: [] } });
                   ctx.setActivePlanId(tabId);
                 } else {
-                  ctx.setActiveTicketId(tabId);
+                  ctx.setActiveTaskId(tabId);
                 }
               }}
             >

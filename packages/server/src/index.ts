@@ -20,7 +20,7 @@ const dbgApi = createDebug("api");
 const dbgCop = createDebug("copilot");
 
 export interface ServerConfig {
-  ticketsDir: string;
+  tasksDir: string;
   plansDir: string;
   port: number;
   staticDir?: string;
@@ -28,7 +28,7 @@ export interface ServerConfig {
    * Absolute path to the bin/ticketbook.ts entry script. When set, the
    * copilot manager generates a per-session MCP config that points the
    * spawned `claude` CLI back at this same script in --mcp mode, so the
-   * copilot has read/write access to the user's tickets and plans for free.
+   * copilot has read/write access to the user's tasks and plans for free.
    * If omitted, the copilot still works but without ticketbook tool access.
    */
   binPath?: string;
@@ -63,10 +63,10 @@ function sendMsg(ws: { send(data: string): void }, msg: ServerMessage): void {
 }
 
 export function startServer(config: ServerConfig): ServerHandle {
-  const { ticketsDir, plansDir, port, staticDir, binPath } = config;
+  const { tasksDir, plansDir, port, staticDir, binPath } = config;
 
   // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy)
-  const terminalBackend = new BunPtyHeadlessBackend(ticketsDir);
+  const terminalBackend = new BunPtyHeadlessBackend(tasksDir);
 
   // Copilot session manager — wraps the Claude Code provider, owns per-session
   // MCP config files. Pass binPath through so the spawned CLI can call back
@@ -76,12 +76,12 @@ export function startServer(config: ServerConfig): ServerHandle {
   // no install requirement).
   const useStub = process.env.COPILOT_PROVIDER === "stub";
   const copilot = new CopilotManager({
-    ticketsDir,
+    tasksDir,
     binPath,
     providers: useStub ? [new StubCopilotProvider()] : [new ClaudeCodeProvider(), new CodexProvider()],
   });
 
-  const routes = createRoutes(ticketsDir, plansDir, copilot);
+  const routes = createRoutes(tasksDir, plansDir, copilot);
 
   // Track active WebSocket connections per session for graceful teardown.
   // Used by both terminal and copilot WS bridges.
@@ -90,10 +90,10 @@ export function startServer(config: ServerConfig): ServerHandle {
   // Track the per-WS listener dispose functions so close() can clean up cleanly
   const wsDisposers = new Map<string, Array<() => void>>();
 
-  /** Read terminalScrollback from .tickets/.config.yaml; falls back to schema default (5000). */
+  /** Read terminalScrollback from .tasks/.config.yaml; falls back to schema default (5000). */
   async function readScrollback(): Promise<number> {
     try {
-      const cfg = await getConfig(ticketsDir);
+      const cfg = await getConfig(tasksDir);
       return cfg.terminalScrollback;
     } catch {
       return 5000;
@@ -131,7 +131,7 @@ export function startServer(config: ServerConfig): ServerHandle {
   }
 
   type WsData =
-    | { kind: "terminal"; sessionId: string; ticketsDir: string }
+    | { kind: "terminal"; sessionId: string; tasksDir: string }
     | { kind: "copilot"; sessionId: string };
 
   const server = Bun.serve<WsData>({
@@ -151,7 +151,7 @@ export function startServer(config: ServerConfig): ServerHandle {
       if (url.pathname === "/api/terminal/sessions") {
         if (req.method === "GET") {
           // Return persisted tabs with alive status from the backend
-          const tabs = listTerminalTabs(ticketsDir);
+          const tabs = listTerminalTabs(tasksDir);
           const aliveSet = new Set(terminalBackend.list());
           const sessions = tabs.map((t) => ({ id: t.id, title: t.title, sortOrder: t.sort_order, tabNumber: t.tab_number, alive: aliveSet.has(t.id) }));
           return addCors(new Response(JSON.stringify({ sessions }), { headers: { "Content-Type": "application/json" } }), origin);
@@ -159,11 +159,11 @@ export function startServer(config: ServerConfig): ServerHandle {
         if (req.method === "POST") {
           // Server assigns id, title, and tab number
           const body = await req.json() as { sortOrder?: number };
-          const tabNumber = getNextTabNumber(ticketsDir);
+          const tabNumber = getNextTabNumber(tasksDir);
           const id = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const title = `Terminal ${tabNumber}`;
           const sortOrder = body.sortOrder ?? 0;
-          upsertTerminalTab(ticketsDir, id, title, sortOrder, tabNumber);
+          upsertTerminalTab(tasksDir, id, title, sortOrder, tabNumber);
           dbgApi("tabCreate", { id, title, tabNumber, sortOrder });
           return addCors(new Response(JSON.stringify({ id, title, tabNumber, sortOrder }), { headers: { "Content-Type": "application/json" } }), origin);
         }
@@ -187,7 +187,7 @@ export function startServer(config: ServerConfig): ServerHandle {
           if (session) {
             session.destroy();
           } else {
-            deleteTerminalTab(ticketsDir, body.id);
+            deleteTerminalTab(tasksDir, body.id);
           }
           return addCors(new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } }), origin);
         }
@@ -198,7 +198,7 @@ export function startServer(config: ServerConfig): ServerHandle {
       if (termMatch && req.headers.get("upgrade")?.toLowerCase() === "websocket") {
         const sessionId = decodeURIComponent(termMatch[1]);
         const success = server.upgrade(req, {
-          data: { kind: "terminal", sessionId, ticketsDir } satisfies WsData,
+          data: { kind: "terminal", sessionId, tasksDir } satisfies WsData,
         });
         if (success) return undefined as unknown as Response;
         return new Response("WebSocket upgrade failed", { status: 500 });
@@ -296,7 +296,7 @@ export function startServer(config: ServerConfig): ServerHandle {
           // Copilot WS is push-only — ignore inbound frames.
           return;
         }
-        const { sessionId, ticketsDir: cwd } = ws.data;
+        const { sessionId, tasksDir: cwd } = ws.data;
         try {
           const msg = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message));
 
@@ -377,8 +377,8 @@ export function startServer(config: ServerConfig): ServerHandle {
   });
 
   // Start file watchers for live SSE updates
-  const ticketWatcher = createWatcher(ticketsDir, (event) =>
-    broadcastEvent({ ...event, source: "ticket" }),
+  const taskWatcher = createWatcher(tasksDir, (event) =>
+    broadcastEvent({ ...event, source: "task" }),
   );
   const planWatcher = createWatcher(plansDir, (event) =>
     broadcastEvent({ ...event, source: "plan" }),
@@ -387,7 +387,7 @@ export function startServer(config: ServerConfig): ServerHandle {
   const shutdown = () => {
     terminalBackend.destroyAll();
     void copilot.stopAll();
-    ticketWatcher.close();
+    taskWatcher.close();
     planWatcher.close();
     server.stop();
     process.exit(0);
@@ -400,7 +400,7 @@ export function startServer(config: ServerConfig): ServerHandle {
     close() {
       terminalBackend.destroyAll();
       void copilot.stopAll();
-      ticketWatcher.close();
+      taskWatcher.close();
       planWatcher.close();
       server.stop();
     },
@@ -409,15 +409,15 @@ export function startServer(config: ServerConfig): ServerHandle {
 
 // Direct execution
 if (import.meta.main) {
-  const ticketsDir = resolve(process.env.TICKETS_DIR ?? ".tickets");
+  const tasksDir = resolve(process.env.TASKS_DIR ?? ".tasks");
   const plansDir = resolve(process.env.PLANS_DIR ?? ".plans");
   const port = parseInt(process.env.PORT ?? "4242", 10);
   const staticDir = resolve(
     process.env.STATIC_DIR ?? join(import.meta.dir, "../../ui/dist"),
   );
 
-  const handle = startServer({ ticketsDir, plansDir, port, staticDir });
+  const handle = startServer({ tasksDir, plansDir, port, staticDir });
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
-  console.log(`Tickets directory: ${ticketsDir}`);
+  console.log(`Tasks directory: ${tasksDir}`);
   console.log(`Plans directory: ${plansDir}`);
 }

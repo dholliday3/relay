@@ -17,7 +17,7 @@ export function DeleteConfirmDialog({
   onCancel,
 }: {
   itemTitle: string;
-  itemType: "ticket" | "plan";
+  itemType: "task" | "plan";
   config: TicketbookConfig;
   onConfirm: () => void;
   onCancel: () => void;

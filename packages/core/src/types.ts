@@ -1,23 +1,23 @@
 import type { z } from "zod";
 import type {
-  TicketFrontmatterSchema,
-  CreateTicketInputSchema,
-  TicketPatchSchema,
-  TicketFiltersSchema,
+  TaskFrontmatterSchema,
+  CreateTaskInputSchema,
+  TaskPatchSchema,
+  TaskFiltersSchema,
   TicketbookConfigSchema,
 } from "./schema.js";
 
-export type TicketFrontmatter = z.infer<typeof TicketFrontmatterSchema>;
+export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 
-export type Ticket = TicketFrontmatter & {
+export type Task = TaskFrontmatter & {
   body: string;
   filePath: string;
 };
 
-export type CreateTicketInput = z.infer<typeof CreateTicketInputSchema>;
+export type CreateTaskInput = z.infer<typeof CreateTaskInputSchema>;
 
-export type TicketPatch = z.infer<typeof TicketPatchSchema>;
+export type TaskPatch = z.infer<typeof TaskPatchSchema>;
 
-export type TicketFilters = z.infer<typeof TicketFiltersSchema>;
+export type TaskFilters = z.infer<typeof TaskFiltersSchema>;
 
 export type TicketbookConfig = z.infer<typeof TicketbookConfigSchema>;

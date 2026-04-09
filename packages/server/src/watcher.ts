@@ -5,18 +5,18 @@ import { access } from "node:fs/promises";
 
 export type ChangeType = "created" | "updated" | "deleted";
 
-export interface TicketChangeEvent {
-  ticketId: string;
+export interface TaskChangeEvent {
+  taskId: string;
   changeType: ChangeType;
   filename: string;
   timestamp: string;
-  source?: "ticket" | "plan";
+  source?: "task" | "plan";
 }
 
-type EventCallback = (event: TicketChangeEvent) => void;
+type EventCallback = (event: TaskChangeEvent) => void;
 
-/** Extract ticket ID from filename like "TKT-001-some-slug.md" → "TKT-001" */
-function extractTicketId(filename: string): string | null {
+/** Extract task ID from filename like "TKT-001-some-slug.md" → "TKT-001" */
+function extractTaskId(filename: string): string | null {
   const name = filename.replace(/\.md$/, "");
   const match = name.match(/^(.+?-\d+)/);
   return match ? match[1] : null;
@@ -46,8 +46,8 @@ export function createWatcher(
     watcher = watch(dir, (_, filename) => {
       if (!filename || extname(filename) !== ".md") return;
 
-      const ticketId = extractTicketId(filename);
-      if (!ticketId) return;
+      const taskId = extractTaskId(filename);
+      if (!taskId) return;
 
       // Debounce per-file
       const existing = debounceTimers.get(filename);
@@ -71,7 +71,7 @@ export function createWatcher(
           }
 
           onEvent({
-            ticketId,
+            taskId,
             changeType,
             filename,
             timestamp: new Date().toISOString(),

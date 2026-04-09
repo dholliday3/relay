@@ -1,4 +1,4 @@
-import { join, dirname, relative, resolve } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import {
   stat,
   mkdir,
@@ -11,7 +11,7 @@ import {
  * Options for scaffolding a ticketbook installation into a target project.
  */
 export interface InitTicketbookOptions {
-  /** Directory to initialize ticketbook in (will contain .tickets/, .plans/, etc.). */
+  /** Directory to initialize ticketbook in (will contain .tasks/, .plans/, etc.). */
   baseDir: string;
   /**
    * Path to `skills/ticketbook/SKILL.md` inside the ticketbook package.
@@ -26,9 +26,9 @@ export interface InitTicketbookOptions {
  * vs. left alone (init is idempotent — it never overwrites user files).
  */
 export interface InitTicketbookResult {
-  ticketsDir: string;
+  tasksDir: string;
   plansDir: string;
-  createdTicketsDir: boolean;
+  createdTasksDir: boolean;
   createdPlansDir: boolean;
   wroteConfig: boolean;
   wroteSkill: boolean;
@@ -48,33 +48,33 @@ export interface InitTicketbookResult {
 
 const AGENTS_MD_CONTENT = `# AGENTS.md
 
-This project uses **ticketbook** for ticket and plan tracking. Tickets live in \`.tickets/\` and plans live in \`.plans/\` as markdown files with YAML frontmatter.
+This project uses **ticketbook** for task and plan tracking. Tasks live in \`.tasks/\` and plans live in \`.plans/\` as markdown files with YAML frontmatter.
 
 ## If your agent supports Skills
 
-The \`ticketbook\` skill at \`.claude/skills/ticketbook/SKILL.md\` (Claude Code) and \`.agents/skills/ticketbook/SKILL.md\` (Codex) covers the full workflow. Nothing to configure — just ask about tickets or plans and the skill will load on demand.
+The \`ticketbook\` skill at \`.claude/skills/ticketbook/SKILL.md\` (Claude Code) and \`.agents/skills/ticketbook/SKILL.md\` (Codex) covers the full workflow. Nothing to configure — just ask about tasks or plans and the skill will load on demand.
 
 ## If your agent does not support Skills
 
-Use the \`ticketbook\` MCP server for all ticket and plan operations. Start it with:
+Use the \`ticketbook\` MCP server for all task and plan operations. Start it with:
 
 \`\`\`
 bunx ticketbook --mcp
 \`\`\`
 
-Never hand-edit files in \`.tickets/\` or \`.plans/\` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
+Never hand-edit files in \`.tasks/\` or \`.plans/\` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
 
 ## Workflow basics
 
-- **Start work:** set ticket \`status: "in-progress"\` and \`assignee: "<your agent name>"\`.
+- **Start work:** set task \`status: "in-progress"\` and \`assignee: "<your agent name>"\`.
 - **Finish work:** set \`status: "done"\`, append a debrief under a \`<!-- agent-notes -->\` marker in the body, and call \`link_ref\` with the commit SHA or PR URL.
-- **Plans → tickets:** call \`cut_tickets_from_plan\` to parse unchecked checkboxes in a plan body into linked tickets in one step.
-- **Commit convention:** include the ticket ID in the commit message (e.g. \`TKTB-015: fix kanban reorder bug\`).
+- **Plans → tasks:** call \`cut_tasks_from_plan\` to parse unchecked checkboxes in a plan body into linked tasks in one step.
+- **Commit convention:** include the task ID in the commit message (e.g. \`TKTB-015: fix kanban reorder bug\`).
 
 ## Enums
 
-- **Ticket status:** \`draft\`, \`backlog\`, \`open\`, \`in-progress\`, \`done\`, \`cancelled\`
-- **Ticket priority:** \`low\`, \`medium\`, \`high\`, \`urgent\`
+- **Task status:** \`draft\`, \`backlog\`, \`open\`, \`in-progress\`, \`done\`, \`cancelled\`
+- **Task priority:** \`low\`, \`medium\`, \`high\`, \`urgent\`
 - **Plan status:** \`draft\`, \`active\`, \`completed\`, \`archived\`
 `;
 
@@ -224,42 +224,42 @@ async function updateGitignore(
  * Scaffold a ticketbook installation into a target project.
  *
  * Creates (idempotently — existing files are never overwritten):
- *   - .tickets/ and .plans/ directories with .config.yaml and .counter files
+ *   - .tasks/ and .plans/ directories with .config.yaml and .counter files
  *   - .claude/skills/ticketbook/SKILL.md (Claude Code skill discovery)
  *   - .agents/skills/ticketbook/SKILL.md (Codex skill discovery)
  *   - .mcp.json (or merges a ticketbook entry into an existing one)
  *   - AGENTS.md (minimal pointer for agents without skill support)
- *   - .gitignore entries for .tickets/.archive/ and .plans/.archive/
+ *   - .gitignore entries for .tasks/.archive/ and .plans/.archive/
  */
 export async function initTicketbook(
   options: InitTicketbookOptions,
 ): Promise<InitTicketbookResult> {
   const baseDir = resolve(options.baseDir);
-  const ticketsDir = join(baseDir, ".tickets");
-  const ticketsArchiveDir = join(ticketsDir, ".archive");
+  const tasksDir = join(baseDir, ".tasks");
+  const tasksArchiveDir = join(tasksDir, ".archive");
   const plansDir = join(baseDir, ".plans");
   const plansArchiveDir = join(plansDir, ".archive");
 
-  const createdTicketsDir = !(await pathExists(ticketsDir));
+  const createdTasksDir = !(await pathExists(tasksDir));
   const createdPlansDir = !(await pathExists(plansDir));
 
-  await ensureDir(ticketsArchiveDir);
+  await ensureDir(tasksArchiveDir);
   await ensureDir(plansArchiveDir);
 
-  // .config.yaml (tickets)
+  // .config.yaml (tasks)
   let wroteConfig = false;
-  const configPath = join(ticketsDir, ".config.yaml");
+  const configPath = join(tasksDir, ".config.yaml");
   if (!(await pathExists(configPath))) {
     await writeFile(
       configPath,
-      "prefix: TKT\nplanPrefix: PLAN\ndeleteMode: archive\n",
+      "prefix: TASK\nplanPrefix: PLAN\ndeleteMode: archive\n",
       "utf-8",
     );
     wroteConfig = true;
   }
 
   // .counter files
-  for (const dir of [ticketsDir, plansDir]) {
+  for (const dir of [tasksDir, plansDir]) {
     const counterPath = join(dir, ".counter");
     if (!(await pathExists(counterPath))) {
       await writeFile(counterPath, "0", "utf-8");
@@ -268,7 +268,7 @@ export async function initTicketbook(
 
   // .gitignore updates
   const updatedGitignore = await updateGitignore(baseDir, [
-    ".tickets/.archive/",
+    ".tasks/.archive/",
     ".plans/.archive/",
   ]);
 
@@ -316,9 +316,9 @@ export async function initTicketbook(
   const wroteAgentsMd = await writeAgentsMd(join(baseDir, "AGENTS.md"));
 
   return {
-    ticketsDir,
+    tasksDir,
     plansDir,
-    createdTicketsDir,
+    createdTasksDir,
     createdPlansDir,
     wroteConfig,
     wroteSkill,

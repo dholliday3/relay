@@ -1,15 +1,15 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  fetchTickets,
+  fetchTasks,
   subscribeSSE,
-  createTicket,
-  deleteTicket,
+  createTask,
+  deleteTask,
   fetchConfig,
   patchConfig,
   fetchMeta,
-  reorderTicket,
-  patchTicket,
+  reorderTask,
+  patchTask,
   patchPlan,
   fetchPlans,
   createPlan,
@@ -17,12 +17,12 @@ import {
   fetchPlanMeta,
 } from "../api";
 import type {
-  Ticket,
+  Task,
   TicketbookConfig,
   Status,
   Priority,
   Meta,
-  CreateTicketInput,
+  CreateTaskInput,
   Plan,
   PlanStatus,
   CreatePlanInput,
@@ -49,21 +49,21 @@ export type PlanFilters = {
 
 interface AppContextValue {
   // Data
-  tickets: Ticket[];
+  tasks: Task[];
   plans: Plan[];
   config: TicketbookConfig;
   meta: Meta;
   planMeta: PlanMeta;
 
   // Loaders
-  loadTickets: () => Promise<void>;
+  loadTasks: () => Promise<void>;
   loadPlans: () => Promise<void>;
 
   // Selection / tabs
   openTabs: string[];
-  activeTicketId: string | null;
+  activeTaskId: string | null;
   activePlanId: string | null;
-  setActiveTicketId: (id: string | null) => void;
+  setActiveTaskId: (id: string | null) => void;
   setActivePlanId: (id: string | null) => void;
 
   // Create state
@@ -76,7 +76,7 @@ interface AppContextValue {
   confirmDelete: string | null;
   setConfirmDelete: (id: string | null) => void;
   deleteItemTitle: string;
-  deleteItemType: "ticket" | "plan";
+  deleteItemType: "task" | "plan";
 
   // Settings
   showSettings: boolean;
@@ -98,11 +98,11 @@ interface AppContextValue {
   rightRailOpen: boolean;
 
   // Handlers
-  handleSelect: (ticket: Ticket) => void;
+  handleSelect: (task: Task) => void;
   handleSelectPlan: (plan: Plan) => void;
-  handleNewTicket: () => void;
+  handleNewTask: () => void;
   handleNewPlan: () => void;
-  handleCreateTicket: (input: CreateTicketInput) => Promise<void>;
+  handleCreateTask: (input: CreateTaskInput) => Promise<void>;
   handleCreatePlan: (input: CreatePlanInput) => Promise<void>;
   handleCreateInColumn: (status: Status) => void;
   handleCloseTab: (tabId: string) => void;
@@ -110,10 +110,10 @@ interface AppContextValue {
   handleConfirmDelete: () => Promise<void>;
   handleCancelDelete: () => void;
   handleCancelCreate: () => void;
-  handleReorder: (ticketId: string, afterId: string | null, beforeId: string | null) => Promise<void>;
-  handleKanbanMove: (ticketId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => Promise<void>;
+  handleReorder: (taskId: string, afterId: string | null, beforeId: string | null) => Promise<void>;
+  handleKanbanMove: (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => Promise<void>;
   handlePlanKanbanMove: (planId: string, newStatus: PlanStatus) => Promise<void>;
-  handlePlanTicketClick: (ticketId: string) => void;
+  handlePlanTaskClick: (taskId: string) => void;
   handleMobileBack: () => void;
   handleSaveSettings: (patch: Partial<TicketbookConfig>) => Promise<void>;
 
@@ -137,10 +137,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   // Data state
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [config, setConfig] = useState<TicketbookConfig>({
-    prefix: "TKT",
+    prefix: "TASK",
     deleteMode: "archive",
     debriefStyle: "very-concise",
   });
@@ -149,7 +149,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Selection / UI
   const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [createDefaultStatus, setCreateDefaultStatus] = useState<Status>("open");
@@ -192,12 +192,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ---- Data loaders ----
-  const loadTickets = useCallback(async () => {
+  const loadTasks = useCallback(async () => {
     try {
-      const data = await fetchTickets();
-      setTickets(data);
+      const data = await fetchTasks();
+      setTasks(data);
     } catch (err) {
-      console.error("Failed to load tickets:", err);
+      console.error("Failed to load tasks:", err);
     }
   }, []);
 
@@ -211,12 +211,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    loadTickets();
+    loadTasks();
     loadPlans();
     fetchConfig().then(setConfig).catch(console.error);
     fetchMeta().then(setMeta).catch(console.error);
     fetchPlanMeta().then(setPlanMeta).catch(console.error);
-  }, [loadTickets, loadPlans]);
+  }, [loadTasks, loadPlans]);
 
   // SSE
   useEffect(() => {
@@ -225,29 +225,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadPlans();
         fetchPlanMeta().then(setPlanMeta).catch(console.error);
       } else {
-        loadTickets();
+        loadTasks();
         fetchMeta().then(setMeta).catch(console.error);
       }
     });
     return unsub;
-  }, [loadTickets, loadPlans]);
+  }, [loadTasks, loadPlans]);
 
   // ---- Derived ----
   const deleteItemTitle = confirmDelete
-    ? (tickets.find((t) => t.id === confirmDelete)?.title
+    ? (tasks.find((t) => t.id === confirmDelete)?.title
       ?? plans.find((p) => p.id === confirmDelete)?.title
       ?? confirmDelete)
     : "";
-  const deleteItemType: "ticket" | "plan" =
-    confirmDelete && plans.some((p) => p.id === confirmDelete) ? "plan" : "ticket";
+  const deleteItemType: "task" | "plan" =
+    confirmDelete && plans.some((p) => p.id === confirmDelete) ? "plan" : "task";
 
   // ---- Handlers ----
 
   const handleSelect = useCallback(
-    (ticket: Ticket) => {
+    (task: Task) => {
       setIsCreating(false);
-      setActiveTicketId(ticket.id);
-      setOpenTabs((tabs) => (tabs.includes(ticket.id) ? tabs : [...tabs, ticket.id]));
+      setActiveTaskId(task.id);
+      setOpenTabs((tabs) => (tabs.includes(task.id) ? tabs : [...tabs, task.id]));
       if (isMobile) setMobileShowDetail(true);
     },
     [isMobile],
@@ -267,10 +267,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (tabId: string) => {
       setOpenTabs((tabs) => {
         const newTabs = tabs.filter((id) => id !== tabId);
-        if (activeTicketId === tabId) {
+        if (activeTaskId === tabId) {
           const idx = tabs.indexOf(tabId);
           const next = newTabs[Math.min(idx, newTabs.length - 1)] ?? null;
-          setActiveTicketId(next);
+          setActiveTaskId(next);
         }
         if (activePlanId === tabId) {
           const idx = tabs.indexOf(tabId);
@@ -280,13 +280,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return newTabs;
       });
     },
-    [activeTicketId, activePlanId],
+    [activeTaskId, activePlanId],
   );
 
-  const handleNewTicket = useCallback(() => {
+  const handleNewTask = useCallback(() => {
     setCreateDefaultStatus("open");
     setIsCreating(true);
-    setActiveTicketId(null);
+    setActiveTaskId(null);
     if (isMobile) setMobileShowDetail(true);
   }, [isMobile]);
 
@@ -296,19 +296,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isMobile) setMobileShowDetail(true);
   }, [isMobile]);
 
-  const handleCreateTicket = useCallback(
-    async (input: CreateTicketInput) => {
+  const handleCreateTask = useCallback(
+    async (input: CreateTaskInput) => {
       try {
-        const ticket = await createTicket(input);
+        const task = await createTask(input);
         setIsCreating(false);
-        await loadTickets();
-        setActiveTicketId(ticket.id);
-        setOpenTabs((tabs) => (tabs.includes(ticket.id) ? tabs : [...tabs, ticket.id]));
+        await loadTasks();
+        setActiveTaskId(task.id);
+        setOpenTabs((tabs) => (tabs.includes(task.id) ? tabs : [...tabs, task.id]));
       } catch (err) {
-        console.error("Failed to create ticket:", err);
+        console.error("Failed to create task:", err);
       }
     },
-    [loadTickets],
+    [loadTasks],
   );
 
   const handleCreatePlan = useCallback(
@@ -329,7 +329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleCreateInColumn = useCallback((status: Status) => {
     setCreateDefaultStatus(status);
     setIsCreating(true);
-    setActiveTicketId(null);
+    setActiveTaskId(null);
   }, []);
 
   const handleCancelCreate = useCallback(() => {
@@ -351,28 +351,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
         await loadPlans();
       } else {
-        await deleteTicket(confirmDelete);
+        await deleteTask(confirmDelete);
         setConfirmDelete(null);
-        setActiveTicketId(null);
+        setActiveTaskId(null);
         setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
-        await loadTickets();
+        await loadTasks();
       }
     } catch (err) {
       console.error("Failed to delete:", err);
     }
-  }, [confirmDelete, plans, loadPlans, loadTickets]);
+  }, [confirmDelete, plans, loadPlans, loadTasks]);
 
   const handleCancelDelete = useCallback(() => {
     setConfirmDelete(null);
   }, []);
 
   const handleReorder = useCallback(
-    async (ticketId: string, afterId: string | null, beforeId: string | null) => {
-      const prevTickets = tickets;
+    async (taskId: string, afterId: string | null, beforeId: string | null) => {
+      const prevTickets = tasks;
 
-      setTickets((current) => {
-        const ticket = current.find((t) => t.id === ticketId);
-        if (!ticket) return current;
+      setTasks((current) => {
+        const task = current.find((t) => t.id === taskId);
+        if (!task) return current;
 
         const afterTicket = afterId ? current.find((t) => t.id === afterId) : null;
         const beforeTicket = beforeId ? current.find((t) => t.id === beforeId) : null;
@@ -388,30 +388,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           newOrder = 1000;
         }
 
-        return current.map((t) => (t.id === ticketId ? { ...t, order: newOrder } : t));
+        return current.map((t) => (t.id === taskId ? { ...t, order: newOrder } : t));
       });
 
       try {
-        await reorderTicket(ticketId, afterId, beforeId);
-        await loadTickets();
+        await reorderTask(taskId, afterId, beforeId);
+        await loadTasks();
       } catch (err) {
-        console.error("Failed to reorder ticket:", err);
-        setTickets(prevTickets);
+        console.error("Failed to reorder task:", err);
+        setTasks(prevTickets);
       }
     },
-    [tickets, loadTickets],
+    [tasks, loadTasks],
   );
 
   const handleKanbanMove = useCallback(
-    async (ticketId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => {
-      const prevTickets = tickets;
-      const ticket = tickets.find((t) => t.id === ticketId);
-      if (!ticket) return;
+    async (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => {
+      const prevTickets = tasks;
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
 
-      const statusChanged = ticket.status !== newStatus;
+      const statusChanged = task.status !== newStatus;
 
-      setTickets((current) => {
-        const t = current.find((t) => t.id === ticketId);
+      setTasks((current) => {
+        const t = current.find((t) => t.id === taskId);
         if (!t) return current;
 
         const afterTicket = afterId ? current.find((t) => t.id === afterId) : null;
@@ -428,21 +428,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           newOrder = 1000;
         }
 
-        return current.map((t) => (t.id === ticketId ? { ...t, status: newStatus, order: newOrder } : t));
+        return current.map((t) => (t.id === taskId ? { ...t, status: newStatus, order: newOrder } : t));
       });
 
       try {
         if (statusChanged) {
-          await patchTicket(ticketId, { status: newStatus });
+          await patchTask(taskId, { status: newStatus });
         }
-        await reorderTicket(ticketId, afterId, beforeId);
-        await loadTickets();
+        await reorderTask(taskId, afterId, beforeId);
+        await loadTasks();
       } catch (err) {
-        console.error("Failed to move ticket:", err);
-        setTickets(prevTickets);
+        console.error("Failed to move task:", err);
+        setTasks(prevTickets);
       }
     },
-    [tickets, loadTickets],
+    [tasks, loadTasks],
   );
 
   const handlePlanKanbanMove = useCallback(
@@ -462,18 +462,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [plans, loadPlans],
   );
 
-  const handlePlanTicketClick = useCallback(
-    (ticketId: string) => {
-      navigate({ to: "/tickets", search: { view: "list", status: [], project: [], epic: [], sprint: [] } });
-      setActiveTicketId(ticketId);
-      setOpenTabs((tabs) => (tabs.includes(ticketId) ? tabs : [...tabs, ticketId]));
+  const handlePlanTaskClick = useCallback(
+    (taskId: string) => {
+      navigate({ to: "/tasks", search: { view: "list", status: [], project: [], epic: [], sprint: [] } });
+      setActiveTaskId(taskId);
+      setOpenTabs((tabs) => (tabs.includes(taskId) ? tabs : [...tabs, taskId]));
     },
     [navigate],
   );
 
   const handleMobileBack = useCallback(() => {
     setMobileShowDetail(false);
-    setActiveTicketId(null);
+    setActiveTaskId(null);
     setIsCreating(false);
   }, []);
 
@@ -546,17 +546,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value: AppContextValue = {
-    tickets,
+    tasks,
     plans,
     config,
     meta,
     planMeta,
-    loadTickets,
+    loadTasks,
     loadPlans,
     openTabs,
-    activeTicketId,
+    activeTaskId,
     activePlanId,
-    setActiveTicketId,
+    setActiveTaskId,
     setActivePlanId,
     isCreating,
     setIsCreating,
@@ -579,9 +579,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     handleRightRailDragStart,
     handleSelect,
     handleSelectPlan,
-    handleNewTicket,
+    handleNewTask,
     handleNewPlan,
-    handleCreateTicket,
+    handleCreateTask,
     handleCreatePlan,
     handleCreateInColumn,
     handleCloseTab,
@@ -592,7 +592,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     handleReorder,
     handleKanbanMove,
     handlePlanKanbanMove,
-    handlePlanTicketClick,
+    handlePlanTaskClick,
     handleMobileBack,
     handleSaveSettings,
     searchInputRef,

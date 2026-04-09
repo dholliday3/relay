@@ -12,7 +12,7 @@ function IndexRoute() {
 
   return (
     <Dashboard
-      tickets={ctx.tickets}
+      tasks={ctx.tasks}
       plans={ctx.plans}
       meta={ctx.meta}
       onNavigate={(mode, filterKey, filterValue) => {
@@ -32,7 +32,7 @@ function IndexRoute() {
         if (filterKey && filterValue) {
           (search as any)[filterKey] = [filterValue];
         }
-        navigate({ to: "/tickets", search });
+        navigate({ to: "/tasks", search });
       }}
       onNavigatePlans={() => {
         navigate({ to: "/plans", search: { view: "list", status: [], project: [] } });

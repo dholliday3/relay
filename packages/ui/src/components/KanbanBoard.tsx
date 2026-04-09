@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Ticket, Status } from "../types";
+import type { Task, Status } from "../types";
 
 const KANBAN_COLUMNS: { key: Status; label: string }[] = [
   { key: "draft", label: "Draft" },
@@ -45,8 +45,8 @@ const PRIORITY_INDICATOR: Record<string, { color: string; label: string }> = {
   low: { color: "#9ca3af", label: "Low" },
 };
 
-function sortWithinGroup(tickets: Ticket[]): Ticket[] {
-  return [...tickets].sort((a, b) => {
+function sortWithinGroup(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
     const aHasOrder = a.order != null;
     const bHasOrder = b.order != null;
     if (aHasOrder && bHasOrder) return a.order! - b.order!;
@@ -61,10 +61,10 @@ function sortWithinGroup(tickets: Ticket[]): Ticket[] {
   });
 }
 
-function buildGroups(tickets: Ticket[]): Record<Status, string[]> {
-  const grouped: Partial<Record<Status, Ticket[]>> = {};
+function buildGroups(tasks: Task[]): Record<Status, string[]> {
+  const grouped: Partial<Record<Status, Task[]>> = {};
   for (const col of KANBAN_COLUMNS) grouped[col.key] = [];
-  for (const t of tickets) grouped[t.status]?.push(t);
+  for (const t of tasks) grouped[t.status]?.push(t);
   const result: Record<string, string[]> = {};
   for (const col of KANBAN_COLUMNS) {
     result[col.key] = sortWithinGroup(grouped[col.key] || []).map((t) => t.id);
@@ -73,10 +73,10 @@ function buildGroups(tickets: Ticket[]): Record<Status, string[]> {
 }
 
 interface KanbanBoardProps {
-  tickets: Ticket[];
-  activeTicketId: string | null;
-  onSelect: (ticket: Ticket) => void;
-  onMove: (ticketId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
+  tasks: Task[];
+  activeTaskId: string | null;
+  onSelect: (task: Task) => void;
+  onMove: (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
   onCreateInColumn?: (status: Status) => void;
 }
 
@@ -101,14 +101,14 @@ function DroppableColumn({
 }
 
 function SortableKanbanCard({
-  ticket,
-  activeTicketId,
+  task,
+  activeTaskId,
   onSelect,
   showDropIndicator,
 }: {
-  ticket: Ticket;
-  activeTicketId: string | null;
-  onSelect: (ticket: Ticket) => void;
+  task: Task;
+  activeTaskId: string | null;
+  onSelect: (task: Task) => void;
   showDropIndicator: boolean;
 }) {
   const {
@@ -118,7 +118,7 @@ function SortableKanbanCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: ticket.id });
+  } = useSortable({ id: task.id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -130,26 +130,26 @@ function SortableKanbanCard({
     <div ref={setNodeRef} style={style} className="kanban-card-wrapper">
       {showDropIndicator && <div className="kanban-drop-indicator" />}
       <button
-        className={`kanban-card ${ticket.id === activeTicketId ? "active" : ""} ${ticket.status === "draft" ? "kanban-card-draft" : ""}`}
-        onClick={() => onSelect(ticket)}
+        className={`kanban-card ${task.id === activeTaskId ? "active" : ""} ${task.status === "draft" ? "kanban-card-draft" : ""}`}
+        onClick={() => onSelect(task)}
         {...attributes}
         {...listeners}
       >
         <div className="kanban-card-title">
-          {ticket.priority && PRIORITY_INDICATOR[ticket.priority] && (
+          {task.priority && PRIORITY_INDICATOR[task.priority] && (
             <span
               className="priority-dot"
-              style={{ backgroundColor: PRIORITY_INDICATOR[ticket.priority].color }}
-              title={PRIORITY_INDICATOR[ticket.priority].label}
+              style={{ backgroundColor: PRIORITY_INDICATOR[task.priority].color }}
+              title={PRIORITY_INDICATOR[task.priority].label}
             />
           )}
-          <span className="kanban-card-title-text">{ticket.title}</span>
+          <span className="kanban-card-title-text">{task.title}</span>
         </div>
         <div className="kanban-card-meta">
-          <span className="ticket-id">{ticket.id}</span>
-          {ticket.tags && ticket.tags.length > 0 && (
+          <span className="ticket-id">{task.id}</span>
+          {task.tags && task.tags.length > 0 && (
             <span className="ticket-tags">
-              {ticket.tags.map((tag) => (
+              {task.tags.map((tag) => (
                 <span key={tag} className="tag-chip">{tag}</span>
               ))}
             </span>
@@ -160,26 +160,26 @@ function SortableKanbanCard({
   );
 }
 
-function KanbanCardOverlay({ ticket }: { ticket: Ticket }) {
+function KanbanCardOverlay({ task }: { task: Task }) {
   return (
     <div className="kanban-card kanban-card-overlay">
       <div className="kanban-card-title">
-        {ticket.priority && PRIORITY_INDICATOR[ticket.priority] && (
+        {task.priority && PRIORITY_INDICATOR[task.priority] && (
           <span
             className="priority-dot"
-            style={{ backgroundColor: PRIORITY_INDICATOR[ticket.priority].color }}
+            style={{ backgroundColor: PRIORITY_INDICATOR[task.priority].color }}
           />
         )}
-        <span className="kanban-card-title-text">{ticket.title}</span>
+        <span className="kanban-card-title-text">{task.title}</span>
       </div>
       <div className="kanban-card-meta">
-        <span className="ticket-id">{ticket.id}</span>
+        <span className="ticket-id">{task.id}</span>
       </div>
     </div>
   );
 }
 
-export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreateInColumn }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, activeTaskId, onSelect, onMove, onCreateInColumn }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     done: false,
     cancelled: false,
@@ -188,21 +188,21 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
   const [overId, setOverId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<Status | null>(null);
 
-  // Local state for multi-container drag: maps status -> ordered ticket IDs
-  const [itemGroups, setItemGroups] = useState<Record<Status, string[]>>(() => buildGroups(tickets));
+  // Local state for multi-container drag: maps status -> ordered task IDs
+  const [itemGroups, setItemGroups] = useState<Record<Status, string[]>>(() => buildGroups(tasks));
 
-  const ticketMap = useMemo(() => {
-    const map = new Map<string, Ticket>();
-    for (const t of tickets) map.set(t.id, t);
+  const taskMap = useMemo(() => {
+    const map = new Map<string, Task>();
+    for (const t of tasks) map.set(t.id, t);
     return map;
-  }, [tickets]);
+  }, [tasks]);
 
   // Sync from props when not dragging
   useEffect(() => {
     if (!activeId) {
-      setItemGroups(buildGroups(tickets));
+      setItemGroups(buildGroups(tasks));
     }
-  }, [tickets, activeId]);
+  }, [tasks, activeId]);
 
   function findContainer(id: string): Status | undefined {
     for (const col of KANBAN_COLUMNS) {
@@ -273,7 +273,7 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
 
     if (!over) {
       // Cancelled — reset
-      setItemGroups(buildGroups(tickets));
+      setItemGroups(buildGroups(tasks));
       setActiveId(null);
       return;
     }
@@ -286,8 +286,8 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
       return;
     }
 
-    const ticket = ticketMap.get(active.id as string);
-    const originalStatus = ticket?.status;
+    const task = taskMap.get(active.id as string);
+    const originalStatus = task?.status;
     const statusChanged = originalStatus !== overContainer;
 
     let finalItems = [...(itemGroups[overContainer] || [])];
@@ -325,7 +325,7 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
 
   const collapsible = (status: Status) => status === "done" || status === "cancelled";
 
-  const activeTicket = activeId ? ticketMap.get(activeId) ?? null : null;
+  const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
 
   return (
     <DndContext
@@ -374,8 +374,8 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
                   <button
                     className="kanban-add-btn kanban-header-add"
                     onClick={() => onCreateInColumn(key)}
-                    title={`New ${label} ticket`}
-                    aria-label={`New ${label} ticket`}
+                    title={`New ${label} task`}
+                    aria-label={`New ${label} task`}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
@@ -387,13 +387,13 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
               <DroppableColumn status={key} isOver={isColumnOver}>
                 <SortableContext items={groupIds} strategy={verticalListSortingStrategy}>
                   {groupIds.map((id) => {
-                    const ticket = ticketMap.get(id);
-                    if (!ticket) return null;
+                    const task = taskMap.get(id);
+                    if (!task) return null;
                     return (
                       <SortableKanbanCard
                         key={id}
-                        ticket={ticket}
-                        activeTicketId={activeTicketId}
+                        task={task}
+                        activeTaskId={activeTaskId}
                         onSelect={onSelect}
                         showDropIndicator={overId === id && activeId !== id}
                       />
@@ -407,7 +407,7 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
                   <button
                     className="kanban-add-btn kanban-footer-add"
                     onClick={() => onCreateInColumn(key)}
-                    aria-label={`New ${label} ticket`}
+                    aria-label={`New ${label} task`}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
@@ -422,7 +422,7 @@ export function KanbanBoard({ tickets, activeTicketId, onSelect, onMove, onCreat
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activeTicket ? <KanbanCardOverlay ticket={activeTicket} /> : null}
+        {activeTask ? <KanbanCardOverlay task={activeTask} /> : null}
       </DragOverlay>
     </DndContext>
   );

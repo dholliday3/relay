@@ -2,10 +2,10 @@ import { describe, test, expect } from "bun:test";
 import {
   StatusEnum,
   PriorityEnum,
-  TicketFrontmatterSchema,
-  CreateTicketInputSchema,
-  TicketPatchSchema,
-  TicketFiltersSchema,
+  TaskFrontmatterSchema,
+  CreateTaskInputSchema,
+  TaskPatchSchema,
+  TaskFiltersSchema,
   TicketbookConfigSchema,
 } from "./schema.js";
 
@@ -33,11 +33,11 @@ describe("PriorityEnum", () => {
   });
 });
 
-describe("TicketFrontmatterSchema", () => {
+describe("TaskFrontmatterSchema", () => {
   test("parses valid frontmatter with all fields", () => {
     const input = {
       id: "TKT-001",
-      title: "Test ticket",
+      title: "Test task",
       status: "open",
       created: "2024-01-01T00:00:00.000Z",
       updated: "2024-01-01T00:00:00.000Z",
@@ -48,7 +48,7 @@ describe("TicketFrontmatterSchema", () => {
       epic: "v1",
       sprint: "sprint-1",
     };
-    const result = TicketFrontmatterSchema.parse(input);
+    const result = TaskFrontmatterSchema.parse(input);
     expect(result.id).toBe("TKT-001");
     expect(result.status).toBe("open");
     expect(result.priority).toBe("high");
@@ -56,7 +56,7 @@ describe("TicketFrontmatterSchema", () => {
   });
 
   test("parses frontmatter with only required fields", () => {
-    const result = TicketFrontmatterSchema.parse({
+    const result = TaskFrontmatterSchema.parse({
       id: "TKT-001",
       title: "Test",
       status: "backlog",
@@ -69,7 +69,7 @@ describe("TicketFrontmatterSchema", () => {
   });
 
   test("coerces date strings to Date objects", () => {
-    const result = TicketFrontmatterSchema.parse({
+    const result = TaskFrontmatterSchema.parse({
       id: "TKT-001",
       title: "Test",
       status: "open",
@@ -82,7 +82,7 @@ describe("TicketFrontmatterSchema", () => {
 
   test("rejects uppercase tags", () => {
     expect(() =>
-      TicketFrontmatterSchema.parse({
+      TaskFrontmatterSchema.parse({
         id: "TKT-001",
         title: "Test",
         status: "open",
@@ -94,7 +94,7 @@ describe("TicketFrontmatterSchema", () => {
   });
 
   test("order is an optional float", () => {
-    const result = TicketFrontmatterSchema.parse({
+    const result = TaskFrontmatterSchema.parse({
       id: "TKT-001",
       title: "Test",
       status: "open",
@@ -106,18 +106,18 @@ describe("TicketFrontmatterSchema", () => {
   });
 });
 
-describe("CreateTicketInputSchema", () => {
+describe("CreateTaskInputSchema", () => {
   test("defaults status to open", () => {
-    const result = CreateTicketInputSchema.parse({ title: "New ticket" });
+    const result = CreateTaskInputSchema.parse({ title: "New task" });
     expect(result.status).toBe("open");
   });
 
   test("rejects empty title", () => {
-    expect(() => CreateTicketInputSchema.parse({ title: "" })).toThrow();
+    expect(() => CreateTaskInputSchema.parse({ title: "" })).toThrow();
   });
 
   test("accepts optional body", () => {
-    const result = CreateTicketInputSchema.parse({
+    const result = CreateTaskInputSchema.parse({
       title: "Test",
       body: "Some content",
     });
@@ -125,19 +125,19 @@ describe("CreateTicketInputSchema", () => {
   });
 });
 
-describe("TicketPatchSchema", () => {
+describe("TaskPatchSchema", () => {
   test("all fields are optional", () => {
-    const result = TicketPatchSchema.parse({});
+    const result = TaskPatchSchema.parse({});
     expect(result).toEqual({});
   });
 
   test("priority can be null (to clear)", () => {
-    const result = TicketPatchSchema.parse({ priority: null });
+    const result = TaskPatchSchema.parse({ priority: null });
     expect(result.priority).toBeNull();
   });
 
   test("project/epic/sprint can be null (to clear)", () => {
-    const result = TicketPatchSchema.parse({
+    const result = TaskPatchSchema.parse({
       project: null,
       epic: null,
       sprint: null,
@@ -148,14 +148,14 @@ describe("TicketPatchSchema", () => {
   });
 });
 
-describe("TicketFiltersSchema", () => {
+describe("TaskFiltersSchema", () => {
   test("accepts single status", () => {
-    const result = TicketFiltersSchema.parse({ status: "open" });
+    const result = TaskFiltersSchema.parse({ status: "open" });
     expect(result.status).toBe("open");
   });
 
   test("accepts array of statuses", () => {
-    const result = TicketFiltersSchema.parse({
+    const result = TaskFiltersSchema.parse({
       status: ["open", "in-progress"],
     });
     expect(result.status).toEqual(["open", "in-progress"]);
@@ -165,7 +165,7 @@ describe("TicketFiltersSchema", () => {
 describe("TicketbookConfigSchema", () => {
   test("provides defaults for empty object", () => {
     const result = TicketbookConfigSchema.parse({});
-    expect(result.prefix).toBe("TKT");
+    expect(result.prefix).toBe("TASK");
     expect(result.deleteMode).toBe("archive");
   });
 

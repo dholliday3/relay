@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import type { Ticket, Status, Meta, Plan, PlanStatus } from "../types";
+import type { Task, Status, Meta, Plan, PlanStatus } from "../types";
 
 type FilterKey = "status" | "project" | "epic" | "sprint";
 
 interface DashboardProps {
-  tickets: Ticket[];
+  tasks: Task[];
   plans: Plan[];
   meta: Meta;
   onNavigate: (mode: "list" | "board", filterKey?: FilterKey, filterValue?: string) => void;
@@ -27,7 +27,7 @@ const PLAN_STATUS_CONFIG: { key: PlanStatus; label: string; color: string }[] = 
   { key: "archived", label: "Archived", color: "#6b7280" },
 ];
 
-export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }: DashboardProps) {
+export function Dashboard({ tasks, plans, meta, onNavigate, onNavigatePlans }: DashboardProps) {
   const statusCounts = useMemo(() => {
     const counts: Record<Status, number> = {
       draft: 0,
@@ -37,21 +37,21 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
       done: 0,
       cancelled: 0,
     };
-    for (const t of tickets) counts[t.status]++;
+    for (const t of tasks) counts[t.status]++;
     return counts;
-  }, [tickets]);
+  }, [tasks]);
 
   const activeCount = statusCounts["in-progress"] + statusCounts["open"] + statusCounts["backlog"];
 
   const recentTickets = useMemo(() => {
-    return [...tickets]
+    return [...tasks]
       .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime())
       .slice(0, 5);
-  }, [tickets]);
+  }, [tasks]);
 
-  const projectGroups = useMemo(() => groupBy(tickets, "project"), [tickets]);
-  const epicGroups = useMemo(() => groupBy(tickets, "epic"), [tickets]);
-  const sprintGroups = useMemo(() => groupBy(tickets, "sprint"), [tickets]);
+  const projectGroups = useMemo(() => groupBy(tasks, "project"), [tasks]);
+  const epicGroups = useMemo(() => groupBy(tasks, "epic"), [tasks]);
+  const sprintGroups = useMemo(() => groupBy(tasks, "sprint"), [tasks]);
 
   return (
     <div className="dashboard">
@@ -60,7 +60,7 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
         <h2 className="dash-section-title">Overview</h2>
         <div className="dash-stats">
           <div className="dash-stat-card dash-stat-total">
-            <span className="dash-stat-value">{tickets.length}</span>
+            <span className="dash-stat-value">{tasks.length}</span>
             <span className="dash-stat-label">Total</span>
           </div>
           <div className="dash-stat-card dash-stat-active">
@@ -81,11 +81,11 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
       </section>
 
       {/* Status bar chart */}
-      {tickets.length > 0 && (
+      {tasks.length > 0 && (
         <section className="dash-section">
           <div className="dash-bar-chart">
             {STATUS_CONFIG.map(({ key, color }) => {
-              const pct = (statusCounts[key] / tickets.length) * 100;
+              const pct = (statusCounts[key] / tasks.length) * 100;
               if (pct === 0) return null;
               return (
                 <div
@@ -129,7 +129,7 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
               return (
                 <button key={name} className="dash-group-card" onClick={() => onNavigate("list", "project", name)}>
                   <span className="dash-group-name">{name}</span>
-                  <span className="dash-group-counts">{group.length} tickets &middot; {active} active</span>
+                  <span className="dash-group-counts">{group.length} tasks &middot; {active} active</span>
                 </button>
               );
             })}
@@ -148,7 +148,7 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
               return (
                 <button key={name} className="dash-group-card" onClick={() => onNavigate("list", "epic", name)}>
                   <span className="dash-group-name">{name}</span>
-                  <span className="dash-group-counts">{group.length} tickets &middot; {done}/{group.length} done</span>
+                  <span className="dash-group-counts">{group.length} tasks &middot; {done}/{group.length} done</span>
                   {group.length > 0 && (
                     <div className="dash-progress-bar">
                       <div className="dash-progress-fill" style={{ width: `${(done / group.length) * 100}%` }} />
@@ -172,7 +172,7 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
               return (
                 <button key={name} className="dash-group-card" onClick={() => onNavigate("list", "sprint", name)}>
                   <span className="dash-group-name">{name}</span>
-                  <span className="dash-group-counts">{group.length} tickets &middot; {done}/{group.length} done</span>
+                  <span className="dash-group-counts">{group.length} tasks &middot; {done}/{group.length} done</span>
                   {group.length > 0 && (
                     <div className="dash-progress-bar">
                       <div className="dash-progress-fill" style={{ width: `${(done / group.length) * 100}%` }} />
@@ -233,9 +233,9 @@ export function Dashboard({ tickets, plans, meta, onNavigate, onNavigatePlans }:
   );
 }
 
-function groupBy(tickets: Ticket[], field: "project" | "epic" | "sprint"): Map<string, Ticket[]> {
-  const map = new Map<string, Ticket[]>();
-  for (const t of tickets) {
+function groupBy(tasks: Task[], field: "project" | "epic" | "sprint"): Map<string, Task[]> {
+  const map = new Map<string, Task[]>();
+  for (const t of tasks) {
     const val = t[field];
     if (!val) continue;
     const arr = map.get(val);

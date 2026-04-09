@@ -1,4 +1,4 @@
-export interface Ticket {
+export interface Task {
   id: string;
   title: string;
   status: "draft" | "backlog" | "open" | "in-progress" | "done" | "cancelled";
@@ -18,10 +18,10 @@ export interface Ticket {
   filePath: string;
 }
 
-export type Status = Ticket["status"];
-export type Priority = Ticket["priority"];
+export type Status = Task["status"];
+export type Priority = Task["priority"];
 
-export interface TicketPatch {
+export interface TaskPatch {
   title?: string;
   status?: Status;
   priority?: Priority | null;
@@ -49,7 +49,7 @@ export interface TicketbookConfig {
   debriefStyle: DebriefStyle;
 }
 
-export interface CreateTicketInput {
+export interface CreateTaskInput {
   title: string;
   status?: Status;
   priority?: Priority;
@@ -70,7 +70,7 @@ export interface Plan {
   updated: string;
   tags?: string[];
   project?: string;
-  tickets?: string[];
+  tasks?: string[];
   refs?: string[];
   body: string;
   filePath: string;
@@ -83,7 +83,7 @@ export interface PlanPatch {
   status?: PlanStatus;
   tags?: string[];
   project?: string | null;
-  tickets?: string[];
+  tasks?: string[];
   refs?: string[];
 }
 

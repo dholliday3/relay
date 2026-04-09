@@ -14,10 +14,10 @@ import {
   PlanPatchSchema,
 } from "./plan-schema.js";
 import type { Plan, CreatePlanInput, PlanPatch } from "./plan-types.js";
-import type { Ticket } from "./types.js";
+import type { Task } from "./types.js";
 import { nextIdForDir, formatFilename } from "./id.js";
 import { getConfig } from "./config.js";
-import { createTicket } from "./writer.js";
+import { createTask } from "./writer.js";
 
 const ARCHIVE_DIR = ".archive";
 
@@ -67,7 +67,7 @@ function serializePlan(
 }
 
 export async function createPlan(
-  ticketsDir: string,
+  tasksDir: string,
   plansDir: string,
   input: CreatePlanInput,
 ): Promise<Plan> {
@@ -77,14 +77,14 @@ export async function createPlan(
   }
   const validated = CreatePlanInputSchema.parse(rawInput);
 
-  const config = await getConfig(ticketsDir);
+  const config = await getConfig(tasksDir);
   const { id, filename } = await nextIdForDir(plansDir, config.planPrefix);
   const now = new Date();
 
   const tags =
     validated.tags && validated.tags.length > 0 ? validated.tags : undefined;
-  const tickets =
-    validated.tickets && validated.tickets.length > 0 ? validated.tickets : undefined;
+  const tasks =
+    validated.tasks && validated.tasks.length > 0 ? validated.tasks : undefined;
   const refs =
     validated.refs && validated.refs.length > 0 ? validated.refs : undefined;
 
@@ -94,7 +94,7 @@ export async function createPlan(
     status: validated.status,
     tags,
     project: validated.project,
-    tickets,
+    tasks,
     refs,
     created: now,
     updated: now,
@@ -112,7 +112,7 @@ export async function createPlan(
     status: validated.status,
     tags,
     project: validated.project,
-    tickets,
+    tasks,
     refs,
     created: now,
     updated: now,
@@ -150,8 +150,8 @@ export async function updatePlan(
     updated.project =
       validated.project === null ? undefined : validated.project;
   }
-  if (validated.tickets !== undefined) {
-    updated.tickets = validated.tickets.length > 0 ? validated.tickets : undefined;
+  if (validated.tasks !== undefined) {
+    updated.tasks = validated.tasks.length > 0 ? validated.tasks : undefined;
   }
   if (validated.refs !== undefined) {
     updated.refs = validated.refs.length > 0 ? validated.refs : undefined;
@@ -166,7 +166,7 @@ export async function updatePlan(
     status: updated.status,
     tags: updated.tags,
     project: updated.project,
-    tickets: updated.tickets,
+    tasks: updated.tasks,
     refs: updated.refs,
     created: updated.created,
     updated: updated.updated,
@@ -186,14 +186,14 @@ export async function updatePlan(
 }
 
 export async function deletePlan(
-  ticketsDir: string,
+  tasksDir: string,
   plansDir: string,
   id: string,
 ): Promise<void> {
   const filePath = await findPlanFile(plansDir, id);
   if (!filePath) throw new Error(`Plan not found: ${id}`);
 
-  const config = await getConfig(ticketsDir);
+  const config = await getConfig(tasksDir);
 
   if (config.deleteMode === "archive") {
     const archiveDir = join(plansDir, ARCHIVE_DIR);
@@ -222,20 +222,20 @@ export async function restorePlan(
   return { ...data, body: parsed.content.trim(), filePath: restoredPath };
 }
 
-export interface CutTicketsResult {
+export interface CutTasksResult {
   plan: Plan;
-  createdTickets: Ticket[];
+  createdTasks: Task[];
 }
 
 /**
- * Parse unchecked checkboxes from a plan's body, create a ticket for each,
+ * Parse unchecked checkboxes from a plan's body, create a task for each,
  * link them to the plan, and check off the items in the plan body.
  */
-export async function cutTicketsFromPlan(
-  ticketsDir: string,
+export async function cutTasksFromPlan(
+  tasksDir: string,
   plansDir: string,
   planId: string,
-): Promise<CutTicketsResult> {
+): Promise<CutTasksResult> {
   const filePath = await findPlanFile(plansDir, planId);
   if (!filePath) throw new Error(`Plan not found: ${planId}`);
 
@@ -257,34 +257,34 @@ export async function cutTicketsFromPlan(
   if (uncheckedIndices.length === 0) {
     return {
       plan: { ...planData, body: parsed.content.trim(), filePath },
-      createdTickets: [],
+      createdTasks: [],
     };
   }
 
-  const createdTickets: Ticket[] = [];
-  const newTicketIds: string[] = [...(planData.tickets ?? [])];
+  const createdTasks: Task[] = [];
+  const newTaskIds: string[] = [...(planData.tasks ?? [])];
 
-  // Create a ticket for each unchecked item and check it off
+  // Create a task for each unchecked item and check it off
   for (const lineIdx of uncheckedIndices) {
     const match = lines[lineIdx].match(checkboxRegex);
     if (!match) continue;
 
     const taskText = match[4].trim();
-    const ticket = await createTicket(ticketsDir, {
+    const task = await createTask(tasksDir, {
       title: taskText,
       status: "open",
       project: planData.project,
       tags: planData.tags,
     });
 
-    createdTickets.push(ticket);
-    newTicketIds.push(ticket.id);
+    createdTasks.push(task);
+    newTaskIds.push(task.id);
 
-    // Check off the item and append the ticket ID
-    lines[lineIdx] = `${match[1]}x${match[3]}${taskText} (${ticket.id})`;
+    // Check off the item and append the task ID
+    lines[lineIdx] = `${match[1]}x${match[3]}${taskText} (${task.id})`;
   }
 
-  // Update the plan with new body and linked tickets
+  // Update the plan with new body and linked tasks
   const newBody = lines.join("\n").trim();
   const now = new Date();
 
@@ -294,7 +294,7 @@ export async function cutTicketsFromPlan(
     status: planData.status,
     tags: planData.tags,
     project: planData.project,
-    tickets: newTicketIds.length > 0 ? newTicketIds : undefined,
+    tasks: newTaskIds.length > 0 ? newTaskIds : undefined,
     refs: planData.refs,
     created: planData.created,
     updated: now,
@@ -304,11 +304,13 @@ export async function cutTicketsFromPlan(
 
   const updatedPlan: Plan = {
     ...planData,
-    tickets: newTicketIds.length > 0 ? newTicketIds : undefined,
+    tasks: newTaskIds.length > 0 ? newTaskIds : undefined,
     updated: now,
     body: newBody,
     filePath,
   };
 
-  return { plan: updatedPlan, createdTickets };
+  return { plan: updatedPlan, createdTasks };
 }
+
+export const cutTicketsFromPlan = cutTasksFromPlan;

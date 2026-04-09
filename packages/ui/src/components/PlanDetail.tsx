@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { patchPlan, patchPlanBody, cutTicketsFromPlan } from "../api";
+import { patchPlan, patchPlanBody, cutTasksFromPlan } from "../api";
 import type { Plan, PlanStatus, PlanMeta } from "../types";
 import { TiptapEditor } from "./TiptapEditor";
 import { SelectChip, ComboboxChip, MultiComboboxChip } from "./MetaFields";
@@ -16,11 +16,11 @@ interface PlanDetailProps {
   planMeta: PlanMeta;
   onUpdated: () => void;
   onDelete?: (id: string) => void;
-  onTicketClick?: (ticketId: string) => void;
-  onTicketsCreated?: () => void;
+  onTaskClick?: (taskId: string) => void;
+  onTasksCreated?: () => void;
 }
 
-export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick, onTicketsCreated }: PlanDetailProps) {
+export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, onTasksCreated }: PlanDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(plan.title);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -84,18 +84,18 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
     }
   };
 
-  const handleCutTickets = useCallback(async () => {
+  const handleCutTasks = useCallback(async () => {
     setCutting(true);
     try {
-      await cutTicketsFromPlan(plan.id);
+      await cutTasksFromPlan(plan.id);
       onUpdated();
-      onTicketsCreated?.();
+      onTasksCreated?.();
     } catch (err) {
-      console.error("Failed to cut tickets:", err);
+      console.error("Failed to cut tasks:", err);
     } finally {
       setCutting(false);
     }
-  }, [plan.id, onUpdated, onTicketsCreated]);
+  }, [plan.id, onUpdated, onTasksCreated]);
 
   const handleBodyChange = useCallback(
     (newBody: string) => {
@@ -131,9 +131,9 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
         <div className="detail-header-actions">
           <button
             className="plan-cut-tickets-btn"
-            onClick={handleCutTickets}
+            onClick={handleCutTasks}
             disabled={cutting}
-            title="Cut tickets from unchecked checkboxes"
+            title="Cut tasks from unchecked checkboxes"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="6" cy="6" r="3" />
@@ -142,7 +142,7 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
               <line x1="14.47" y1="14.48" x2="20" y2="20" />
               <line x1="8.12" y1="8.12" x2="12" y2="12" />
             </svg>
-            {cutting ? "Cutting..." : "Cut Tickets"}
+            {cutting ? "Cutting..." : "Cut Tasks"}
           </button>
           {onDelete && (
             <button
@@ -160,7 +160,7 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
         </div>
       </div>
 
-      {/* Inline editable title — same pattern as TicketDetail */}
+      {/* Inline editable title — same pattern as TaskDetail */}
       {editingTitle ? (
         <input
           ref={titleInputRef}
@@ -182,12 +182,12 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
 
       {/* Tiptap editor */}
       <TiptapEditor
-        ticketId={plan.id}
+        taskId={plan.id}
         content={plan.body}
         onUpdate={handleBodyChange}
       />
 
-      {/* Metadata row — same pattern as TicketDetail */}
+      {/* Metadata row — same pattern as TaskDetail */}
       <div className="detail-meta-row">
         <SelectChip
           value={plan.status}
@@ -208,14 +208,14 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTicketClick,
         />
       </div>
 
-      {plan.tickets && plan.tickets.length > 0 && (
-        <div className="plan-linked-tickets">
-          <span className="plan-linked-label">Linked tickets:</span>
-          {plan.tickets.map((tid) => (
+      {plan.tasks && plan.tasks.length > 0 && (
+        <div className="plan-linked-tasks">
+          <span className="plan-linked-label">Linked tasks:</span>
+          {plan.tasks.map((tid) => (
             <button
               key={tid}
               className="plan-ticket-chip"
-              onClick={() => onTicketClick?.(tid)}
+              onClick={() => onTaskClick?.(tid)}
             >
               {tid}
             </button>

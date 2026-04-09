@@ -15,7 +15,7 @@ const lowercaseString = z
   .string()
   .refine((s) => s === s.toLowerCase(), "Tags must be lowercase");
 
-export const TicketFrontmatterSchema = z.object({
+export const TaskFrontmatterSchema = z.object({
   id: z.string(),
   title: z.string(),
   status: StatusEnum,
@@ -33,7 +33,7 @@ export const TicketFrontmatterSchema = z.object({
   refs: z.array(z.string()).optional(),
 });
 
-export const CreateTicketInputSchema = z.object({
+export const CreateTaskInputSchema = z.object({
   title: z.string().min(1),
   status: StatusEnum.default("open"),
   priority: PriorityEnum.optional(),
@@ -49,7 +49,7 @@ export const CreateTicketInputSchema = z.object({
   refs: z.array(z.string()).optional(),
 });
 
-export const TicketPatchSchema = z.object({
+export const TaskPatchSchema = z.object({
   title: z.string().min(1).optional(),
   status: StatusEnum.optional(),
   priority: PriorityEnum.nullish(),
@@ -65,7 +65,7 @@ export const TicketPatchSchema = z.object({
   refs: z.array(z.string()).optional(),
 });
 
-export const TicketFiltersSchema = z.object({
+export const TaskFiltersSchema = z.object({
   status: z.union([StatusEnum, z.array(StatusEnum)]).optional(),
   priority: z.union([PriorityEnum, z.array(PriorityEnum)]).optional(),
   project: z.string().optional(),
@@ -80,7 +80,7 @@ export const DeleteModeEnum = z.enum(["archive", "hard"]);
 export const DebriefStyleEnum = z.enum(["very-concise", "concise", "detailed", "lengthy"]);
 
 export const TicketbookConfigSchema = z.object({
-  prefix: z.string().default("TKT"),
+  prefix: z.string().default("TASK"),
   planPrefix: z.string().default("PLAN"),
   deleteMode: DeleteModeEnum.default("archive"),
   debriefStyle: DebriefStyleEnum.default("very-concise"),

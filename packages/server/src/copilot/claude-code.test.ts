@@ -173,7 +173,7 @@ describe("ClaudeCodeProvider.parseStreamJsonLine", () => {
         content: [
           {
             type: "tool_use",
-            name: "create_ticket",
+            name: "create_task",
             input: { title: "Hello", status: "open" },
           },
         ],
@@ -182,7 +182,7 @@ describe("ClaudeCodeProvider.parseStreamJsonLine", () => {
     const parts = p.parseStreamJsonLine(line, session);
     expect(parts).toHaveLength(1);
     expect(parts[0].type).toBe("tool_use");
-    expect(parts[0].toolName).toBe("create_ticket");
+    expect(parts[0].toolName).toBe("create_task");
     expect(parts[0].content).toBe(JSON.stringify({ title: "Hello", status: "open" }));
   });
 
@@ -199,13 +199,13 @@ describe("buildTicketbookMcpConfig", () => {
   it("produces an mcpServers entry pointing at bin/ticketbook.ts --mcp", () => {
     const config = buildTicketbookMcpConfig({
       binPath: "/abs/path/bin/ticketbook.ts",
-      ticketsDir: "/abs/path/.tickets",
+      tasksDir: "/abs/path/.tasks",
     });
     expect(config).toEqual({
       mcpServers: {
         ticketbook: {
           command: "bun",
-          args: ["run", "/abs/path/bin/ticketbook.ts", "--mcp", "--dir", "/abs/path/.tickets"],
+          args: ["run", "/abs/path/bin/ticketbook.ts", "--mcp", "--dir", "/abs/path/.tasks"],
         },
       },
     });
@@ -214,7 +214,7 @@ describe("buildTicketbookMcpConfig", () => {
   it("respects a custom bun path", () => {
     const config = buildTicketbookMcpConfig({
       binPath: "/abs/bin.ts",
-      ticketsDir: "/abs/.tickets",
+      tasksDir: "/abs/.tasks",
       bunPath: "/usr/local/bin/bun",
     });
     const server = (config.mcpServers as Record<string, { command: string }>).ticketbook;
