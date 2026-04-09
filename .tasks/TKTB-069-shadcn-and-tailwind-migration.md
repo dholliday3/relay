@@ -10,7 +10,7 @@ tags:
 relatedTo:
   - TKTB-068
 created: '2026-04-08T00:00:00.000Z'
-updated: '2026-04-09T07:00:00.000Z'
+updated: '2026-04-09T08:00:00.000Z'
 ---
 
 ## Context
@@ -104,7 +104,7 @@ Surfaces to migrate (rough estimate, in order of effort):
 | 16 | ☐ | App layout shells | Tailwind utilities |
 | 17 | ☐ | Agent notes / refs | Tailwind utilities |
 | 18 | ☑ | Task list rows (`TaskList.tsx` + `PlanList.tsx`) | Tailwind utilities + shadcn `Badge` + Phosphor `CaretDown`/`DotsSixVertical`/`Plus` icons; dnd-kit sortable preserved (commit `b8bcd2b`) |
-| 19 | ☐ | Task detail view | Tailwind utilities |
+| 19 | ☑ | Task detail view (`TaskDetail.tsx` + `PlanDetail.tsx`) | Tailwind utilities + shadcn `Collapsible`/`Button`/`Input`/`Textarea`/`Badge` + Phosphor `CaretDown`/`Trash`/`Scissors`/`X`; also purged orphan `.meta-*` / `.combobox-*` blocks (commit `fc61b28`) |
 | 20 | ☑ | New ticket button + create dialog | shadcn `Dialog` (`CreateTicketModal` + `CreatePlanModal`) (commit `7fae3ee`) |
 | 21 | ☑ | Kanban board + cards (`KanbanBoard.tsx` + `PlanKanbanBoard.tsx`) | Tailwind utilities + shadcn `Badge`/`Button` + Phosphor `CaretDoubleLeft`/`Plus`; dnd-kit multi-container drag preserved; [writing-mode:vertical-rl] for collapsed column labels (commit `ea80701`) |
 | 22 | ☐ | Dashboard | Tailwind utilities |
@@ -116,7 +116,7 @@ Also fixed during this work: split `html, body, #root { font-size: 13px }` so `f
 
 Each row is its own PR. Mark off as completed inline in this ticket as they land.
 
-**Progress:** 15 of 25 rows complete (60%). App.css down from ~2,800 lines → 1,401 lines.
+**Progress:** 16 of 25 rows complete (64%). App.css down from ~2,800 lines → 920 lines (67% reduction).
 
 ### Phase 3 — delete the shim
 
