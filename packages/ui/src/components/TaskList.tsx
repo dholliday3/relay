@@ -89,13 +89,14 @@ function relativeTime(dateStr: string): string {
 interface TaskListProps {
   tasks: Task[];
   activeTaskId: string | null;
+  hideBadges: boolean;
   onSelect: (task: Task) => void;
   onReorder: (taskId: string, afterId: string | null, beforeId: string | null) => void;
   onMove?: (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
   onCreateInStatus?: (status: Status) => void;
 }
 
-function TaskRowContent({ task }: { task: Task }) {
+function TaskRowContent({ task, hideBadges }: { task: Task; hideBadges: boolean }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
       <div className="flex items-center gap-1.5">
@@ -110,7 +111,7 @@ function TaskRowContent({ task }: { task: Task }) {
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{task.id}</span>
-        {task.assignee && (
+        {!hideBadges && task.assignee && (
           <span
             className="max-w-[80px] truncate rounded-full bg-accent px-1.5 py-px text-[10px] text-muted-foreground"
             title={task.assignee}
@@ -118,7 +119,7 @@ function TaskRowContent({ task }: { task: Task }) {
             {task.assignee}
           </span>
         )}
-        {task.tags && task.tags.length > 0 && (
+        {!hideBadges && task.tags && task.tags.length > 0 && (
           <span className="flex flex-wrap gap-1">
             {task.tags.map((tag) => (
               <Badge key={tag} variant="secondary">
@@ -138,11 +139,13 @@ function TaskRowContent({ task }: { task: Task }) {
 function SortableTaskRow({
   task,
   activeTaskId,
+  hideBadges,
   onSelect,
   isDragActive,
 }: {
   task: Task;
   activeTaskId: string | null;
+  hideBadges: boolean;
   onSelect: (task: Task) => void;
   isDragActive: boolean;
 }) {
@@ -189,7 +192,7 @@ function SortableTaskRow({
       >
         <DotsSixVerticalIcon className="size-3.5" />
       </span>
-      <TaskRowContent task={task} />
+      <TaskRowContent task={task} hideBadges={hideBadges} />
     </button>
   );
 }
@@ -209,7 +212,15 @@ function DroppableGroup({ status, children }: { status: Status; children: React.
   );
 }
 
-export function TaskList({ tasks, activeTaskId, onSelect, onReorder, onMove, onCreateInStatus }: TaskListProps) {
+export function TaskList({
+  tasks,
+  activeTaskId,
+  hideBadges,
+  onSelect,
+  onReorder,
+  onMove,
+  onCreateInStatus,
+}: TaskListProps) {
   const [collapsed, setCollapsed] = useState<Record<Status, boolean>>({
     "in-progress": false,
     open: false,
@@ -374,6 +385,7 @@ export function TaskList({ tasks, activeTaskId, onSelect, onReorder, onMove, onC
                         key={task.id}
                         task={task}
                         activeTaskId={activeTaskId}
+                        hideBadges={hideBadges}
                         onSelect={onSelect}
                         isDragActive={activeId !== null}
                       />
@@ -389,7 +401,7 @@ export function TaskList({ tasks, activeTaskId, onSelect, onReorder, onMove, onC
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className="flex w-[280px] items-center rounded-md border border-primary bg-card px-3 py-2 opacity-95 shadow-lg">
-            <TaskRowContent task={activeTask} />
+            <TaskRowContent task={activeTask} hideBadges={hideBadges} />
           </div>
         ) : null}
       </DragOverlay>

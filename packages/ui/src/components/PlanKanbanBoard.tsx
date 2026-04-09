@@ -53,6 +53,7 @@ function buildGroups(plans: Plan[]): Record<PlanStatus, string[]> {
 interface PlanKanbanBoardProps {
   plans: Plan[];
   activePlanId: string | null;
+  hideBadges: boolean;
   onSelect: (plan: Plan) => void;
   onMove: (planId: string, newStatus: PlanStatus) => void;
 }
@@ -80,7 +81,7 @@ function DroppableColumn({
   );
 }
 
-function PlanCardBody({ plan }: { plan: Plan }) {
+function PlanCardBody({ plan, hideBadges }: { plan: Plan; hideBadges: boolean }) {
   return (
     <>
       <div className="flex items-center gap-1.5">
@@ -90,12 +91,12 @@ function PlanCardBody({ plan }: { plan: Plan }) {
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{plan.id}</span>
-        {plan.tasks && plan.tasks.length > 0 && (
+        {!hideBadges && plan.tasks && plan.tasks.length > 0 && (
           <Badge variant="secondary">
             {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}
           </Badge>
         )}
-        {plan.tags && plan.tags.length > 0 && (
+        {!hideBadges && plan.tags && plan.tags.length > 0 && (
           <span className="flex flex-wrap gap-1">
             {plan.tags.map((tag) => (
               <Badge key={tag} variant="secondary">
@@ -112,11 +113,13 @@ function PlanCardBody({ plan }: { plan: Plan }) {
 function SortablePlanCard({
   plan,
   activePlanId,
+  hideBadges,
   onSelect,
   showDropIndicator,
 }: {
   plan: Plan;
   activePlanId: string | null;
+  hideBadges: boolean;
   onSelect: (plan: Plan) => void;
   showDropIndicator: boolean;
 }) {
@@ -151,21 +154,27 @@ function SortablePlanCard({
         {...attributes}
         {...listeners}
       >
-        <PlanCardBody plan={plan} />
+        <PlanCardBody plan={plan} hideBadges={hideBadges} />
       </button>
     </div>
   );
 }
 
-function PlanCardOverlay({ plan }: { plan: Plan }) {
+function PlanCardOverlay({ plan, hideBadges }: { plan: Plan; hideBadges: boolean }) {
   return (
     <div className="flex w-[220px] flex-col gap-1.5 rounded-md border border-primary bg-card p-2.5 text-left opacity-95 shadow-lg">
-      <PlanCardBody plan={plan} />
+      <PlanCardBody plan={plan} hideBadges={hideBadges} />
     </div>
   );
 }
 
-export function PlanKanbanBoard({ plans, activePlanId, onSelect, onMove }: PlanKanbanBoardProps) {
+export function PlanKanbanBoard({
+  plans,
+  activePlanId,
+  hideBadges,
+  onSelect,
+  onMove,
+}: PlanKanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     archived: false,
   });
@@ -369,6 +378,7 @@ export function PlanKanbanBoard({ plans, activePlanId, onSelect, onMove }: PlanK
                         key={id}
                         plan={plan}
                         activePlanId={activePlanId}
+                        hideBadges={hideBadges}
                         onSelect={onSelect}
                         showDropIndicator={overId === id && activeId !== id}
                       />
@@ -385,7 +395,7 @@ export function PlanKanbanBoard({ plans, activePlanId, onSelect, onMove }: PlanK
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activePlan ? <PlanCardOverlay plan={activePlan} /> : null}
+        {activePlan ? <PlanCardOverlay plan={activePlan} hideBadges={hideBadges} /> : null}
       </DragOverlay>
     </DndContext>
   );

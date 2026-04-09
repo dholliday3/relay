@@ -15,6 +15,33 @@ Ticketbook is a local-first task and plan tracker. Tasks live in `.tasks/` and p
 
 The typical flow is: brainstorm in a plan → cut tasks from the plan → pick up a task → hand off to an agent → review what changed → mark done and link the commit.
 
+## Task statuses
+
+Statuses are how humans and agents coordinate who is working on what and what's ready. Keep them accurate.
+
+| Status | Meaning |
+|---|---|
+| `draft` | Not yet fleshed out — needs more detail before it's actionable |
+| `backlog` | Future work — not ready to be picked up yet |
+| `open` | Ready to be picked up right now |
+| `in-progress` | Actively being worked on by a human or agent |
+| `done` | Complete |
+| `cancelled` | Won't do |
+
+Most tasks live in `backlog`. Only move a task to `open` when it's actually ready for someone to start. When creating tasks, default to `backlog` unless the user explicitly says it's ready to work on now or the context makes that clear.
+
+## Keeping statuses current
+
+**Proactively consider whether tickets should be updated based on the work you're doing.** Don't wait for the user to ask — if you're actively implementing something that corresponds to a ticket, update it:
+
+- **Starting work on a task?** Set it to `in-progress` and assign yourself before writing any code.
+- **Finished the work described in a task?** Set it to `done` (and add agent notes).
+- **Work you're doing makes a task obsolete or unblocks it?** Update or flag it.
+- **Creating a new task?** Think about whether it's `backlog` (future) or `open` (ready now) — don't default everything to `open`.
+- **See a task marked `open` or `in-progress` that clearly isn't?** Flag it to the user rather than silently changing it — someone else may have context you don't.
+
+The board is a shared coordination surface. Stale statuses erode trust in the system and make it harder for humans to know what's actually happening.
+
 ## When the user asks what to work on
 
 Call `list_tasks` with `status: "open"` (optionally add `priority: "high"` or a `project`/`epic`/`sprint` filter). Results come back sorted by priority and order — the top item is the recommendation. Don't open every task; the summary line is enough to propose what to pick up. If there are no open tasks, check `status: "backlog"` before telling the user there's nothing to do.
@@ -27,7 +54,7 @@ Call `list_tasks` with `status: "open"` (optionally add `priority: "high"` or a 
 
 ## When the user wants to create a task
 
-Call `create_task` with at minimum a `title`. Defaults: `status: "open"`, no priority. Only set a `priority` if the user specified one or the context clearly calls for it. If a `project`, `epic`, `sprint`, `blockedBy`, or `relatedTo` is obvious from context, include it — but don't interrogate the user for metadata they didn't ask to set. **Never invent projects, epics, or sprints that don't already exist** — call `list_tasks` first to see what's in use if you need to check.
+Call `create_task` with at minimum a `title`. Defaults: `status: "backlog"`, no priority. Only set `status: "open"` if the user says it's ready to pick up now or the context makes that obvious. Only set a `priority` if the user specified one or the context clearly calls for it. If a `project`, `epic`, `sprint`, `blockedBy`, or `relatedTo` is obvious from context, include it — but don't interrogate the user for metadata they didn't ask to set. **Never invent projects, epics, or sprints that don't already exist** — call `list_tasks` first to see what's in use if you need to check.
 
 ## When the user wants to break a plan into tasks
 

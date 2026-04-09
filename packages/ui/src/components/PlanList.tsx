@@ -31,10 +31,11 @@ function relativeTime(dateStr: string): string {
 interface PlanListProps {
   plans: Plan[];
   activePlanId: string | null;
+  hideBadges: boolean;
   onSelect: (plan: Plan) => void;
 }
 
-export function PlanList({ plans, activePlanId, onSelect }: PlanListProps) {
+export function PlanList({ plans, activePlanId, hideBadges, onSelect }: PlanListProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     completed: true,
     archived: true,
@@ -97,12 +98,12 @@ export function PlanList({ plans, activePlanId, onSelect }: PlanListProps) {
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-mono text-[11px] text-muted-foreground">{plan.id}</span>
-                          {plan.tasks && plan.tasks.length > 0 && (
+                          {!hideBadges && plan.tasks && plan.tasks.length > 0 && (
                             <Badge variant="secondary">
                               {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}
                             </Badge>
                           )}
-                          {plan.tags?.map((tag) => (
+                          {!hideBadges && plan.tags?.map((tag) => (
                             <Badge key={tag} variant="secondary">
                               {tag}
                             </Badge>

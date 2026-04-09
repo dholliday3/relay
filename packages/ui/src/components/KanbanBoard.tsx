@@ -79,6 +79,7 @@ function buildGroups(tasks: Task[]): Record<Status, string[]> {
 interface KanbanBoardProps {
   tasks: Task[];
   activeTaskId: string | null;
+  hideBadges: boolean;
   onSelect: (task: Task) => void;
   onMove: (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
   onCreateInColumn?: (status: Status) => void;
@@ -107,7 +108,7 @@ function DroppableColumn({
   );
 }
 
-function TaskCardBody({ task }: { task: Task }) {
+function TaskCardBody({ task, hideBadges }: { task: Task; hideBadges: boolean }) {
   return (
     <>
       <div className="flex items-center gap-1.5">
@@ -124,7 +125,7 @@ function TaskCardBody({ task }: { task: Task }) {
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{task.id}</span>
-        {task.tags && task.tags.length > 0 && (
+        {!hideBadges && task.tags && task.tags.length > 0 && (
           <span className="flex flex-wrap gap-1">
             {task.tags.map((tag) => (
               <Badge key={tag} variant="secondary">
@@ -141,11 +142,13 @@ function TaskCardBody({ task }: { task: Task }) {
 function SortableKanbanCard({
   task,
   activeTaskId,
+  hideBadges,
   onSelect,
   showDropIndicator,
 }: {
   task: Task;
   activeTaskId: string | null;
+  hideBadges: boolean;
   onSelect: (task: Task) => void;
   showDropIndicator: boolean;
 }) {
@@ -182,21 +185,28 @@ function SortableKanbanCard({
         {...attributes}
         {...listeners}
       >
-        <TaskCardBody task={task} />
+        <TaskCardBody task={task} hideBadges={hideBadges} />
       </button>
     </div>
   );
 }
 
-function KanbanCardOverlay({ task }: { task: Task }) {
+function KanbanCardOverlay({ task, hideBadges }: { task: Task; hideBadges: boolean }) {
   return (
     <div className="flex w-[220px] flex-col gap-1.5 rounded-md border border-primary bg-card p-2.5 text-left opacity-95 shadow-lg">
-      <TaskCardBody task={task} />
+      <TaskCardBody task={task} hideBadges={hideBadges} />
     </div>
   );
 }
 
-export function KanbanBoard({ tasks, activeTaskId, onSelect, onMove, onCreateInColumn }: KanbanBoardProps) {
+export function KanbanBoard({
+  tasks,
+  activeTaskId,
+  hideBadges,
+  onSelect,
+  onMove,
+  onCreateInColumn,
+}: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
     done: false,
     cancelled: false,
@@ -431,6 +441,7 @@ export function KanbanBoard({ tasks, activeTaskId, onSelect, onMove, onCreateInC
                         key={id}
                         task={task}
                         activeTaskId={activeTaskId}
+                        hideBadges={hideBadges}
                         onSelect={onSelect}
                         showDropIndicator={overId === id && activeId !== id}
                       />
@@ -457,7 +468,7 @@ export function KanbanBoard({ tasks, activeTaskId, onSelect, onMove, onCreateInC
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activeTask ? <KanbanCardOverlay task={activeTask} /> : null}
+        {activeTask ? <KanbanCardOverlay task={activeTask} hideBadges={hideBadges} /> : null}
       </DragOverlay>
     </DndContext>
   );
