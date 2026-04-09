@@ -12,7 +12,7 @@ function IndexRoute() {
 
   return (
     <Dashboard
-      tickets={ctx.tickets}
+      tasks={ctx.tasks}
       plans={ctx.plans}
       meta={ctx.meta}
       onNavigate={(mode, filterKey, filterValue) => {

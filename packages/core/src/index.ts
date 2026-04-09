@@ -1,29 +1,29 @@
 export {
   StatusEnum,
   PriorityEnum,
-  TicketFrontmatterSchema,
-  CreateTicketInputSchema,
-  TicketPatchSchema,
-  TicketFiltersSchema,
+  TaskFrontmatterSchema,
+  CreateTaskInputSchema,
+  TaskPatchSchema,
+  TaskFiltersSchema,
   DeleteModeEnum,
   TicketbookConfigSchema,
 } from "./schema.js";
 
 export type {
-  Ticket,
-  TicketFrontmatter,
-  CreateTicketInput,
-  TicketPatch,
-  TicketFilters,
+  Task,
+  TaskFrontmatter,
+  CreateTaskInput,
+  TaskPatch,
+  TaskFilters,
   TicketbookConfig,
 } from "./types.js";
 
 export { getConfig, updateConfig } from "./config.js";
 
 export {
-  listTickets,
-  getTicket,
-  searchTickets,
+  listTasks,
+  getTask,
+  searchTasks,
   getProjects,
   getEpics,
   getSprints,
@@ -33,15 +33,15 @@ export {
 export { nextId, nextIdForDir, slugify, formatId, formatFilename } from "./id.js";
 
 export {
-  createTicket,
-  updateTicket,
-  deleteTicket,
-  restoreTicket,
+  createTask,
+  updateTask,
+  deleteTask,
+  restoreTask,
   toggleSubtask,
   addSubtask,
 } from "./writer.js";
 
-export { reorderTicket, rebalanceOrder, sortTickets } from "./order.js";
+export { reorderTask, rebalanceOrder, sortTasks } from "./order.js";
 
 export {
   PlanStatusEnum,
@@ -72,10 +72,11 @@ export {
   updatePlan,
   deletePlan,
   restorePlan,
+  cutTasksFromPlan,
   cutTicketsFromPlan,
 } from "./plan-writer.js";
 
-export type { CutTicketsResult } from "./plan-writer.js";
+export type { CutTasksResult } from "./plan-writer.js";
 
 export type { ClientMessage, ServerMessage } from "./terminal-protocol.js";
 

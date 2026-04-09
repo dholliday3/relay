@@ -295,7 +295,7 @@ export function CopilotPanel({ onClose }: CopilotPanelProps) {
               {isEmpty ? (
                 <ConversationEmptyState
                   title="What are we building?"
-                  description="Ask me to draft a ticket, plan an epic, or read your existing tickets."
+                  description="Ask me to draft a task, plan an epic, or read your existing tasks."
                   icon={<SparkleIcon className="size-6" />}
                 />
               ) : (
@@ -455,10 +455,10 @@ function ToolBlock({
 }
 
 const STARTER_SUGGESTIONS = [
-  "List my in-progress tickets",
+  "List my in-progress tasks",
   "What should I focus on next?",
   "Summarize the open backlog by tag",
-  "Draft a ticket: fix terminal scrollback bug",
+  "Draft a task: fix terminal scrollback bug",
 ];
 
 function formatRelative(ms: number): string {

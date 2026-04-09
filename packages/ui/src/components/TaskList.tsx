@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Ticket, Status } from "../types";
+import type { Task, Status } from "../types";
 
 const STATUS_ORDER: { key: Status; label: string }[] = [
   { key: "in-progress", label: "In Progress" },
@@ -45,8 +45,8 @@ const PRIORITY_INDICATOR: Record<string, { color: string; label: string }> = {
   low: { color: "#9ca3af", label: "Low" },
 };
 
-function sortWithinGroup(tickets: Ticket[]): Ticket[] {
-  return [...tickets].sort((a, b) => {
+function sortWithinGroup(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
     const aHasOrder = a.order != null;
     const bHasOrder = b.order != null;
     if (aHasOrder && bHasOrder) return a.order! - b.order!;
@@ -78,22 +78,22 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diffMonth / 12)}y ago`;
 }
 
-interface TicketListProps {
-  tickets: Ticket[];
-  activeTicketId: string | null;
-  onSelect: (ticket: Ticket) => void;
-  onReorder: (ticketId: string, afterId: string | null, beforeId: string | null) => void;
-  onMove?: (ticketId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
+interface TaskListProps {
+  tasks: Task[];
+  activeTaskId: string | null;
+  onSelect: (task: Task) => void;
+  onReorder: (taskId: string, afterId: string | null, beforeId: string | null) => void;
+  onMove?: (taskId: string, newStatus: Status, afterId: string | null, beforeId: string | null) => void;
   onCreateInStatus?: (status: Status) => void;
 }
 
-function TicketRowContent({
-  ticket,
-  activeTicketId,
+function TaskRowContent({
+  task,
+  activeTaskId,
   showHandle,
 }: {
-  ticket: Ticket;
-  activeTicketId: string | null;
+  task: Task;
+  activeTaskId: string | null;
   showHandle?: boolean;
 }) {
   return (
@@ -112,43 +112,43 @@ function TicketRowContent({
       )}
       <div className="ticket-row-content">
         <div className="ticket-row-main">
-          {ticket.priority && PRIORITY_INDICATOR[ticket.priority] && (
+          {task.priority && PRIORITY_INDICATOR[task.priority] && (
             <span
               className="priority-dot"
-              style={{ backgroundColor: PRIORITY_INDICATOR[ticket.priority].color }}
-              title={PRIORITY_INDICATOR[ticket.priority].label}
+              style={{ backgroundColor: PRIORITY_INDICATOR[task.priority].color }}
+              title={PRIORITY_INDICATOR[task.priority].label}
             />
           )}
-          <span className="ticket-title">{ticket.title}</span>
+          <span className="ticket-title">{task.title}</span>
         </div>
         <div className="ticket-row-meta">
-          <span className="ticket-id">{ticket.id}</span>
-          {ticket.assignee && (
-            <span className="assignee-indicator" title={ticket.assignee}>{ticket.assignee}</span>
+          <span className="ticket-id">{task.id}</span>
+          {task.assignee && (
+            <span className="assignee-indicator" title={task.assignee}>{task.assignee}</span>
           )}
-          {ticket.tags && ticket.tags.length > 0 && (
+          {task.tags && task.tags.length > 0 && (
             <span className="ticket-tags">
-              {ticket.tags.map((tag) => (
+              {task.tags.map((tag) => (
                 <span key={tag} className="tag-chip">{tag}</span>
               ))}
             </span>
           )}
-          <span className="ticket-time">{relativeTime(ticket.updated)}</span>
+          <span className="ticket-time">{relativeTime(task.updated)}</span>
         </div>
       </div>
     </>
   );
 }
 
-function SortableTicketRow({
-  ticket,
-  activeTicketId,
+function SortableTaskRow({
+  task,
+  activeTaskId,
   onSelect,
   isDragActive,
 }: {
-  ticket: Ticket;
-  activeTicketId: string | null;
-  onSelect: (ticket: Ticket) => void;
+  task: Task;
+  activeTaskId: string | null;
+  onSelect: (task: Task) => void;
   isDragActive: boolean;
 }) {
   const {
@@ -159,7 +159,7 @@ function SortableTicketRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: ticket.id });
+  } = useSortable({ id: task.id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -171,8 +171,8 @@ function SortableTicketRow({
     <button
       ref={setNodeRef}
       style={style}
-      className={`ticket-row ${ticket.id === activeTicketId ? "active" : ""} ${isDragActive ? "drag-active" : ""} ${ticket.status === "draft" ? "ticket-draft" : ""}`}
-      onClick={() => onSelect(ticket)}
+      className={`ticket-row ${task.id === activeTaskId ? "active" : ""} ${isDragActive ? "drag-active" : ""} ${task.status === "draft" ? "ticket-draft" : ""}`}
+      onClick={() => onSelect(task)}
       {...attributes}
     >
       <span
@@ -192,25 +192,25 @@ function SortableTicketRow({
       </span>
       <div className="ticket-row-content">
         <div className="ticket-row-main">
-          {ticket.priority && PRIORITY_INDICATOR[ticket.priority] && (
+          {task.priority && PRIORITY_INDICATOR[task.priority] && (
             <span
               className="priority-dot"
-              style={{ backgroundColor: PRIORITY_INDICATOR[ticket.priority].color }}
-              title={PRIORITY_INDICATOR[ticket.priority].label}
+              style={{ backgroundColor: PRIORITY_INDICATOR[task.priority].color }}
+              title={PRIORITY_INDICATOR[task.priority].label}
             />
           )}
-          <span className="ticket-title">{ticket.title}</span>
+          <span className="ticket-title">{task.title}</span>
         </div>
         <div className="ticket-row-meta">
-          <span className="ticket-id">{ticket.id}</span>
-          {ticket.tags && ticket.tags.length > 0 && (
+          <span className="ticket-id">{task.id}</span>
+          {task.tags && task.tags.length > 0 && (
             <span className="ticket-tags">
-              {ticket.tags.map((tag) => (
+              {task.tags.map((tag) => (
                 <span key={tag} className="tag-chip">{tag}</span>
               ))}
             </span>
           )}
-          <span className="ticket-time">{relativeTime(ticket.updated)}</span>
+          <span className="ticket-time">{relativeTime(task.updated)}</span>
         </div>
       </div>
     </button>
@@ -226,7 +226,7 @@ function DroppableGroup({ status, children }: { status: Status; children: React.
   );
 }
 
-export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMove, onCreateInStatus }: TicketListProps) {
+export function TaskList({ tasks, activeTaskId, onSelect, onReorder, onMove, onCreateInStatus }: TaskListProps) {
   const [collapsed, setCollapsed] = useState<Record<Status, boolean>>({
     "in-progress": false,
     open: false,
@@ -246,16 +246,16 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
     }),
   );
 
-  const grouped = new Map<Status, Ticket[]>();
+  const grouped = new Map<Status, Task[]>();
   for (const s of STATUS_ORDER) {
     grouped.set(s.key, []);
   }
-  for (const t of tickets) {
+  for (const t of tasks) {
     grouped.get(t.status)?.push(t);
   }
 
   // Pre-sort groups
-  const sortedGroups = new Map<Status, Ticket[]>();
+  const sortedGroups = new Map<Status, Task[]>();
   for (const [key, group] of grouped) {
     sortedGroups.set(key, sortWithinGroup(group));
   }
@@ -264,22 +264,22 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
     setCollapsed((prev) => ({ ...prev, [status]: !prev[status] }));
   };
 
-  // Auto-expand collapsed group when a ticket in it becomes active (e.g. via keyboard navigation)
+  // Auto-expand collapsed group when a task in it becomes active (e.g. via keyboard navigation)
   useEffect(() => {
-    if (!activeTicketId) return;
-    const ticket = tickets.find((t) => t.id === activeTicketId);
-    if (ticket && collapsed[ticket.status]) {
-      setCollapsed((prev) => ({ ...prev, [ticket.status]: false }));
+    if (!activeTaskId) return;
+    const task = tasks.find((t) => t.id === activeTaskId);
+    if (task && collapsed[task.status]) {
+      setCollapsed((prev) => ({ ...prev, [task.status]: false }));
     }
-  }, [activeTicketId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeTicket = activeId ? tickets.find((t) => t.id === activeId) ?? null : null;
+  const activeTask = activeId ? tasks.find((t) => t.id === activeId) ?? null : null;
 
-  // Find which status group a ticket belongs to
+  // Find which status group a task belongs to
   const findStatusGroup = useCallback(
-    (ticketId: string): Status | null => {
+    (taskId: string): Status | null => {
       for (const [status, group] of sortedGroups) {
-        if (group.some((t) => t.id === ticketId)) return status;
+        if (group.some((t) => t.id === taskId)) return status;
       }
       return null;
     },
@@ -315,7 +315,7 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
     const activeStatus = findStatusGroup(active.id as string);
     const overIdStr = over.id as string;
 
-    // Determine target status: either from a group droppable or from a ticket's group
+    // Determine target status: either from a group droppable or from a task's group
     let targetStatus: Status | null = null;
     if (overIdStr.startsWith("group-")) {
       targetStatus = overIdStr.replace("group-", "") as Status;
@@ -373,8 +373,8 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
                   <button
                     className="group-add-btn"
                     onClick={(e) => { e.stopPropagation(); onCreateInStatus(key); }}
-                    title={`New ${label} ticket`}
-                    aria-label={`New ${label} ticket`}
+                    title={`New ${label} task`}
+                    aria-label={`New ${label} task`}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
@@ -389,11 +389,11 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
                   strategy={verticalListSortingStrategy}
                 >
                   <DroppableGroup status={key}>
-                    {group.map((ticket) => (
-                      <SortableTicketRow
-                        key={ticket.id}
-                        ticket={ticket}
-                        activeTicketId={activeTicketId}
+                    {group.map((task) => (
+                      <SortableTaskRow
+                        key={task.id}
+                        task={task}
+                        activeTaskId={activeTaskId}
                         onSelect={onSelect}
                         isDragActive={activeId !== null}
                       />
@@ -407,9 +407,9 @@ export function TicketList({ tickets, activeTicketId, onSelect, onReorder, onMov
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activeTicket ? (
+        {activeTask ? (
           <div className="ticket-row drag-overlay">
-            <TicketRowContent ticket={activeTicket} activeTicketId={null} />
+            <TaskRowContent task={activeTask} activeTaskId={null} />
           </div>
         ) : null}
       </DragOverlay>

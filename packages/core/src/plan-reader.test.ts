@@ -12,20 +12,20 @@ import {
 import { createPlan } from "./plan-writer.js";
 
 describe("plan-reader", () => {
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-reader-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
@@ -40,15 +40,15 @@ describe("plan-reader", () => {
   });
 
   test("listPlans finds created plans", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "First Plan" });
-    await createPlan(ticketsDir, plansDir, { title: "Second Plan" });
+    await createPlan(tasksDir, plansDir, { title: "First Plan" });
+    await createPlan(tasksDir, plansDir, { title: "Second Plan" });
 
     const plans = await listPlans(plansDir);
     expect(plans).toHaveLength(2);
   });
 
   test("listPlans ignores .counter and .archive", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "Test" });
+    await createPlan(tasksDir, plansDir, { title: "Test" });
 
     const archiveDir = join(plansDir, ".archive");
     await mkdir(archiveDir, { recursive: true });
@@ -63,8 +63,8 @@ describe("plan-reader", () => {
   });
 
   test("listPlans filters by status", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "Draft", status: "draft" });
-    await createPlan(ticketsDir, plansDir, { title: "Active", status: "active" });
+    await createPlan(tasksDir, plansDir, { title: "Draft", status: "draft" });
+    await createPlan(tasksDir, plansDir, { title: "Active", status: "active" });
 
     const drafts = await listPlans(plansDir, { status: "draft" });
     expect(drafts).toHaveLength(1);
@@ -72,8 +72,8 @@ describe("plan-reader", () => {
   });
 
   test("listPlans filters by project", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "P1", project: "alpha" });
-    await createPlan(ticketsDir, plansDir, { title: "P2", project: "beta" });
+    await createPlan(tasksDir, plansDir, { title: "P1", project: "alpha" });
+    await createPlan(tasksDir, plansDir, { title: "P2", project: "beta" });
 
     const result = await listPlans(plansDir, { project: "alpha" });
     expect(result).toHaveLength(1);
@@ -81,8 +81,8 @@ describe("plan-reader", () => {
   });
 
   test("listPlans filters by tags", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "Tagged", tags: ["feature", "ui"] });
-    await createPlan(ticketsDir, plansDir, { title: "Other", tags: ["infra"] });
+    await createPlan(tasksDir, plansDir, { title: "Tagged", tags: ["feature", "ui"] });
+    await createPlan(tasksDir, plansDir, { title: "Other", tags: ["infra"] });
 
     const result = await listPlans(plansDir, { tags: ["feature"] });
     expect(result).toHaveLength(1);
@@ -90,8 +90,8 @@ describe("plan-reader", () => {
   });
 
   test("listPlans filters by search", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "Agent Collaboration" });
-    await createPlan(ticketsDir, plansDir, { title: "Q2 Roadmap" });
+    await createPlan(tasksDir, plansDir, { title: "Agent Collaboration" });
+    await createPlan(tasksDir, plansDir, { title: "Q2 Roadmap" });
 
     const result = await listPlans(plansDir, { search: "agent" });
     expect(result).toHaveLength(1);
@@ -99,7 +99,7 @@ describe("plan-reader", () => {
   });
 
   test("getPlan returns a plan by ID", async () => {
-    const created = await createPlan(ticketsDir, plansDir, { title: "Find Me" });
+    const created = await createPlan(tasksDir, plansDir, { title: "Find Me" });
     const found = await getPlan(plansDir, created.id);
     expect(found).not.toBeNull();
     expect(found!.title).toBe("Find Me");
@@ -111,11 +111,11 @@ describe("plan-reader", () => {
   });
 
   test("searchPlans finds matches in title and body", async () => {
-    await createPlan(ticketsDir, plansDir, {
+    await createPlan(tasksDir, plansDir, {
       title: "Normal Plan",
       body: "Contains special keyword here",
     });
-    await createPlan(ticketsDir, plansDir, { title: "Unrelated" });
+    await createPlan(tasksDir, plansDir, { title: "Unrelated" });
 
     const results = await searchPlans(plansDir, "special keyword");
     expect(results).toHaveLength(1);
@@ -123,17 +123,17 @@ describe("plan-reader", () => {
   });
 
   test("getPlanProjects returns unique project names", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "A", project: "alpha" });
-    await createPlan(ticketsDir, plansDir, { title: "B", project: "beta" });
-    await createPlan(ticketsDir, plansDir, { title: "C", project: "alpha" });
+    await createPlan(tasksDir, plansDir, { title: "A", project: "alpha" });
+    await createPlan(tasksDir, plansDir, { title: "B", project: "beta" });
+    await createPlan(tasksDir, plansDir, { title: "C", project: "alpha" });
 
     const projects = await getPlanProjects(plansDir);
     expect(projects).toEqual(["alpha", "beta"]);
   });
 
   test("getPlanTags returns unique tag values", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "A", tags: ["feature", "ui"] });
-    await createPlan(ticketsDir, plansDir, { title: "B", tags: ["feature", "api"] });
+    await createPlan(tasksDir, plansDir, { title: "A", tags: ["feature", "ui"] });
+    await createPlan(tasksDir, plansDir, { title: "B", tags: ["feature", "api"] });
 
     const tags = await getPlanTags(plansDir);
     expect(tags).toEqual(["api", "feature", "ui"]);

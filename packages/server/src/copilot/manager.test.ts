@@ -83,7 +83,7 @@ describe("CopilotManager", () => {
     const claude = new FakeProvider("claude-code", "claude-test");
     const codex = new FakeProvider("codex", "codex-test");
     const manager = new CopilotManager({
-      ticketsDir: dir,
+      tasksDir: dir,
       providers: [claude, codex],
       defaultProviderId: "claude-code",
     });

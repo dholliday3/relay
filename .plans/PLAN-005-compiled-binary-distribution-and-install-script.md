@@ -8,7 +8,7 @@ tags:
   - release
   - agent-integration
 project: ticketbook
-tickets: []
+tasks: []
 created: '2026-04-08T19:00:00.000Z'
 updated: '2026-04-08T19:00:00.000Z'
 ---
@@ -55,7 +55,7 @@ Reference: study `~/workspace/resources/plannotator/apps/hook` and its build scr
 - [ ] Convert the dynamic imports in `bin/ticketbook.ts` (`await import("../packages/server/src/mcp.ts")`, `"../packages/server/src/index.ts"`) to static imports so they get bundled
 - [ ] Smoke test: build the binary, copy to a fresh temp dir outside the repo, run `./ticketbook-darwin-arm64 init --dir /tmp/smoke-test`, verify all scaffolded files
 - [ ] Smoke test: run the binary in MCP mode from a foreign repo, verify MCP handshake and a tool call
-- [ ] Smoke test: run the binary in HTTP mode, verify the UI loads and a ticket can be created
+- [ ] Smoke test: run the binary in HTTP mode, verify the UI loads and a task can be created
 
 ### Phase 2: Cross-compile and publish via GitHub Releases
 

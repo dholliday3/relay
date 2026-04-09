@@ -1,23 +1,23 @@
 import {
-  listTickets,
-  getTicket,
+  listTasks,
+  getTask,
   getProjects,
   getEpics,
   getSprints,
   getTags,
-  createTicket,
-  updateTicket,
-  deleteTicket,
-  restoreTicket,
+  createTask,
+  updateTask,
+  deleteTask,
+  restoreTask,
   toggleSubtask,
   addSubtask,
-  reorderTicket,
-  sortTickets,
+  reorderTask,
+  sortTasks,
   getConfig,
   updateConfig,
-  CreateTicketInputSchema,
-  TicketPatchSchema,
-  TicketFiltersSchema,
+  CreateTaskInputSchema,
+  TaskPatchSchema,
+  TaskFiltersSchema,
   TicketbookConfigSchema,
   listPlans,
   getPlan,
@@ -27,12 +27,12 @@ import {
   updatePlan,
   deletePlan,
   restorePlan,
-  cutTicketsFromPlan,
+  cutTasksFromPlan,
   CreatePlanInputSchema,
   PlanPatchSchema,
   PlanFiltersSchema,
 } from "@ticketbook/core";
-import type { TicketChangeEvent } from "./watcher.js";
+import type { TaskChangeEvent } from "./watcher.js";
 import type { CopilotManager, CopilotProviderId } from "./copilot/index.js";
 
 type RouteHandler = (
@@ -53,7 +53,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 // --- SSE client management ---
 const sseClients = new Set<ReadableStreamDefaultController>();
 
-export function broadcastEvent(event: TicketChangeEvent): void {
+export function broadcastEvent(event: TaskChangeEvent): void {
   const data = `data: ${JSON.stringify(event)}\n\n`;
   for (const controller of sseClients) {
     try {
@@ -110,7 +110,7 @@ function buildRouteRegex(path: string): { regex: RegExp; paramNames: string[] } 
 }
 
 export function createRoutes(
-  ticketsDir: string,
+  tasksDir: string,
   plansDir?: string,
   copilot?: CopilotManager,
 ): Route[] {
@@ -166,32 +166,32 @@ export function createRoutes(
     const tagsParam = url.searchParams.getAll("tags");
     if (tagsParam.length > 0) rawFilters.tags = tagsParam;
 
-    const filters = TicketFiltersSchema.parse(rawFilters);
-    const tickets = await listTickets(ticketsDir, filters);
-    return json(sortTickets(tickets));
+    const filters = TaskFiltersSchema.parse(rawFilters);
+    const tasks = await listTasks(tasksDir, filters);
+    return json(sortTasks(tasks));
   });
 
   // GET /api/tasks/:id
   route("GET", "/tasks/:id", async (_req, params) => {
-    const ticket = await getTicket(ticketsDir, params.id);
-    if (!ticket) return errorResponse(`Ticket not found: ${params.id}`, 404);
-    return json(ticket);
+    const task = await getTask(tasksDir, params.id);
+    if (!task) return errorResponse(`Task not found: ${params.id}`, 404);
+    return json(task);
   });
 
   // POST /api/tasks
   route("POST", "/tasks", async (req) => {
     const body = await readJsonBody(req);
-    const input = CreateTicketInputSchema.parse(body);
-    const ticket = await createTicket(ticketsDir, input);
-    return json(ticket, 201);
+    const input = CreateTaskInputSchema.parse(body);
+    const task = await createTask(tasksDir, input);
+    return json(task, 201);
   });
 
   // PATCH /api/tasks/:id — update frontmatter fields
   route("PATCH", "/tasks/:id", async (req, params) => {
     const body = await readJsonBody(req);
-    const patch = TicketPatchSchema.parse(body);
-    const ticket = await updateTicket(ticketsDir, params.id, patch);
-    return json(ticket);
+    const patch = TaskPatchSchema.parse(body);
+    const task = await updateTask(tasksDir, params.id, patch);
+    return json(task);
   });
 
   // PATCH /api/tasks/:id/body — update task body only
@@ -200,22 +200,22 @@ export function createRoutes(
     if (typeof body.body !== "string") {
       return errorResponse("Missing 'body' field", 400);
     }
-    const ticket = await updateTicket(ticketsDir, params.id, {
+    const task = await updateTask(tasksDir, params.id, {
       body: body.body,
     });
-    return json(ticket);
+    return json(task);
   });
 
   // DELETE /api/tasks/:id
   route("DELETE", "/tasks/:id", async (_req, params) => {
-    await deleteTicket(ticketsDir, params.id);
+    await deleteTask(tasksDir, params.id);
     return json({ ok: true });
   });
 
   // POST /api/tasks/:id/restore
   route("POST", "/tasks/:id/restore", async (_req, params) => {
-    const ticket = await restoreTicket(ticketsDir, params.id);
-    return json(ticket);
+    const task = await restoreTask(tasksDir, params.id);
+    return json(task);
   });
 
   // PATCH /api/tasks/:id/reorder
@@ -224,13 +224,13 @@ export function createRoutes(
       afterId?: string | null;
       beforeId?: string | null;
     };
-    const ticket = await reorderTicket(
-      ticketsDir,
+    const task = await reorderTask(
+      tasksDir,
       params.id,
       body.afterId ?? null,
       body.beforeId ?? null,
     );
-    return json(ticket);
+    return json(task);
   });
 
   // PATCH /api/tasks/:id/subtask
@@ -245,32 +245,32 @@ export function createRoutes(
       if (typeof body.text !== "string" || !body.text.trim()) {
         return errorResponse("Missing 'text' field for add action", 400);
       }
-      const ticket = await addSubtask(ticketsDir, params.id, body.text);
-      return json(ticket);
+      const task = await addSubtask(tasksDir, params.id, body.text);
+      return json(task);
     }
 
     // Default: toggle
     if (typeof body.index !== "number") {
       return errorResponse("Missing 'index' field", 400);
     }
-    const ticket = await toggleSubtask(ticketsDir, params.id, body.index);
-    return json(ticket);
+    const task = await toggleSubtask(tasksDir, params.id, body.index);
+    return json(task);
   });
 
   // GET /api/meta — aggregate metadata
   route("GET", "/meta", async () => {
     const [projects, epics, sprints, tags] = await Promise.all([
-      getProjects(ticketsDir),
-      getEpics(ticketsDir),
-      getSprints(ticketsDir),
-      getTags(ticketsDir),
+      getProjects(tasksDir),
+      getEpics(tasksDir),
+      getSprints(tasksDir),
+      getTags(tasksDir),
     ]);
     return json({ projects, epics, sprints, tags });
   });
 
   // GET /api/config
   route("GET", "/config", async () => {
-    const config = await getConfig(ticketsDir);
+    const config = await getConfig(tasksDir);
     return json(config);
   });
 
@@ -278,7 +278,7 @@ export function createRoutes(
   route("PATCH", "/config", async (req) => {
     const body = await readJsonBody(req);
     const patch = TicketbookConfigSchema.partial().parse(body);
-    const config = await updateConfig(ticketsDir, patch);
+    const config = await updateConfig(tasksDir, patch);
     return json(config);
   });
 
@@ -326,7 +326,7 @@ export function createRoutes(
     route("POST", "/plans", async (req) => {
       const body = await readJsonBody(req);
       const input = CreatePlanInputSchema.parse(body);
-      const plan = await createPlan(ticketsDir, plansDir, input);
+      const plan = await createPlan(tasksDir, plansDir, input);
       return json(plan, 201);
     });
 
@@ -350,7 +350,7 @@ export function createRoutes(
 
     // DELETE /api/plans/:id
     route("DELETE", "/plans/:id", async (_req, params) => {
-      await deletePlan(ticketsDir, plansDir, params.id);
+      await deletePlan(tasksDir, plansDir, params.id);
       return json({ ok: true });
     });
 
@@ -362,11 +362,11 @@ export function createRoutes(
 
     // POST /api/plans/:id/cut-tasks — create tasks from unchecked checkboxes
     route("POST", "/plans/:id/cut-tasks", async (_req, params) => {
-      const result = await cutTicketsFromPlan(ticketsDir, plansDir, params.id);
+      const result = await cutTasksFromPlan(tasksDir, plansDir, params.id);
       return json({
         plan: result.plan,
-        createdTasks: result.createdTickets,
-        count: result.createdTickets.length,
+        createdTasks: result.createdTasks,
+        count: result.createdTasks.length,
       });
     });
   }

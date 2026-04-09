@@ -82,8 +82,8 @@ function PlansRoute() {
                 planMeta={ctx.planMeta}
                 onUpdated={ctx.loadPlans}
                 onDelete={ctx.handleDeleteRequest}
-                onTicketClick={ctx.handlePlanTicketClick}
-                onTicketsCreated={ctx.loadTickets}
+                onTaskClick={ctx.handlePlanTaskClick}
+                onTasksCreated={ctx.loadTasks}
               />
             )}
           </DialogContent>
@@ -142,8 +142,8 @@ function PlansRoute() {
               planMeta={ctx.planMeta}
               onUpdated={ctx.loadPlans}
               onDelete={ctx.handleDeleteRequest}
-              onTicketClick={ctx.handlePlanTicketClick}
-              onTicketsCreated={ctx.loadTickets}
+              onTaskClick={ctx.handlePlanTaskClick}
+              onTasksCreated={ctx.loadTasks}
             />
           ) : (
             <div className="empty-state">
@@ -171,24 +171,24 @@ function PlanTabBar() {
   return (
     <div className="tab-bar">
       {ctx.openTabs.map((tabId) => {
-        const isTicketTab = ctx.tickets.some((tk) => tk.id === tabId);
+        const isTaskTab = ctx.tasks.some((tk) => tk.id === tabId);
         const isPlanTab = ctx.plans.some((p) => p.id === tabId);
         const tabTitle =
-          ctx.tickets.find((tk) => tk.id === tabId)?.title ??
+          ctx.tasks.find((tk) => tk.id === tabId)?.title ??
           ctx.plans.find((p) => p.id === tabId)?.title ??
           tabId;
         const isActive = tabId === ctx.activePlanId;
         return (
           <div
             key={tabId}
-            className={`tab-item ${isActive ? "tab-active" : ""} ${isPlanTab && !isTicketTab ? "tab-plan" : ""}`}
+            className={`tab-item ${isActive ? "tab-active" : ""} ${isPlanTab && !isTaskTab ? "tab-plan" : ""}`}
           >
             <button
               className="tab-label"
               onClick={() => {
-                if (isTicketTab && !isPlanTab) {
+                if (isTaskTab && !isPlanTab) {
                   navigate({ to: "/tasks", search: { view: "list", status: [], project: [], epic: [], sprint: [] } });
-                  ctx.setActiveTicketId(tabId);
+                  ctx.setActiveTaskId(tabId);
                 } else {
                   ctx.setActivePlanId(tabId);
                 }

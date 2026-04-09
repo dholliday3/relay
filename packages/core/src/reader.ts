@@ -1,16 +1,16 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import matter from "gray-matter";
-import { TicketFrontmatterSchema } from "./schema.js";
-import type { Ticket, TicketFilters } from "./types.js";
+import { TaskFrontmatterSchema } from "./schema.js";
+import type { Task, TaskFilters } from "./types.js";
 
 const IGNORED_FILES = new Set([".counter", ".config.yaml"]);
 const IGNORED_DIRS = new Set([".archive"]);
 
-async function parseTicketFile(filePath: string): Promise<Ticket | null> {
+async function parseTicketFile(filePath: string): Promise<Task | null> {
   const raw = await readFile(filePath, "utf-8");
   const { data, content } = matter(raw);
-  const result = TicketFrontmatterSchema.safeParse(data);
+  const result = TaskFrontmatterSchema.safeParse(data);
   if (!result.success) return null;
   return {
     ...result.data,
@@ -19,7 +19,7 @@ async function parseTicketFile(filePath: string): Promise<Ticket | null> {
   };
 }
 
-async function readAllTickets(dir: string): Promise<Ticket[]> {
+async function readAllTickets(dir: string): Promise<Task[]> {
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -28,112 +28,112 @@ async function readAllTickets(dir: string): Promise<Ticket[]> {
     throw err;
   }
 
-  const tickets: Ticket[] = [];
+  const tasks: Task[] = [];
   for (const entry of entries) {
     if (IGNORED_FILES.has(entry) || IGNORED_DIRS.has(entry)) continue;
     if (extname(entry) !== ".md") continue;
-    const ticket = await parseTicketFile(join(dir, entry));
-    if (ticket) tickets.push(ticket);
+    const task = await parseTicketFile(join(dir, entry));
+    if (task) tasks.push(task);
   }
-  return tickets;
+  return tasks;
 }
 
-function matchesFilters(ticket: Ticket, filters: TicketFilters): boolean {
+function matchesFilters(task: Task, filters: TaskFilters): boolean {
   if (filters.status) {
     const statuses = Array.isArray(filters.status)
       ? filters.status
       : [filters.status];
-    if (!statuses.includes(ticket.status)) return false;
+    if (!statuses.includes(task.status)) return false;
   }
 
   if (filters.priority) {
     const priorities = Array.isArray(filters.priority)
       ? filters.priority
       : [filters.priority];
-    if (!ticket.priority || !priorities.includes(ticket.priority)) return false;
+    if (!task.priority || !priorities.includes(task.priority)) return false;
   }
 
   if (filters.project !== undefined) {
-    if (ticket.project !== filters.project) return false;
+    if (task.project !== filters.project) return false;
   }
 
   if (filters.epic !== undefined) {
-    if (ticket.epic !== filters.epic) return false;
+    if (task.epic !== filters.epic) return false;
   }
 
   if (filters.sprint !== undefined) {
-    if (ticket.sprint !== filters.sprint) return false;
+    if (task.sprint !== filters.sprint) return false;
   }
 
   if (filters.tags && filters.tags.length > 0) {
-    if (!ticket.tags) return false;
-    if (!filters.tags.every((t) => ticket.tags!.includes(t))) return false;
+    if (!task.tags) return false;
+    if (!filters.tags.every((t) => task.tags!.includes(t))) return false;
   }
 
   if (filters.search) {
     const q = filters.search.toLowerCase();
-    const haystack = `${ticket.title} ${ticket.body}`.toLowerCase();
+    const haystack = `${task.title} ${task.body}`.toLowerCase();
     if (!haystack.includes(q)) return false;
   }
 
   return true;
 }
 
-export async function listTickets(
+export async function listTasks(
   dir: string,
-  filters?: TicketFilters,
-): Promise<Ticket[]> {
-  const tickets = await readAllTickets(dir);
-  if (!filters) return tickets;
-  return tickets.filter((t) => matchesFilters(t, filters));
+  filters?: TaskFilters,
+): Promise<Task[]> {
+  const tasks = await readAllTickets(dir);
+  if (!filters) return tasks;
+  return tasks.filter((t) => matchesFilters(t, filters));
 }
 
-export async function getTicket(
+export async function getTask(
   dir: string,
   id: string,
-): Promise<Ticket | null> {
-  const tickets = await readAllTickets(dir);
-  return tickets.find((t) => t.id === id) ?? null;
+): Promise<Task | null> {
+  const tasks = await readAllTickets(dir);
+  return tasks.find((t) => t.id === id) ?? null;
 }
 
-export async function searchTickets(
+export async function searchTasks(
   dir: string,
   query: string,
-): Promise<Ticket[]> {
-  return listTickets(dir, { search: query });
+): Promise<Task[]> {
+  return listTasks(dir, { search: query });
 }
 
 export async function getProjects(dir: string): Promise<string[]> {
-  const tickets = await readAllTickets(dir);
+  const tasks = await readAllTickets(dir);
   const set = new Set<string>();
-  for (const t of tickets) {
+  for (const t of tasks) {
     if (t.project) set.add(t.project);
   }
   return [...set].sort();
 }
 
 export async function getEpics(dir: string): Promise<string[]> {
-  const tickets = await readAllTickets(dir);
+  const tasks = await readAllTickets(dir);
   const set = new Set<string>();
-  for (const t of tickets) {
+  for (const t of tasks) {
     if (t.epic) set.add(t.epic);
   }
   return [...set].sort();
 }
 
 export async function getSprints(dir: string): Promise<string[]> {
-  const tickets = await readAllTickets(dir);
+  const tasks = await readAllTickets(dir);
   const set = new Set<string>();
-  for (const t of tickets) {
+  for (const t of tasks) {
     if (t.sprint) set.add(t.sprint);
   }
   return [...set].sort();
 }
 
 export async function getTags(dir: string): Promise<string[]> {
-  const tickets = await readAllTickets(dir);
+  const tasks = await readAllTickets(dir);
   const set = new Set<string>();
-  for (const t of tickets) {
+  for (const t of tasks) {
     if (t.tags) {
       for (const tag of t.tags) set.add(tag);
     }

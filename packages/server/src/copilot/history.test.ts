@@ -13,7 +13,7 @@ import {
 
 const userTextLine = JSON.stringify({
   type: "user",
-  message: { role: "user", content: "List my in-progress tickets" },
+  message: { role: "user", content: "List my in-progress tasks" },
   uuid: "u-1",
   timestamp: "2026-04-07T11:27:20.517Z",
 });
@@ -44,7 +44,7 @@ const userToolResultLine = JSON.stringify({
       {
         type: "tool_result",
         tool_use_id: "toolu_abc",
-        content: [{ type: "text", text: "3 ticket(s):\n[TKTB-042] ..." }],
+        content: [{ type: "text", text: "3 task(s):\n[TKTB-042] ..." }],
       },
     ],
   },
@@ -56,7 +56,7 @@ const assistantTextLine = JSON.stringify({
   type: "assistant",
   message: {
     role: "assistant",
-    content: [{ type: "text", text: "You have 3 in-progress tickets..." }],
+    content: [{ type: "text", text: "You have 3 in-progress tasks..." }],
   },
   uuid: "a-2",
   timestamp: "2026-04-07T11:27:23.000Z",
@@ -101,7 +101,7 @@ describe("parseClaudeJsonl", () => {
     expect(messages[0]).toMatchObject({
       id: "u-1",
       role: "user",
-      parts: [{ type: "text", content: "List my in-progress tickets" }],
+      parts: [{ type: "text", content: "List my in-progress tasks" }],
     });
   });
 
@@ -136,13 +136,13 @@ describe("parseClaudeJsonl", () => {
     expect(messages[0].parts[1].type).toBe("tool_use");
     expect(messages[0].parts[2]).toMatchObject({
       type: "tool_result",
-      content: "3 ticket(s):\n[TKTB-042] ...",
+      content: "3 task(s):\n[TKTB-042] ...",
       toolName: "toolu_abc",
     });
     expect(messages[1].role).toBe("assistant");
     expect(messages[1].parts[0]).toMatchObject({
       type: "text",
-      content: "You have 3 in-progress tickets...",
+      content: "You have 3 in-progress tasks...",
     });
   });
 

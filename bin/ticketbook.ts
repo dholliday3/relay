@@ -49,22 +49,22 @@ function printUsage(): void {
   console.log(`Usage: ticketbook [command] [options] [path]
 
 Commands:
-  init        Scaffold a new .tickets/ directory
+  init        Scaffold a new .tasks/ directory
   (default)   Start the server and open the UI
 
 Options:
-  --dir <path>   Path to .tickets/ directory (or directory containing it)
+  --dir <path>   Path to .tasks/ directory (or directory containing it)
   --port <num>   Server port (default: auto-assigned)
   --no-ui        Server only, no static UI serving
   --mcp          Start MCP server mode (stdio transport, no HTTP)
   -h, --help     Show this help message`);
 }
 
-/** Walk up from startDir to find a .tickets/ directory (like git finds .git/) */
-async function findTicketsDir(startDir: string): Promise<string | null> {
+/** Walk up from startDir to find a .tasks/ directory (like git finds .git/) */
+async function findTasksDir(startDir: string): Promise<string | null> {
   let dir = resolve(startDir);
   while (true) {
-    const candidate = join(dir, ".tickets");
+    const candidate = join(dir, ".tasks");
     try {
       const s = await stat(candidate);
       if (s.isDirectory()) return candidate;
@@ -78,12 +78,12 @@ async function findTicketsDir(startDir: string): Promise<string | null> {
   return null;
 }
 
-/** Resolve a user-provided path to a .tickets/ directory */
-async function resolveTicketsDir(givenPath: string): Promise<string> {
+/** Resolve a user-provided path to a .tasks/ directory */
+async function resolveTasksDir(givenPath: string): Promise<string> {
   const resolved = resolve(givenPath);
 
-  // If the path itself is a .tickets directory, use it directly
-  if (basename(resolved) === ".tickets") {
+  // If the path itself is a .tasks directory, use it directly
+  if (basename(resolved) === ".tasks") {
     try {
       const s = await stat(resolved);
       if (s.isDirectory()) return resolved;
@@ -93,16 +93,16 @@ async function resolveTicketsDir(givenPath: string): Promise<string> {
     return resolved;
   }
 
-  // Check if it contains a .tickets subdirectory
-  const withTickets = join(resolved, ".tickets");
+  // Check if it contains a .tasks subdirectory
+  const withTasks = join(resolved, ".tasks");
   try {
-    const s = await stat(withTickets);
-    if (s.isDirectory()) return withTickets;
+    const s = await stat(withTasks);
+    if (s.isDirectory()) return withTasks;
   } catch {
-    // No .tickets inside — assume the path IS the tickets dir
+    // No .tasks inside — assume the path IS the tasks dir
   }
 
-  return withTickets;
+  return withTasks;
 }
 
 /** Resolve the path to the bundled SKILL.md inside the ticketbook package. */
@@ -119,7 +119,7 @@ function printInitSummary(
   baseDir: string,
   result: Awaited<ReturnType<typeof initTicketbook>>,
 ): void {
-  console.log(`Initialized ticketbook at ${result.ticketsDir}`);
+  console.log(`Initialized ticketbook at ${result.tasksDir}`);
 
   const created: string[] = [];
   if (result.wroteSkill) {
@@ -166,27 +166,27 @@ async function main(): Promise<void> {
     return;
   }
 
-  // --- Resolve .tickets/ directory ---
-  let ticketsDir: string | null = null;
+  // --- Resolve .tasks/ directory ---
+  let tasksDir: string | null = null;
 
   if (args.dir) {
-    ticketsDir = await resolveTicketsDir(args.dir);
+    tasksDir = await resolveTasksDir(args.dir);
   } else {
-    ticketsDir = await findTicketsDir(process.cwd());
+    tasksDir = await findTasksDir(process.cwd());
   }
 
-  if (!ticketsDir) {
-    console.log("No .tickets/ directory found.");
+  if (!tasksDir) {
+    console.log("No .tasks/ directory found.");
     const answer = prompt("Would you like to initialize one here? (y/N) ");
     if (answer?.toLowerCase() === "y") {
       const result = await initTicketbook({
         baseDir: process.cwd(),
         skillSourcePath: resolveSkillSourcePath(),
       });
-      ticketsDir = result.ticketsDir;
+      tasksDir = result.tasksDir;
       printInitSummary(process.cwd(), result);
     } else {
-      console.log("Run 'ticketbook init' to create a .tickets/ directory.");
+      console.log("Run 'ticketbook init' to create a .tasks/ directory.");
       process.exit(1);
     }
   }
@@ -194,9 +194,9 @@ async function main(): Promise<void> {
   // --- MCP mode ---
   if (args.mcp) {
     const { startMcpServer } = await import("../packages/server/src/mcp.ts");
-    const mcpPlansDir = join(dirname(ticketsDir), ".plans");
-    console.error(`Ticketbook MCP server (stdio) — tickets: ${ticketsDir}, plans: ${mcpPlansDir}`);
-    await startMcpServer(ticketsDir, mcpPlansDir);
+    const mcpPlansDir = join(dirname(tasksDir), ".plans");
+    console.error(`Ticketbook MCP server (stdio) — tasks: ${tasksDir}, plans: ${mcpPlansDir}`);
+    await startMcpServer(tasksDir, mcpPlansDir);
     return;
   }
 
@@ -207,15 +207,15 @@ async function main(): Promise<void> {
     ? undefined
     : resolve(join(import.meta.dir, "../packages/ui/dist"));
 
-  // Derive plans dir from tickets dir (sibling .plans/ directory)
-  const plansDir = join(dirname(ticketsDir), ".plans");
+  // Derive plans dir from tasks dir (sibling .plans/ directory)
+  const plansDir = join(dirname(tasksDir), ".plans");
 
   // Absolute path to this script — passed through so the copilot manager can
   // wire up an MCP config that re-invokes us in --mcp mode for tool access.
   const binPath = fileURLToPath(import.meta.url);
 
   const handle = startServer({
-    ticketsDir,
+    tasksDir,
     plansDir,
     port: args.port ?? 0,
     staticDir: uiDistDir,
@@ -223,7 +223,7 @@ async function main(): Promise<void> {
   });
 
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
-  console.log(`Tickets directory: ${ticketsDir}`);
+  console.log(`Tasks directory: ${tasksDir}`);
   console.log(`Plans directory: ${plansDir}`);
   if (!args.noUi && uiDistDir) {
     console.log(`UI: http://localhost:${handle.port}`);

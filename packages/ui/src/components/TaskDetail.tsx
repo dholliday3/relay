@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { patchTicket, patchTicketBody } from "../api";
-import type { Ticket, Status, Priority, Meta } from "../types";
+import { patchTask, patchTaskBody } from "../api";
+import type { Task, Status, Priority, Meta } from "../types";
 import { TiptapEditor } from "./TiptapEditor";
 import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 
@@ -21,26 +21,26 @@ const PRIORITY_OPTIONS: { value: string; label: string }[] = [
   { value: "urgent", label: "Urgent" },
 ];
 
-interface TicketDetailProps {
-  ticket: Ticket;
+interface TaskDetailProps {
+  task: Task;
   meta: Meta;
   onUpdated: () => void;
   onDelete?: (id: string) => void;
 }
 
-export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetailProps) {
+export function TaskDetail({ task, meta, onUpdated, onDelete }: TaskDetailProps) {
   const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(ticket.title);
+  const [titleDraft, setTitleDraft] = useState(task.title);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const bodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync drafts when ticket changes externally
+  // Sync drafts when task changes externally
   useEffect(() => {
-    setTitleDraft(ticket.title);
+    setTitleDraft(task.title);
     setEditingTitle(false);
-  }, [ticket.id, ticket.title]);
+  }, [task.id, task.title]);
 
   useEffect(() => {
     if (editingTitle && titleInputRef.current) {
@@ -49,10 +49,10 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
     }
   }, [editingTitle]);
 
-  // Reset save status when switching tickets
+  // Reset save status when switching tasks
   useEffect(() => {
     setSaveStatus("idle");
-  }, [ticket.id]);
+  }, [task.id]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -63,24 +63,24 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
   }, []);
 
   const saveField = useCallback(
-    async (patch: Parameters<typeof patchTicket>[1]) => {
+    async (patch: Parameters<typeof patchTask>[1]) => {
       try {
-        await patchTicket(ticket.id, patch);
+        await patchTask(task.id, patch);
         onUpdated();
       } catch (err) {
         console.error("Failed to save:", err);
       }
     },
-    [ticket.id, onUpdated],
+    [task.id, onUpdated],
   );
 
   const handleTitleSave = () => {
     setEditingTitle(false);
     const trimmed = titleDraft.trim();
-    if (trimmed && trimmed !== ticket.title) {
+    if (trimmed && trimmed !== task.title) {
       saveField({ title: trimmed });
     } else {
-      setTitleDraft(ticket.title);
+      setTitleDraft(task.title);
     }
   };
 
@@ -89,7 +89,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
       e.preventDefault();
       handleTitleSave();
     } else if (e.key === "Escape") {
-      setTitleDraft(ticket.title);
+      setTitleDraft(task.title);
       setEditingTitle(false);
     }
   };
@@ -101,7 +101,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
       setSaveStatus("saving");
       bodyTimerRef.current = setTimeout(async () => {
         try {
-          await patchTicketBody(ticket.id, markdown);
+          await patchTaskBody(task.id, markdown);
           onUpdated();
           setSaveStatus("saved");
           savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
@@ -111,14 +111,14 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
         }
       }, 500);
     },
-    [ticket.id, onUpdated],
+    [task.id, onUpdated],
   );
 
   return (
     <div className="ticket-detail">
-      {/* Ticket ID + save indicator + delete button */}
+      {/* Task ID + save indicator + delete button */}
       <div className="detail-header-row">
-        <span className="detail-ticket-id">{ticket.id}</span>
+        <span className="detail-ticket-id">{task.id}</span>
         {saveStatus !== "idle" && (
           <span className={`save-indicator ${saveStatus}`}>
             {saveStatus === "saving" ? "Saving..." : "Saved"}
@@ -127,9 +127,9 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
         {onDelete && (
           <button
             className="delete-btn"
-            onClick={() => onDelete(ticket.id)}
-            title="Delete ticket"
-            aria-label="Delete ticket"
+            onClick={() => onDelete(task.id)}
+            title="Delete task"
+            aria-label="Delete task"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
@@ -155,35 +155,35 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
           onClick={() => setEditingTitle(true)}
           title="Click to edit"
         >
-          {ticket.title}
+          {task.title}
         </h1>
       )}
 
       {/* Body editor */}
       <TiptapEditor
-        content={splitAgentNotes(ticket.body).userContent}
+        content={splitAgentNotes(task.body).userContent}
         onUpdate={(md) => {
-          const { agentNotes } = splitAgentNotes(ticket.body);
+          const { agentNotes } = splitAgentNotes(task.body);
           handleBodyChange(mergeAgentNotes(md, agentNotes));
         }}
-        ticketId={ticket.id}
+        taskId={task.id}
       />
 
       {/* Metadata row */}
       <div className="detail-meta-row">
         <SelectChip
-          value={ticket.status}
+          value={task.status}
           options={STATUS_OPTIONS}
           onChange={(v) => saveField({ status: v as Status })}
         />
         <SelectChip
-          value={ticket.priority ?? ""}
+          value={task.priority ?? ""}
           options={PRIORITY_OPTIONS}
           placeholder="Priority"
           onChange={(v) => saveField({ priority: v ? (v as Priority) : null })}
         />
         <MultiComboboxChip
-          values={ticket.tags ?? []}
+          values={task.tags ?? []}
           options={meta.tags}
           placeholder="Tags"
           onChange={(tags) => saveField({ tags })}
@@ -194,7 +194,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
               label: "Project",
               content: (
                 <ComboboxChip
-                  value={ticket.project ?? ""}
+                  value={task.project ?? ""}
                   options={meta.projects}
                   placeholder="None"
                   onChange={(v) => saveField({ project: v || null })}
@@ -205,7 +205,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
               label: "Epic",
               content: (
                 <ComboboxChip
-                  value={ticket.epic ?? ""}
+                  value={task.epic ?? ""}
                   options={meta.epics}
                   placeholder="None"
                   onChange={(v) => saveField({ epic: v || null })}
@@ -216,7 +216,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
               label: "Sprint",
               content: (
                 <ComboboxChip
-                  value={ticket.sprint ?? ""}
+                  value={task.sprint ?? ""}
                   options={meta.sprints}
                   placeholder="None"
                   onChange={(v) => saveField({ sprint: v || null })}
@@ -228,7 +228,7 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
               content: (
                 <input
                   className="meta-assignee-input"
-                  value={ticket.assignee ?? ""}
+                  value={task.assignee ?? ""}
                   onChange={(e) => saveField({ assignee: e.target.value || null })}
                   placeholder="Unassigned"
                 />
@@ -237,8 +237,8 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
             {
               label: "Blocked by",
               content: (
-                <TicketLinkChips
-                  links={ticket.blockedBy ?? []}
+                <TaskLinkChips
+                  links={task.blockedBy ?? []}
                   onChange={(ids) => saveField({ blockedBy: ids })}
                 />
               ),
@@ -246,8 +246,8 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
             {
               label: "Related to",
               content: (
-                <TicketLinkChips
-                  links={ticket.relatedTo ?? []}
+                <TaskLinkChips
+                  links={task.relatedTo ?? []}
                   onChange={(ids) => saveField({ relatedTo: ids })}
                 />
               ),
@@ -257,10 +257,10 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
       </div>
 
       {/* Refs (commits/PRs) */}
-      {ticket.refs && ticket.refs.length > 0 && (
+      {task.refs && task.refs.length > 0 && (
         <div className="ticket-refs">
           <span className="ticket-refs-label">Refs</span>
-          {ticket.refs.map((ref) => (
+          {task.refs.map((ref) => (
             <span key={ref} className="ticket-ref-chip">
               {ref.startsWith("http") ? (
                 <a href={ref} target="_blank" rel="noopener noreferrer">{ref.replace(/.*\//, "")}</a>
@@ -274,9 +274,9 @@ export function TicketDetail({ ticket, meta, onUpdated, onDelete }: TicketDetail
 
       {/* Agent notes (collapsible) */}
       <AgentNotesSection
-        notes={splitAgentNotes(ticket.body).agentNotes}
+        notes={splitAgentNotes(task.body).agentNotes}
         onUpdate={(notes) => {
-          const { userContent } = splitAgentNotes(ticket.body);
+          const { userContent } = splitAgentNotes(task.body);
           handleBodyChange(mergeAgentNotes(userContent, notes));
         }}
       />
@@ -333,7 +333,7 @@ function AgentNotesSection({
 }
 
 
-function TicketLinkChips({
+function TaskLinkChips({
   links,
   onChange,
 }: {
@@ -374,7 +374,7 @@ function TicketLinkChips({
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={links.length === 0 ? "Add ticket ID..." : ""}
+        placeholder={links.length === 0 ? "Add task ID..." : ""}
       />
     </div>
   );

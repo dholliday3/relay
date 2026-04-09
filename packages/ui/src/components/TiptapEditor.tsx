@@ -17,10 +17,10 @@ const lowlight = createLowlight(common);
 interface TiptapEditorProps {
   content: string;
   onUpdate: (markdown: string) => void;
-  ticketId: string;
+  taskId: string;
 }
 
-export function TiptapEditor({ content, onUpdate, ticketId }: TiptapEditorProps) {
+export function TiptapEditor({ content, onUpdate, taskId }: TiptapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
   const suppressUpdateRef = useRef(false);
@@ -67,19 +67,19 @@ export function TiptapEditor({ content, onUpdate, ticketId }: TiptapEditorProps)
     },
   });
 
-  // Reset content when ticket changes (suppress onUpdate to avoid spurious saves)
+  // Reset content when task changes (suppress onUpdate to avoid spurious saves)
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
       suppressUpdateRef.current = true;
       editor.commands.setContent(content);
       suppressUpdateRef.current = false;
     }
-  }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close slash menu when ticket changes
+  // Close slash menu when task changes
   useEffect(() => {
     setSlashMenuState(null);
-  }, [ticketId]);
+  }, [taskId]);
 
   return (
     <>

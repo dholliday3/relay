@@ -1,6 +1,6 @@
-import { listTickets } from "./reader.js";
-import { updateTicket } from "./writer.js";
-import type { Ticket } from "./types.js";
+import { listTasks } from "./reader.js";
+import { updateTask } from "./writer.js";
+import type { Task } from "./types.js";
 
 const REBALANCE_STEP = 1000;
 const MAX_DECIMAL_PLACES = 10;
@@ -19,11 +19,11 @@ function decimalPlaces(n: number): number {
 }
 
 /**
- * Sort tickets: ordered tickets first (by order asc), then unordered
- * tickets by priority (urgent→low) then updated date (newest first).
+ * Sort tasks: ordered tasks first (by order asc), then unordered
+ * tasks by priority (urgent→low) then updated date (newest first).
  */
-export function sortTickets(tickets: Ticket[]): Ticket[] {
-  return [...tickets].sort((a, b) => {
+export function sortTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
     const aHasOrder = a.order != null;
     const bHasOrder = b.order != null;
 
@@ -41,42 +41,42 @@ export function sortTickets(tickets: Ticket[]): Ticket[] {
 }
 
 /**
- * Rebalance order values for all tickets with a given status to clean
+ * Rebalance order values for all tasks with a given status to clean
  * integers (1000, 2000, 3000, ...).
  */
 export async function rebalanceOrder(
   dir: string,
   status: string,
 ): Promise<void> {
-  const tickets = await listTickets(dir, { status: status as "draft" | "backlog" | "open" | "in-progress" | "done" | "cancelled" });
-  const sorted = sortTickets(tickets);
+  const tasks = await listTasks(dir, { status: status as "draft" | "backlog" | "open" | "in-progress" | "done" | "cancelled" });
+  const sorted = sortTasks(tasks);
 
   for (let i = 0; i < sorted.length; i++) {
     const newOrder = (i + 1) * REBALANCE_STEP;
     if (sorted[i].order !== newOrder) {
-      await updateTicket(dir, sorted[i].id, { order: newOrder });
+      await updateTask(dir, sorted[i].id, { order: newOrder });
     }
   }
 }
 
 /**
- * Reorder a ticket by placing it between two neighbors. Calculates the
+ * Reorder a task by placing it between two neighbors. Calculates the
  * midpoint order value. If the midpoint requires more than 10 decimal
  * places, triggers an automatic rebalance first, then recalculates.
  *
- * @param dir - .tickets directory path
- * @param id - ticket to move
- * @param afterId - ticket above (lower order), or null if placing at top
- * @param beforeId - ticket below (higher order), or null if placing at bottom
+ * @param dir - .tasks directory path
+ * @param id - task to move
+ * @param afterId - task above (lower order), or null if placing at top
+ * @param beforeId - task below (higher order), or null if placing at bottom
  */
-export async function reorderTicket(
+export async function reorderTask(
   dir: string,
   id: string,
   afterId: string | null,
   beforeId: string | null,
-): Promise<Ticket> {
-  const ticket = await getNeighborOrder(dir, id);
-  if (!ticket) throw new Error(`Ticket not found: ${id}`);
+): Promise<Task> {
+  const task = await getNeighborOrder(dir, id);
+  if (!task) throw new Error(`Task not found: ${id}`);
 
   const afterOrder = afterId ? await getNeighborOrder(dir, afterId) : null;
   const beforeOrder = beforeId ? await getNeighborOrder(dir, beforeId) : null;
@@ -87,7 +87,7 @@ export async function reorderTicket(
   );
 
   if (decimalPlaces(newOrder) > MAX_DECIMAL_PLACES) {
-    await rebalanceOrder(dir, ticket.status);
+    await rebalanceOrder(dir, task.status);
     // Re-read neighbor orders after rebalance
     const afterRebalanced = afterId
       ? await getNeighborOrder(dir, afterId)
@@ -101,15 +101,15 @@ export async function reorderTicket(
     );
   }
 
-  return updateTicket(dir, id, { order: newOrder });
+  return updateTask(dir, id, { order: newOrder });
 }
 
 async function getNeighborOrder(
   dir: string,
   id: string,
 ): Promise<{ order: number | undefined; status: string } | null> {
-  const tickets = await listTickets(dir);
-  const t = tickets.find((t) => t.id === id);
+  const tasks = await listTasks(dir);
+  const t = tasks.find((t) => t.id === id);
   if (!t) return null;
   return { order: t.order, status: t.status };
 }

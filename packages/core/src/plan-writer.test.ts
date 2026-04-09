@@ -8,30 +8,30 @@ import {
   updatePlan,
   deletePlan,
   restorePlan,
-  cutTicketsFromPlan,
+  cutTasksFromPlan,
 } from "./plan-writer.js";
-import { listTickets } from "./reader.js";
+import { listTasks } from "./reader.js";
 
 describe("createPlan", () => {
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-writer-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
   test("creates a plan file with correct frontmatter", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "My First Plan",
       status: "draft",
     });
@@ -54,12 +54,12 @@ describe("createPlan", () => {
   });
 
   test("defaults status to draft", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, { title: "No Status" });
+    const plan = await createPlan(tasksDir, plansDir, { title: "No Status" });
     expect(plan.status).toBe("draft");
   });
 
   test("omits optional fields when not set", async () => {
-    await createPlan(ticketsDir, plansDir, { title: "Basic Plan" });
+    await createPlan(tasksDir, plansDir, { title: "Basic Plan" });
 
     const files = await readdir(plansDir);
     const mdFile = files.find((f) => f.endsWith(".md"))!;
@@ -68,12 +68,12 @@ describe("createPlan", () => {
 
     expect(data.project).toBeUndefined();
     expect(data.tags).toBeUndefined();
-    expect(data.tickets).toBeUndefined();
+    expect(data.tasks).toBeUndefined();
     expect(data.refs).toBeUndefined();
   });
 
   test("normalizes tags on write", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "Tagged",
       tags: ["  Feature  ", "FEATURE", "ui"],
     });
@@ -81,7 +81,7 @@ describe("createPlan", () => {
   });
 
   test("includes body content", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "With Body",
       body: "## Overview\n\nSome plan content",
     });
@@ -89,57 +89,57 @@ describe("createPlan", () => {
   });
 
   test("increments counter for each plan", async () => {
-    const p1 = await createPlan(ticketsDir, plansDir, { title: "First" });
-    const p2 = await createPlan(ticketsDir, plansDir, { title: "Second" });
+    const p1 = await createPlan(tasksDir, plansDir, { title: "First" });
+    const p2 = await createPlan(tasksDir, plansDir, { title: "Second" });
     expect(p1.id).toBe("PLAN-001");
     expect(p2.id).toBe("PLAN-002");
   });
 
-  test("stores linked ticket IDs", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+  test("stores linked task IDs", async () => {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "Linked",
-      tickets: ["TKT-001", "TKT-002"],
+      tasks: ["TASK-001", "TASK-002"],
     });
-    expect(plan.tickets).toEqual(["TKT-001", "TKT-002"]);
+    expect(plan.tasks).toEqual(["TASK-001", "TASK-002"]);
 
     const files = await readdir(plansDir);
     const mdFile = files.find((f) => f.endsWith(".md"))!;
     const raw = await readFile(join(plansDir, mdFile), "utf-8");
     const { data } = matter(raw);
-    expect(data.tickets).toEqual(["TKT-001", "TKT-002"]);
+    expect(data.tasks).toEqual(["TASK-001", "TASK-002"]);
   });
 
   test("uses custom prefix from config", async () => {
     await writeFile(
-      join(ticketsDir, ".config.yaml"),
+      join(tasksDir, ".config.yaml"),
       "prefix: TKT\nplanPrefix: PRD\n",
       "utf-8",
     );
-    const plan = await createPlan(ticketsDir, plansDir, { title: "Custom Prefix" });
+    const plan = await createPlan(tasksDir, plansDir, { title: "Custom Prefix" });
     expect(plan.id).toBe("PRD-001");
   });
 });
 
 describe("updatePlan", () => {
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-writer-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
   test("updates frontmatter fields", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, { title: "Original" });
+    const plan = await createPlan(tasksDir, plansDir, { title: "Original" });
     const updated = await updatePlan(plansDir, plan.id, {
       status: "active",
       project: "myproject",
@@ -153,7 +153,7 @@ describe("updatePlan", () => {
   });
 
   test("clears optional fields when set to null", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "WithProject",
       project: "myproject",
     });
@@ -162,7 +162,7 @@ describe("updatePlan", () => {
   });
 
   test("updates body content", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "Body Test",
       body: "Original body",
     });
@@ -172,12 +172,12 @@ describe("updatePlan", () => {
     expect(updated.body).toBe("Updated body");
   });
 
-  test("updates linked tickets", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, { title: "Links" });
+  test("updates linked tasks", async () => {
+    const plan = await createPlan(tasksDir, plansDir, { title: "Links" });
     const updated = await updatePlan(plansDir, plan.id, {
-      tickets: ["TKT-001", "TKT-003"],
+      tasks: ["TASK-001", "TASK-003"],
     });
-    expect(updated.tickets).toEqual(["TKT-001", "TKT-003"]);
+    expect(updated.tasks).toEqual(["TASK-001", "TASK-003"]);
   });
 
   test("throws for non-existent plan", async () => {
@@ -188,26 +188,26 @@ describe("updatePlan", () => {
 });
 
 describe("deletePlan", () => {
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-writer-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
   test("archives plan by default", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, { title: "To Archive" });
-    await deletePlan(ticketsDir, plansDir, plan.id);
+    const plan = await createPlan(tasksDir, plansDir, { title: "To Archive" });
+    await deletePlan(tasksDir, plansDir, plan.id);
 
     const mainFiles = await readdir(plansDir);
     expect(mainFiles.filter((f) => f.endsWith(".md"))).toHaveLength(0);
@@ -218,12 +218,12 @@ describe("deletePlan", () => {
 
   test("hard-deletes when config says so", async () => {
     await writeFile(
-      join(ticketsDir, ".config.yaml"),
+      join(tasksDir, ".config.yaml"),
       "prefix: TKT\nplanPrefix: PLAN\ndeleteMode: hard\n",
       "utf-8",
     );
-    const plan = await createPlan(ticketsDir, plansDir, { title: "To Delete" });
-    await deletePlan(ticketsDir, plansDir, plan.id);
+    const plan = await createPlan(tasksDir, plansDir, { title: "To Delete" });
+    await deletePlan(tasksDir, plansDir, plan.id);
 
     const files = await readdir(plansDir);
     expect(files.filter((f) => f.endsWith(".md"))).toHaveLength(0);
@@ -231,26 +231,26 @@ describe("deletePlan", () => {
 });
 
 describe("restorePlan", () => {
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-writer-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
   test("restores an archived plan", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, { title: "Archived" });
-    await deletePlan(ticketsDir, plansDir, plan.id);
+    const plan = await createPlan(tasksDir, plansDir, { title: "Archived" });
+    await deletePlan(tasksDir, plansDir, plan.id);
 
     const restored = await restorePlan(plansDir, plan.id);
     expect(restored.id).toBe(plan.id);
@@ -265,73 +265,73 @@ describe("restorePlan", () => {
   });
 });
 
-describe("cutTicketsFromPlan", () => {
-  let ticketsDir: string;
+describe("cutTasksFromPlan", () => {
+  let tasksDir: string;
   let plansDir: string;
 
   beforeEach(async () => {
     const root = await mkdtemp(join(tmpdir(), "ticketbook-plan-writer-"));
-    ticketsDir = join(root, ".tickets");
+    tasksDir = join(root, ".tasks");
     plansDir = join(root, ".plans");
-    await mkdir(ticketsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
-    await writeFile(join(ticketsDir, ".counter"), "0", "utf-8");
+    await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(ticketsDir, { recursive: true, force: true });
+    await rm(tasksDir, { recursive: true, force: true });
     await rm(plansDir, { recursive: true, force: true });
   });
 
-  test("creates tickets from unchecked checkboxes", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+  test("creates tasks from unchecked checkboxes", async () => {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "Feature Plan",
       body: "## Tasks\n\n- [ ] Build API endpoint\n- [ ] Add tests\n- [x] Already done",
       project: "myproject",
     });
 
-    const result = await cutTicketsFromPlan(ticketsDir, plansDir, plan.id);
+    const result = await cutTasksFromPlan(tasksDir, plansDir, plan.id);
 
-    expect(result.createdTickets).toHaveLength(2);
-    expect(result.createdTickets[0].title).toBe("Build API endpoint");
-    expect(result.createdTickets[1].title).toBe("Add tests");
-    expect(result.createdTickets[0].status).toBe("open");
-    expect(result.createdTickets[0].project).toBe("myproject");
+    expect(result.createdTasks).toHaveLength(2);
+    expect(result.createdTasks[0].title).toBe("Build API endpoint");
+    expect(result.createdTasks[1].title).toBe("Add tests");
+    expect(result.createdTasks[0].status).toBe("open");
+    expect(result.createdTasks[0].project).toBe("myproject");
 
-    // Plan body should have items checked off with ticket IDs
-    expect(result.plan.body).toContain("[x] Build API endpoint (TKT-001)");
-    expect(result.plan.body).toContain("[x] Add tests (TKT-002)");
+    // Plan body should have items checked off with task IDs
+    expect(result.plan.body).toContain("[x] Build API endpoint (TASK-001)");
+    expect(result.plan.body).toContain("[x] Add tests (TASK-002)");
     expect(result.plan.body).toContain("[x] Already done");
 
-    // Plan should have linked tickets
-    expect(result.plan.tickets).toContain("TKT-001");
-    expect(result.plan.tickets).toContain("TKT-002");
+    // Plan should have linked tasks
+    expect(result.plan.tasks).toContain("TASK-001");
+    expect(result.plan.tasks).toContain("TASK-002");
 
-    // Tickets should exist on disk
-    const tickets = await listTickets(ticketsDir);
-    expect(tickets).toHaveLength(2);
+    // Tasks should exist on disk
+    const tasks = await listTasks(tasksDir);
+    expect(tasks).toHaveLength(2);
   });
 
   test("returns empty array when no unchecked items", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "All Done",
       body: "- [x] Already done\n- [x] Also done",
     });
 
-    const result = await cutTicketsFromPlan(ticketsDir, plansDir, plan.id);
-    expect(result.createdTickets).toHaveLength(0);
+    const result = await cutTasksFromPlan(tasksDir, plansDir, plan.id);
+    expect(result.createdTasks).toHaveLength(0);
   });
 
-  test("preserves existing linked tickets", async () => {
-    const plan = await createPlan(ticketsDir, plansDir, {
+  test("preserves existing linked tasks", async () => {
+    const plan = await createPlan(tasksDir, plansDir, {
       title: "Existing Links",
-      tickets: ["EXISTING-001"],
+      tasks: ["EXISTING-001"],
       body: "- [ ] New task",
     });
 
-    const result = await cutTicketsFromPlan(ticketsDir, plansDir, plan.id);
-    expect(result.plan.tickets).toContain("EXISTING-001");
-    expect(result.plan.tickets).toContain("TKT-001");
+    const result = await cutTasksFromPlan(tasksDir, plansDir, plan.id);
+    expect(result.plan.tasks).toContain("EXISTING-001");
+    expect(result.plan.tasks).toContain("TASK-001");
   });
 });

@@ -1,20 +1,20 @@
-import type { Ticket, TicketPatch, Meta, TicketbookConfig, CreateTicketInput, Plan, PlanPatch, CreatePlanInput, PlanMeta } from "./types";
+import type { Task, TaskPatch, Meta, TicketbookConfig, CreateTaskInput, Plan, PlanPatch, CreatePlanInput, PlanMeta } from "./types";
 
 const BASE = "/api";
 
-export async function fetchTickets(): Promise<Ticket[]> {
+export async function fetchTasks(): Promise<Task[]> {
   const res = await fetch(`${BASE}/tasks`);
   if (!res.ok) throw new Error(`Failed to fetch tasks: ${res.status}`);
   return res.json();
 }
 
-export async function fetchTicket(id: string): Promise<Ticket> {
+export async function fetchTask(id: string): Promise<Task> {
   const res = await fetch(`${BASE}/tasks/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`Failed to fetch task: ${res.status}`);
   return res.json();
 }
 
-export async function patchTicket(id: string, patch: TicketPatch): Promise<Ticket> {
+export async function patchTask(id: string, patch: TaskPatch): Promise<Task> {
   const res = await fetch(`${BASE}/tasks/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -24,7 +24,7 @@ export async function patchTicket(id: string, patch: TicketPatch): Promise<Ticke
   return res.json();
 }
 
-export async function patchTicketBody(id: string, body: string): Promise<Ticket> {
+export async function patchTaskBody(id: string, body: string): Promise<Task> {
   const res = await fetch(`${BASE}/tasks/${encodeURIComponent(id)}/body`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -40,7 +40,7 @@ export async function fetchMeta(): Promise<Meta> {
   return res.json();
 }
 
-export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
+export async function createTask(input: CreateTaskInput): Promise<Task> {
   const res = await fetch(`${BASE}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -50,7 +50,7 @@ export async function createTicket(input: CreateTicketInput): Promise<Ticket> {
   return res.json();
 }
 
-export async function deleteTicket(id: string): Promise<void> {
+export async function deleteTask(id: string): Promise<void> {
   const res = await fetch(`${BASE}/tasks/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
@@ -73,11 +73,11 @@ export async function patchConfig(patch: Partial<TicketbookConfig>): Promise<Tic
   return res.json();
 }
 
-export async function reorderTicket(
+export async function reorderTask(
   id: string,
   afterId: string | null,
   beforeId: string | null,
-): Promise<Ticket> {
+): Promise<Task> {
   const res = await fetch(`${BASE}/tasks/${encodeURIComponent(id)}/reorder`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -144,7 +144,7 @@ export async function fetchPlanMeta(): Promise<PlanMeta> {
   return res.json();
 }
 
-export async function cutTicketsFromPlan(planId: string): Promise<{ plan: Plan; createdTasks: any[]; count: number }> {
+export async function cutTasksFromPlan(planId: string): Promise<{ plan: Plan; createdTasks: any[]; count: number }> {
   const res = await fetch(`${BASE}/plans/${encodeURIComponent(planId)}/cut-tasks`, {
     method: "POST",
   });
@@ -152,7 +152,7 @@ export async function cutTicketsFromPlan(planId: string): Promise<{ plan: Plan; 
   return res.json();
 }
 
-export function subscribeSSE(onEvent: (event: { type: string; ticketId?: string; source?: string }) => void): () => void {
+export function subscribeSSE(onEvent: (event: { type: string; taskId?: string; source?: string }) => void): () => void {
   let es: EventSource | null = new EventSource(`${BASE}/events`);
 
   es.onmessage = (msg) => {

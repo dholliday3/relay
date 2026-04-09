@@ -18,7 +18,7 @@ updated: '2026-04-08T05:20:45.708Z'
 
 ## Why this exists
 
-Today's UI is rigid. `__root.tsx` hardcodes a header + `<Outlet />` + optional right-side terminal. Each route (`/tickets`, `/plans`, `/`) owns its own layout and URL schema, and the tickets route hardcodes the list-vs-detail split. There are two unrelated tab systems (one for ticket/plan tabs in the detail pane, one inside `TerminalPane` for terminal sessions). The terminal's open state and width live as globals on `AppContext`.
+Today's UI is rigid. `__root.tsx` hardcodes a header + `<Outlet />` + optional right-side terminal. Each route (`/tasks`, `/plans`, `/`) owns its own layout and URL schema, and the tasks route hardcodes the list-vs-detail split. There are two unrelated tab systems (one for task/plan tabs in the detail pane, one inside `TerminalPane` for terminal sessions). The terminal's open state and width live as globals on `AppContext`.
 
 This works for "task tracker with a terminal bolted on." It does not work for the direction we're heading: a workspace where humans orchestrate many agent sessions across many projects, and the UI fluidly reshapes around whatever the user is doing right now.
 
@@ -26,7 +26,7 @@ This works for "task tracker with a terminal bolted on." It does not work for th
 
 VS Code's whole spatial model orbits one thing: the file tree of a single project root. Sidebar = files. Tabs = open files. Status bar = the file's git status. Everything is a *projection of the file under cursor*.
 
-Our model needs to orbit a different noun: **the agent session**. A session has a project, a worktree, a branch, a live output stream, a status, linked tickets/plans, and a working diff. Files, CI, diffs, tickets — those become *projections of the active session*, not projections of a file. And critically, sessions aren't constrained to one project root, so the whole "single workspace folder" assumption falls away.
+Our model needs to orbit a different noun: **the agent session**. A session has a project, a worktree, a branch, a live output stream, a status, linked tasks/plans, and a working diff. Files, CI, diffs, tasks — those become *projections of the active session*, not projections of a file. And critically, sessions aren't constrained to one project root, so the whole "single workspace folder" assumption falls away.
 
 This is the single most important reframe in this plan. Everything below follows from it.
 
@@ -37,8 +37,8 @@ A view is a pure function of `(viewType, params)`. You register each view type o
 **Global views** (don't need a session):
 
 - `home`
-- `tickets.list` — params: `{ filters, sort }`
-- `tickets.board` — params: `{ filters }`
+- `tasks.list` — params: `{ filters, sort }`
+- `tasks.board` — params: `{ filters }`
 - `plans.list`
 - `sessions.feed` — live list of agents, sorted by needs-attention
 - `projects.list` — known repos, worktrees, branches
@@ -53,12 +53,12 @@ A view is a pure function of `(viewType, params)`. You register each view type o
 - `session.files` — file tree rooted at this session's worktree
 - `session.ci` — GitHub Checks for this session's branch
 - `session.timeline` — structured event stream (OSC 133/633, see TKTB-054)
-- `session.linked-tickets` — tickets tied to this session
+- `session.linked-tasks` — tasks tied to this session
 - `session.plan` — plan that spawned this session, if any
 
 **Record-bound views** (need an id of a specific record):
 
-- `ticket.detail` — params: `{ ticketId }`
+- `task.detail` — params: `{ ticketId }`
 - `plan.detail` — params: `{ planId }`
 
 Each registry entry exposes:
@@ -133,7 +133,7 @@ Examples of workspaces a user might create:
 
 - **"Morning review"** → 4 `session.diff` tabs pinned to today's PR sessions across 2 repos
 - **"Feature: auth rewrite"** → `plan.detail` center-left, 2 `session.terminal` tabs center-right, `sessions.feed` in the bottom panel filtered to that plan's sessions
-- **"Triage"** → `tickets.list` left, `sessions.feed` right, empty center
+- **"Triage"** → `tasks.list` left, `sessions.feed` right, empty center
 - **"Default"** → what you boot into
 
 Workspaces are cheap to create, swap, and share. They become the unit of context, replacing both "what folder am I in" and "what tab layout did I have last time."
@@ -143,25 +143,25 @@ Workspaces are cheap to create, swap, and share. They become the unit of context
 VS Code's left rail toggles which explorer shows in the sidebar (Files / Search / SCM / Run / Extensions). Same idea, different explorers:
 
 - **Sessions feed** — the live agent feed with status dots, project/branch labels, and last-output preview. Sorted by needs-attention. *This is the centerpiece.*
-- **Tickets** — current ticket list, filterable
+- **Tasks** — current task list, filterable
 - **Plans** — current plan list
 - **Projects / worktrees** — every known repo + worktree + branch you've touched, so jumping across is one click
-- **Search** — cross-project search across sessions, tickets, plans, files, agent output
+- **Search** — cross-project search across sessions, tasks, plans, files, agent output
 - **Saved prompts / skills** — for quick injection into a session
 
-Clicking anything in an explorer either opens it as a tab in the center (default), or — with a modifier — pins it into a side panel. This is the affordance: "easy to bring a session or a plan or tickets into the main view."
+Clicking anything in an explorer either opens it as a tab in the center (default), or — with a modifier — pins it into a side panel. This is the affordance: "easy to bring a session or a plan or tasks into the main view."
 
 ## What this means for the URL model
 
-Today: `/tickets?view=board&status=…&project=…` — route-level filters in the URL.
+Today: `/tasks?view=board&status=…&project=…` — route-level filters in the URL.
 
-Tomorrow: routes go away (or shrink to almost nothing). Filters become `params` on a `tickets.list` tab inside the layout. URLs become one of:
+Tomorrow: routes go away (or shrink to almost nothing). Filters become `params` on a `tasks.list` tab inside the layout. URLs become one of:
 
 - `/` — restore last workspace
 - `/w/:workspaceId` — open a named workspace
 - `/share/:layoutBlob` — deep-linkable serialized layout for sharing
 
-This is the biggest break from the current architecture. Worth being explicit about it before committing. **Open question:** do we need to keep `/tickets` and `/plans` URLs working as a transitional concession, or do we accept the break?
+This is the biggest break from the current architecture. Worth being explicit about it before committing. **Open question:** do we need to keep `/tasks` and `/plans` URLs working as a transitional concession, or do we accept the break?
 
 ## Library choice (deferred)
 
@@ -177,7 +177,7 @@ This decision is explicitly *deferred* until the schema is settled. Don't pick a
 
 ## Open design questions (must resolve before implementation)
 
-1. **What is a session, exactly?** Right now `terminal/sessions` are PTY-backed terminal tabs. Is "agent session" the same primitive (a long-running shell with structured event hooks), or a layer above that links a terminal session to a ticket/plan + records its diff/output history? TKTB-054, TKTB-055, TKTB-056 all hint at this. **The schema we settle on for** `Session` **is the keystone — every side panel reads from it.**
+1. **What is a session, exactly?** Right now `terminal/sessions` are PTY-backed terminal tabs. Is "agent session" the same primitive (a long-running shell with structured event hooks), or a layer above that links a terminal session to a task/plan + records its diff/output history? TKTB-054, TKTB-055, TKTB-056 all hint at this. **The schema we settle on for** `Session` **is the keystone — every side panel reads from it.**
 
 2. **Where does "needs attention" come from?** OSC 133/633 shell integration (TKTB-054)? Idle detection? Explicit agent emit? The feed is only useful if "needs attention" is reliable.
 
@@ -189,13 +189,13 @@ This decision is explicitly *deferred* until the schema is settled. Don't pick a
 
 6. **Active session resolution across split groups.** When two pinned session views have focus in different groups, which is "active"? Probably last-focused-group's binding wins. Needs to be deliberate.
 
-7. **URL break.** Do we keep `/tickets` and `/plans` as transitional URLs, or accept the clean break to a workspace-only URL model?
+7. **URL break.** Do we keep `/tasks` and `/plans` as transitional URLs, or accept the clean break to a workspace-only URL model?
 
 ## What this plan is NOT
 
-- Not an implementation ticket. No code yet.
+- Not an implementation task. No code yet.
 - Not a library evaluation. Library choice is deferred until the schema is locked.
-- Not a redesign of tickets/plans/terminal as features. They keep working. This is about how they *compose*.
+- Not a redesign of tasks/plans/terminal as features. They keep working. This is about how they *compose*.
 - Not a commitment to dockview. It's a recommendation for the first cut, not a decision.
 
 ## What "done" looks like for this plan
@@ -216,6 +216,6 @@ This decision is explicitly *deferred* until the schema is settled. Don't pick a
 
 - [ ] Library decision unblocked (Path A or Path B)
 
-- [ ] Implementation tickets cut from this plan (likely TKTB-060…06x)
+- [ ] Implementation tasks cut from this plan (likely TKTB-060…06x)
 
-Once those boxes are checked, this plan converts into a stack of implementation tickets via `cut_tickets_from_plan`.
+Once those boxes are checked, this plan converts into a stack of implementation tasks via `cut_tickets_from_plan`.

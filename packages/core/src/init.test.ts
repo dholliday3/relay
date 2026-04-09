@@ -45,25 +45,25 @@ describe("initTicketbook", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("creates .tickets/ and .plans/ with config and counters", async () => {
+  test("creates .tasks/ and .plans/ with config and counters", async () => {
     const result = await initTicketbook({ baseDir: dir, skillSourcePath });
 
-    expect(result.createdTicketsDir).toBe(true);
+    expect(result.createdTasksDir).toBe(true);
     expect(result.createdPlansDir).toBe(true);
     expect(result.wroteConfig).toBe(true);
 
-    expect(await fileExists(join(dir, ".tickets", ".archive"))).toBe(true);
+    expect(await fileExists(join(dir, ".tasks", ".archive"))).toBe(true);
     expect(await fileExists(join(dir, ".plans", ".archive"))).toBe(true);
 
     const config = await readFile(
-      join(dir, ".tickets", ".config.yaml"),
+      join(dir, ".tasks", ".config.yaml"),
       "utf-8",
     );
     expect(config).toContain("prefix: TASK");
     expect(config).toContain("planPrefix: PLAN");
 
     const ticketsCounter = await readFile(
-      join(dir, ".tickets", ".counter"),
+      join(dir, ".tasks", ".counter"),
       "utf-8",
     );
     expect(ticketsCounter).toBe("0");
@@ -232,7 +232,7 @@ describe("initTicketbook", () => {
 
     const agentsMd = await readFile(join(dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("ticketbook");
-    expect(agentsMd).toContain(".tickets/");
+    expect(agentsMd).toContain(".tasks/");
 
     // Simulate user editing the file.
     await writeFile(join(dir, "AGENTS.md"), "# Custom\n", "utf-8");
@@ -249,7 +249,7 @@ describe("initTicketbook", () => {
     expect(result.updatedGitignore).toBe(true);
 
     const gitignore = await readFile(join(dir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain(".tickets/.archive/");
+    expect(gitignore).toContain(".tasks/.archive/");
     expect(gitignore).toContain(".plans/.archive/");
   });
 
@@ -265,7 +265,7 @@ describe("initTicketbook", () => {
     const gitignore = await readFile(join(dir, ".gitignore"), "utf-8");
     expect(gitignore).toContain("node_modules");
     expect(gitignore).toContain(".env");
-    expect(gitignore).toContain(".tickets/.archive/");
+    expect(gitignore).toContain(".tasks/.archive/");
     expect(gitignore).toContain(".plans/.archive/");
   });
 

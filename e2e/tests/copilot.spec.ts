@@ -89,7 +89,7 @@ test("empty state shows suggestions and the prompt input is enabled", async ({ p
 
   // Empty state heading + suggestions visible.
   await expect(page.getByRole("heading", { name: "What are we building?" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "List my in-progress tickets" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "List my in-progress tasks" })).toBeVisible();
   await expect(page.getByRole("button", { name: "What should I focus on next?" })).toBeVisible();
 
   // Status row says Ready and the textarea is enabled.

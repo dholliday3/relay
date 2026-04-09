@@ -9,11 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TicketsRouteImport } from './routes/tasks'
+import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as PlansRouteImport } from './routes/plans'
 import { Route as IndexRouteImport } from './routes/index'
 
-const TicketsRoute = TicketsRouteImport.update({
+const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
@@ -32,18 +32,18 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/plans': typeof PlansRoute
-  '/tasks': typeof TicketsRoute
+  '/tasks': typeof TasksRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/plans': typeof PlansRoute
-  '/tasks': typeof TicketsRoute
+  '/tasks': typeof TasksRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/plans': typeof PlansRoute
-  '/tasks': typeof TicketsRoute
+  '/tasks': typeof TasksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -56,7 +56,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PlansRoute: typeof PlansRoute
-  TicketsRoute: typeof TicketsRoute
+  TasksRoute: typeof TasksRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,7 +65,7 @@ declare module '@tanstack/react-router' {
       id: '/tasks'
       path: '/tasks'
       fullPath: '/tasks'
-      preLoaderRoute: typeof TicketsRouteImport
+      preLoaderRoute: typeof TasksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plans': {
@@ -88,7 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PlansRoute: PlansRoute,
-  TicketsRoute: TicketsRoute,
+  TasksRoute: TasksRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

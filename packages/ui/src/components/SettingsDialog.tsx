@@ -67,8 +67,8 @@ export function SettingsDialog({
               placeholder="e.g. TASK, ART"
             />
             <span className="text-[11px] text-muted-foreground">
-            New tasks will be created as {prefix || "TASK"}-001, {prefix || "TASK"}-002, etc.
-          </span>
+              New tasks will be created as {prefix || "TASK"}-001, {prefix || "TASK"}-002, etc.
+            </span>
           </div>
 
           <div className="flex flex-col gap-1.5">

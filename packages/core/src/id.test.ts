@@ -6,7 +6,7 @@ import { slugify, formatId, formatFilename, nextId } from "./id.js";
 
 describe("slugify", () => {
   test("lowercases and replaces spaces with hyphens", () => {
-    expect(slugify("Add Ticket Search")).toBe("add-ticket-search");
+    expect(slugify("Add Task Search")).toBe("add-task-search");
   });
 
   test("removes non-alphanumeric characters", () => {
@@ -48,8 +48,8 @@ describe("formatId", () => {
 
 describe("formatFilename", () => {
   test("produces correct filename", () => {
-    expect(formatFilename("TKT-042", "Add Ticket Search")).toBe(
-      "TKT-042-add-ticket-search.md",
+    expect(formatFilename("TKT-042", "Add Task Search")).toBe(
+      "TKT-042-add-task-search.md",
     );
   });
 
@@ -71,14 +71,14 @@ describe("nextId", () => {
 
   test("starts at 1 when no counter file exists", async () => {
     const result = await nextId(dir);
-    expect(result.id).toBe("TKT-001");
+    expect(result.id).toBe("TASK-001");
     expect(result.number).toBe(1);
   });
 
   test("increments counter", async () => {
     await writeFile(join(dir, ".counter"), "5", "utf-8");
     const result = await nextId(dir);
-    expect(result.id).toBe("TKT-006");
+    expect(result.id).toBe("TASK-006");
     expect(result.number).toBe(6);
 
     // Verify counter was written
@@ -95,6 +95,6 @@ describe("nextId", () => {
 
   test("filename function produces correct output", async () => {
     const result = await nextId(dir);
-    expect(result.filename("My Cool Feature")).toBe("TKT-001-my-cool-feature.md");
+    expect(result.filename("My Cool Feature")).toBe("TASK-001-my-cool-feature.md");
   });
 });

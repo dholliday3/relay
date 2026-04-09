@@ -20,7 +20,7 @@ import {
 } from "../db.js";
 
 export interface CopilotManagerConfig {
-  ticketsDir: string;
+  tasksDir: string;
   binPath?: string;
   cwd?: string;
   providers?: CopilotProvider[];
@@ -65,9 +65,9 @@ interface InternalSessionMeta extends CopilotSessionMetadata {
   currentAssistantCreatedAt: number | null;
 }
 
-const SYSTEM_PROMPT = `You are the Ticketbook copilot — an in-app assistant that helps the user plan, write, and edit tickets and plans for their project.
+const SYSTEM_PROMPT = `You are the Ticketbook copilot — an in-app assistant that helps the user plan, write, and edit tasks and plans for their project.
 
-You have access to the user's tickets and plans through the "ticketbook" MCP server. Use those tools when the user asks you to read, create, update, or organize their tickets and plans. Don't ask permission to read — just look. When you make changes, summarize what you did in one short paragraph.
+You have access to the user's tasks and plans through the "ticketbook" MCP server. Use those tools when the user asks you to read, create, update, or organize their tasks and plans. Don't ask permission to read — just look. When you make changes, summarize what you did in one short paragraph.
 
 Be terse. Skip preamble. Lead with the action or the answer.`;
 
@@ -148,7 +148,7 @@ export class CopilotManager {
     let mcpConfig: Record<string, unknown> | undefined;
 
     if (opts.conversationId) {
-      const row = getCopilotConversation(this.config.ticketsDir, opts.conversationId);
+      const row = getCopilotConversation(this.config.tasksDir, opts.conversationId);
       if (!row) {
         throw new Error(`Copilot conversation not found: ${opts.conversationId}`);
       }
@@ -164,7 +164,7 @@ export class CopilotManager {
     if (this.config.binPath) {
       mcpConfig = buildTicketbookMcpConfig({
         binPath: this.config.binPath,
-        ticketsDir: this.config.ticketsDir,
+        tasksDir: this.config.tasksDir,
       });
       const written = await writeMcpConfigFile(mcpConfig);
       mcpConfigPath = written.path;
@@ -273,15 +273,15 @@ export class CopilotManager {
   }
 
   listConversations(providerId?: CopilotProviderId): CopilotConversationRow[] {
-    return listCopilotConversations(this.config.ticketsDir, providerId);
+    return listCopilotConversations(this.config.tasksDir, providerId);
   }
 
   deleteConversation(id: string): void {
-    deleteCopilotConversation(this.config.ticketsDir, id);
+    deleteCopilotConversation(this.config.tasksDir, id);
   }
 
   async loadConversationMessages(id: string): Promise<StoredTranscriptMessage[]> {
-    return listCopilotMessages(this.config.ticketsDir, id).map((row) => ({
+    return listCopilotMessages(this.config.tasksDir, id).map((row) => ({
       id: row.id,
       role: row.role,
       parts: row.parts,
@@ -330,7 +330,7 @@ export class CopilotManager {
     this.flushAssistantMessage(session);
 
     if (session.conversationId) {
-      bumpCopilotConversation(this.config.ticketsDir, session.conversationId);
+      bumpCopilotConversation(this.config.tasksDir, session.conversationId);
     }
 
     for (const listener of this.listeners) {
@@ -342,13 +342,13 @@ export class CopilotManager {
     if (!session.providerConversationId) return;
     if (!session.conversationId) {
       const existing = getCopilotConversationByProviderConversationId(
-        this.config.ticketsDir,
+        this.config.tasksDir,
         session.providerId,
         session.providerConversationId,
       );
       const row =
         existing ??
-        recordCopilotConversation(this.config.ticketsDir, {
+        recordCopilotConversation(this.config.tasksDir, {
           providerId: session.providerId,
           providerConversationId: session.providerConversationId,
           title: session.pendingTitle ?? "Untitled",
@@ -360,7 +360,7 @@ export class CopilotManager {
     if (!session.conversationId) return;
     if (session.stagedMessages.length > 0) {
       for (const message of session.stagedMessages) {
-        appendCopilotMessage(this.config.ticketsDir, {
+        appendCopilotMessage(this.config.tasksDir, {
           id: message.id,
           conversationId: session.conversationId,
           role: message.role,
@@ -385,7 +385,7 @@ export class CopilotManager {
     };
 
     if (session.conversationId) {
-      appendCopilotMessage(this.config.ticketsDir, {
+      appendCopilotMessage(this.config.tasksDir, {
         id: message.id,
         conversationId: session.conversationId,
         role: message.role,
@@ -412,8 +412,8 @@ export class CopilotManager {
 
   private defaultCwd(): string {
     return (
-      this.config.ticketsDir
-        .replace(/\/?\.tickets\/?$/, "")
+      this.config.tasksDir
+        .replace(/\/?\.tasks\/?$/, "")
         .replace(/\/+$/, "") || process.cwd()
     );
   }

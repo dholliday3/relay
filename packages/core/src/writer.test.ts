@@ -4,15 +4,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import matter from "gray-matter";
 import {
-  createTicket,
-  updateTicket,
-  deleteTicket,
-  restoreTicket,
+  createTask,
+  updateTask,
+  deleteTask,
+  restoreTask,
   toggleSubtask,
   addSubtask,
 } from "./writer.js";
 
-describe("createTicket", () => {
+describe("createTask", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -24,33 +24,33 @@ describe("createTicket", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("creates a ticket file with correct frontmatter", async () => {
-    const ticket = await createTicket(dir, {
-      title: "My First Ticket",
+  test("creates a task file with correct frontmatter", async () => {
+    const task = await createTask(dir, {
+      title: "My First Task",
       status: "open",
     });
 
-    expect(ticket.id).toBe("TKT-001");
-    expect(ticket.title).toBe("My First Ticket");
-    expect(ticket.status).toBe("open");
-    expect(ticket.created).toBeInstanceOf(Date);
-    expect(ticket.updated).toBeInstanceOf(Date);
+    expect(task.id).toBe("TASK-001");
+    expect(task.title).toBe("My First Task");
+    expect(task.status).toBe("open");
+    expect(task.created).toBeInstanceOf(Date);
+    expect(task.updated).toBeInstanceOf(Date);
 
     // Verify file exists
     const files = await readdir(dir);
     const mdFile = files.find((f) => f.endsWith(".md"));
-    expect(mdFile).toBe("TKT-001-my-first-ticket.md");
+    expect(mdFile).toBe("TASK-001-my-first-task.md");
 
     // Verify frontmatter
     const raw = await readFile(join(dir, mdFile!), "utf-8");
     const { data } = matter(raw);
-    expect(data.id).toBe("TKT-001");
-    expect(data.title).toBe("My First Ticket");
+    expect(data.id).toBe("TASK-001");
+    expect(data.title).toBe("My First Task");
     expect(data.status).toBe("open");
   });
 
   test("omits optional fields when not set", async () => {
-    await createTicket(dir, { title: "Basic Ticket" });
+    await createTask(dir, { title: "Basic Task" });
 
     const files = await readdir(dir);
     const mdFile = files.find((f) => f.endsWith(".md"))!;
@@ -66,30 +66,30 @@ describe("createTicket", () => {
   });
 
   test("normalizes tags on write", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Tagged",
       tags: ["  Bug  ", "BUG", "feature"],
     });
-    expect(ticket.tags).toEqual(["bug", "feature"]);
+    expect(task.tags).toEqual(["bug", "feature"]);
   });
 
   test("includes body content", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "With Body",
       body: "Some description here",
     });
-    expect(ticket.body).toBe("Some description here");
+    expect(task.body).toBe("Some description here");
   });
 
-  test("increments counter for each ticket", async () => {
-    const t1 = await createTicket(dir, { title: "First" });
-    const t2 = await createTicket(dir, { title: "Second" });
-    expect(t1.id).toBe("TKT-001");
-    expect(t2.id).toBe("TKT-002");
+  test("increments counter for each task", async () => {
+    const t1 = await createTask(dir, { title: "First" });
+    const t2 = await createTask(dir, { title: "Second" });
+    expect(t1.id).toBe("TASK-001");
+    expect(t2.id).toBe("TASK-002");
   });
 });
 
-describe("updateTicket", () => {
+describe("updateTask", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -102,8 +102,8 @@ describe("updateTicket", () => {
   });
 
   test("updates frontmatter fields", async () => {
-    const ticket = await createTicket(dir, { title: "Original" });
-    const updated = await updateTicket(dir, ticket.id, {
+    const task = await createTask(dir, { title: "Original" });
+    const updated = await updateTask(dir, task.id, {
       status: "in-progress",
       priority: "high",
     });
@@ -111,17 +111,17 @@ describe("updateTicket", () => {
     expect(updated.status).toBe("in-progress");
     expect(updated.priority).toBe("high");
     expect(updated.updated.getTime()).toBeGreaterThanOrEqual(
-      ticket.updated.getTime(),
+      task.updated.getTime(),
     );
   });
 
   test("clears optional fields when set to null", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "WithPriority",
       priority: "high",
       project: "myproject",
     });
-    const updated = await updateTicket(dir, ticket.id, {
+    const updated = await updateTask(dir, task.id, {
       priority: null,
       project: null,
     });
@@ -136,24 +136,24 @@ describe("updateTicket", () => {
   });
 
   test("updates body content", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Body Test",
       body: "Original body",
     });
-    const updated = await updateTicket(dir, ticket.id, {
+    const updated = await updateTask(dir, task.id, {
       body: "Updated body",
     });
     expect(updated.body).toBe("Updated body");
   });
 
-  test("throws for non-existent ticket", async () => {
-    expect(updateTicket(dir, "TKT-999", { title: "Nope" })).rejects.toThrow(
-      "Ticket not found",
+  test("throws for non-existent task", async () => {
+    expect(updateTask(dir, "TKT-999", { title: "Nope" })).rejects.toThrow(
+      "Task not found",
     );
   });
 });
 
-describe("deleteTicket", () => {
+describe("deleteTask", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -165,9 +165,9 @@ describe("deleteTicket", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("archives ticket by default", async () => {
-    const ticket = await createTicket(dir, { title: "To Archive" });
-    await deleteTicket(dir, ticket.id);
+  test("archives task by default", async () => {
+    const task = await createTask(dir, { title: "To Archive" });
+    await deleteTask(dir, task.id);
 
     // Main directory should not have the file
     const mainFiles = await readdir(dir);
@@ -184,15 +184,15 @@ describe("deleteTicket", () => {
       "prefix: TKT\ndeleteMode: hard\n",
       "utf-8",
     );
-    const ticket = await createTicket(dir, { title: "To Delete" });
-    await deleteTicket(dir, ticket.id);
+    const task = await createTask(dir, { title: "To Delete" });
+    await deleteTask(dir, task.id);
 
     const files = await readdir(dir);
     expect(files.filter((f) => f.endsWith(".md"))).toHaveLength(0);
   });
 });
 
-describe("restoreTicket", () => {
+describe("restoreTask", () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -204,20 +204,20 @@ describe("restoreTicket", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("restores an archived ticket", async () => {
-    const ticket = await createTicket(dir, { title: "Archived" });
-    await deleteTicket(dir, ticket.id);
+  test("restores an archived task", async () => {
+    const task = await createTask(dir, { title: "Archived" });
+    await deleteTask(dir, task.id);
 
-    const restored = await restoreTicket(dir, ticket.id);
-    expect(restored.id).toBe(ticket.id);
+    const restored = await restoreTask(dir, task.id);
+    expect(restored.id).toBe(task.id);
     expect(restored.title).toBe("Archived");
 
     const mainFiles = await readdir(dir);
     expect(mainFiles.filter((f) => f.endsWith(".md"))).toHaveLength(1);
   });
 
-  test("throws when ticket is not in archive", () => {
-    expect(restoreTicket(dir, "TKT-999")).rejects.toThrow("not found");
+  test("throws when task is not in archive", () => {
+    expect(restoreTask(dir, "TKT-999")).rejects.toThrow("not found");
   });
 });
 
@@ -234,33 +234,33 @@ describe("toggleSubtask", () => {
   });
 
   test("toggles a checkbox from unchecked to checked", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Tasks",
       body: "## Tasks\n\n- [ ] First task\n- [ ] Second task",
     });
 
-    const updated = await toggleSubtask(dir, ticket.id, 0);
+    const updated = await toggleSubtask(dir, task.id, 0);
     expect(updated.body).toContain("- [x] First task");
     expect(updated.body).toContain("- [ ] Second task");
   });
 
   test("toggles a checkbox from checked to unchecked", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Tasks",
       body: "- [x] Done task",
     });
 
-    const updated = await toggleSubtask(dir, ticket.id, 0);
+    const updated = await toggleSubtask(dir, task.id, 0);
     expect(updated.body).toContain("- [ ] Done task");
   });
 
   test("throws for invalid index", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Tasks",
       body: "- [ ] Only one",
     });
 
-    expect(toggleSubtask(dir, ticket.id, 5)).rejects.toThrow("not found");
+    expect(toggleSubtask(dir, task.id, 5)).rejects.toThrow("not found");
   });
 });
 
@@ -277,23 +277,23 @@ describe("addSubtask", () => {
   });
 
   test("creates Tasks section if missing", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "No Tasks",
       body: "Some description",
     });
 
-    const updated = await addSubtask(dir, ticket.id, "New task");
+    const updated = await addSubtask(dir, task.id, "New task");
     expect(updated.body).toContain("## Tasks");
     expect(updated.body).toContain("- [ ] New task");
   });
 
   test("appends to existing Tasks section", async () => {
-    const ticket = await createTicket(dir, {
+    const task = await createTask(dir, {
       title: "Has Tasks",
       body: "## Tasks\n\n- [ ] Existing task",
     });
 
-    const updated = await addSubtask(dir, ticket.id, "Another task");
+    const updated = await addSubtask(dir, task.id, "Another task");
     expect(updated.body).toContain("- [ ] Existing task");
     expect(updated.body).toContain("- [ ] Another task");
   });

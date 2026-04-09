@@ -82,9 +82,9 @@ export function PlanList({ plans, activePlanId, onSelect }: PlanListProps) {
                       </div>
                       <div className="ticket-row-meta">
                         <span className="ticket-id">{plan.id}</span>
-                        {plan.tickets && plan.tickets.length > 0 && (
+                        {plan.tasks && plan.tasks.length > 0 && (
                           <span className="tag-chip">
-                            {plan.tickets.length} ticket{plan.tickets.length !== 1 ? "s" : ""}
+                            {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}
                           </span>
                         )}
                         {plan.tags?.map((tag) => (

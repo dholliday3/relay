@@ -171,8 +171,8 @@ export function listCopilotConversations(
 ): CopilotConversationRow[] {
   const d = getDb(dataDir);
   const sql = providerId
-    ? "SELECT id, provider_id, provider_conversation_id, title, created_at, updated_at, message_count FROM copilot_conversations WHERE provider_id = ? ORDER BY updated_at DESC"
-    : "SELECT id, provider_id, provider_conversation_id, title, created_at, updated_at, message_count FROM copilot_conversations ORDER BY updated_at DESC";
+    ? "SELECT id, provider_id, provider_conversation_id, title, created_at, updated_at, message_count FROM copilot_conversations WHERE provider_id = ? ORDER BY updated_at DESC, rowid DESC"
+    : "SELECT id, provider_id, provider_conversation_id, title, created_at, updated_at, message_count FROM copilot_conversations ORDER BY updated_at DESC, rowid DESC";
   return (providerId ? d.query(sql).all(providerId) : d.query(sql).all()) as CopilotConversationRow[];
 }
 

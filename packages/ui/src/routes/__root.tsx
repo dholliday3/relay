@@ -12,7 +12,7 @@ import {
 import { AppProvider, useAppContext } from "../context/AppContext";
 import type { ViewMode } from "../context/AppContext";
 import { FilterChip } from "../components/FilterChip";
-import { CreateTicketModal } from "../components/CreateTicketModal";
+import { CreateTaskModal } from "../components/CreateTaskModal";
 import { CreatePlanModal } from "../components/CreatePlanModal";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
@@ -33,8 +33,8 @@ import {
 const CopilotPanel = lazy(() =>
   import("../components/CopilotPanel").then((m) => ({ default: m.CopilotPanel })),
 );
-import { patchTicket } from "../api";
-import type { Status, Priority, Ticket } from "../types";
+import { patchTask } from "../api";
+import type { Status, Priority, Task } from "../types";
 import "../App.css";
 
 export const Route = createRootRoute({
@@ -54,16 +54,16 @@ function RootLayoutInner() {
   const navigate = useNavigate();
 
   // Detect current route
-  const ticketsMatch = useMatch({ from: "/tasks", shouldThrow: false });
+  const tasksMatch = useMatch({ from: "/tasks", shouldThrow: false });
   const plansMatch = useMatch({ from: "/plans", shouldThrow: false });
   const indexMatch = useMatch({ from: "/", shouldThrow: false });
 
-  const isHome = indexMatch != null && !ticketsMatch && !plansMatch;
-  const isTickets = ticketsMatch != null;
+  const isHome = indexMatch != null && !tasksMatch && !plansMatch;
+  const isTasks = tasksMatch != null;
   const isPlans = plansMatch != null;
 
   // Read search params from matched routes
-  const ticketsSearch = (ticketsMatch as any)?.search as
+  const tasksSearch = (tasksMatch as any)?.search as
     | { view?: string; status?: string[]; project?: string[]; epic?: string[]; sprint?: string[]; q?: string }
     | undefined;
   const plansSearch = (plansMatch as any)?.search as
@@ -71,14 +71,14 @@ function RootLayoutInner() {
     | undefined;
 
   const currentView: ViewMode =
-    isTickets
-      ? (ticketsSearch?.view === "board" ? "board" : "list")
+    isTasks
+      ? (tasksSearch?.view === "board" ? "board" : "list")
       : isPlans
         ? (plansSearch?.view === "board" ? "board" : "list")
         : "list";
 
   // Search input with debounce
-  const currentQ = isTickets ? (ticketsSearch?.q ?? "") : isPlans ? (plansSearch?.q ?? "") : "";
+  const currentQ = isTasks ? (tasksSearch?.q ?? "") : isPlans ? (plansSearch?.q ?? "") : "";
   const [searchInput, setSearchInput] = useState(currentQ);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,7 +92,7 @@ function RootLayoutInner() {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       if (searchInput !== currentQ) {
-        if (isTickets) {
+        if (isTasks) {
           navigate({ to: "/tasks", search: (prev: any) => ({ ...prev, q: searchInput || undefined }) });
         } else if (isPlans) {
           navigate({ to: "/plans", search: (prev: any) => ({ ...prev, q: searchInput || undefined }) });
@@ -105,11 +105,11 @@ function RootLayoutInner() {
   }, [searchInput]);
 
   // Filter state derived from search params
-  const ticketFilters = {
-    status: ticketsSearch?.status ?? [],
-    project: ticketsSearch?.project ?? [],
-    epic: ticketsSearch?.epic ?? [],
-    sprint: ticketsSearch?.sprint ?? [],
+  const taskFilters = {
+    status: tasksSearch?.status ?? [],
+    project: tasksSearch?.project ?? [],
+    epic: tasksSearch?.epic ?? [],
+    sprint: tasksSearch?.sprint ?? [],
   };
   const planFilterState = {
     status: plansSearch?.status ?? [],
@@ -117,27 +117,27 @@ function RootLayoutInner() {
   };
 
   const hasActiveFilters =
-    isTickets
-      ? (ticketFilters.status.length > 0 || ticketFilters.project.length > 0 || ticketFilters.epic.length > 0 || ticketFilters.sprint.length > 0)
+    isTasks
+      ? (taskFilters.status.length > 0 || taskFilters.project.length > 0 || taskFilters.epic.length > 0 || taskFilters.sprint.length > 0)
       : isPlans
         ? (planFilterState.status.length > 0 || planFilterState.project.length > 0)
         : false;
 
   // Filtered counts (for result badge)
-  const filteredTicketCount = useMemo(() => {
-    if (!isTickets) return 0;
-    return ctx.tickets.filter((t) => {
+  const filteredTaskCount = useMemo(() => {
+    if (!isTasks) return 0;
+    return ctx.tasks.filter((t) => {
       if (currentQ) {
         const q = currentQ.toLowerCase();
         if (!t.title.toLowerCase().includes(q) && !t.body.toLowerCase().includes(q)) return false;
       }
-      if (ticketFilters.status.length > 0 && !ticketFilters.status.includes(t.status)) return false;
-      if (ticketFilters.project.length > 0 && (!t.project || !ticketFilters.project.includes(t.project))) return false;
-      if (ticketFilters.epic.length > 0 && (!t.epic || !ticketFilters.epic.includes(t.epic))) return false;
-      if (ticketFilters.sprint.length > 0 && (!t.sprint || !ticketFilters.sprint.includes(t.sprint))) return false;
+      if (taskFilters.status.length > 0 && !taskFilters.status.includes(t.status)) return false;
+      if (taskFilters.project.length > 0 && (!t.project || !taskFilters.project.includes(t.project))) return false;
+      if (taskFilters.epic.length > 0 && (!t.epic || !taskFilters.epic.includes(t.epic))) return false;
+      if (taskFilters.sprint.length > 0 && (!t.sprint || !taskFilters.sprint.includes(t.sprint))) return false;
       return true;
     }).length;
-  }, [isTickets, ctx.tickets, currentQ, ticketFilters]);
+  }, [isTasks, ctx.tasks, currentQ, taskFilters]);
 
   const filteredPlanCount = useMemo(() => {
     if (!isPlans) return 0;
@@ -153,7 +153,7 @@ function RootLayoutInner() {
   }, [isPlans, ctx.plans, currentQ, planFilterState]);
 
   // Filter toggle helpers
-  const toggleTicketFilter = useCallback(
+  const toggleTaskFilter = useCallback(
     (key: string, value: string) => {
       navigate({
         to: "/tasks",
@@ -184,35 +184,35 @@ function RootLayoutInner() {
   // View mode change
   const handleViewModeChange = useCallback(
     (mode: ViewMode) => {
-      if (isTickets) {
+      if (isTasks) {
         navigate({ to: "/tasks", search: (prev: any) => ({ ...prev, view: mode === "list" ? undefined : mode }) });
       } else if (isPlans) {
         navigate({ to: "/plans", search: (prev: any) => ({ ...prev, view: mode === "list" ? undefined : mode }) });
       }
     },
-    [navigate, isTickets, isPlans],
+    [navigate, isTasks, isPlans],
   );
 
-  // Flat ticket list for keyboard nav (only in tickets route)
-  const flatTicketList = useMemo(() => {
-    if (!isTickets) return [];
+  // Flat task list for keyboard nav (only in tasks route)
+  const flatTaskList = useMemo(() => {
+    if (!isTasks) return [];
     const statusOrder: Status[] =
       currentView === "board"
         ? ["draft", "backlog", "open", "in-progress", "done", "cancelled"]
         : ["in-progress", "open", "backlog", "draft", "done", "cancelled"];
     const priorityRank: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-    const filtered = ctx.tickets.filter((t) => {
+    const filtered = ctx.tasks.filter((t) => {
       if (currentQ) {
         const q = currentQ.toLowerCase();
         if (!t.title.toLowerCase().includes(q) && !t.body.toLowerCase().includes(q)) return false;
       }
-      if (ticketFilters.status.length > 0 && !ticketFilters.status.includes(t.status)) return false;
-      if (ticketFilters.project.length > 0 && (!t.project || !ticketFilters.project.includes(t.project))) return false;
-      if (ticketFilters.epic.length > 0 && (!t.epic || !ticketFilters.epic.includes(t.epic))) return false;
-      if (ticketFilters.sprint.length > 0 && (!t.sprint || !ticketFilters.sprint.includes(t.sprint))) return false;
+      if (taskFilters.status.length > 0 && !taskFilters.status.includes(t.status)) return false;
+      if (taskFilters.project.length > 0 && (!t.project || !taskFilters.project.includes(t.project))) return false;
+      if (taskFilters.epic.length > 0 && (!t.epic || !taskFilters.epic.includes(t.epic))) return false;
+      if (taskFilters.sprint.length > 0 && (!t.sprint || !taskFilters.sprint.includes(t.sprint))) return false;
       return true;
     });
-    const result: Ticket[] = [];
+    const result: Task[] = [];
     for (const status of statusOrder) {
       const group = filtered.filter((t) => t.status === status);
       const sorted = [...group].sort((a, b) => {
@@ -229,7 +229,7 @@ function RootLayoutInner() {
       result.push(...sorted);
     }
     return result;
-  }, [isTickets, ctx.tickets, currentView, currentQ, ticketFilters]);
+  }, [isTasks, ctx.tasks, currentView, currentQ, taskFilters]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -281,7 +281,7 @@ function RootLayoutInner() {
           (document.activeElement as HTMLElement)?.blur();
           return;
         }
-        ctx.setActiveTicketId(null);
+        ctx.setActiveTaskId(null);
         return;
       }
 
@@ -296,25 +296,25 @@ function RootLayoutInner() {
         } else {
           ctx.setCreateDefaultStatus("open");
           ctx.setIsCreating(true);
-          ctx.setActiveTicketId(null);
+          ctx.setActiveTaskId(null);
         }
         return;
       }
 
-      // Up/Down: navigate ticket list (only on tickets route)
-      if (isTickets && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      // Up/Down: navigate task list (only on tasks route)
+      if (isTasks && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         e.preventDefault();
-        if (flatTicketList.length === 0) return;
-        const currentIndex = ctx.activeTicketId
-          ? flatTicketList.findIndex((t) => t.id === ctx.activeTicketId)
+        if (flatTaskList.length === 0) return;
+        const currentIndex = ctx.activeTaskId
+          ? flatTaskList.findIndex((t) => t.id === ctx.activeTaskId)
           : -1;
         let nextIndex: number;
         if (e.key === "ArrowDown") {
-          nextIndex = currentIndex < flatTicketList.length - 1 ? currentIndex + 1 : currentIndex;
+          nextIndex = currentIndex < flatTaskList.length - 1 ? currentIndex + 1 : currentIndex;
         } else {
           nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
         }
-        ctx.setActiveTicketId(flatTicketList[nextIndex].id);
+        ctx.setActiveTaskId(flatTaskList[nextIndex].id);
         ctx.setIsCreating(false);
         setTimeout(() => {
           document
@@ -324,8 +324,8 @@ function RootLayoutInner() {
         return;
       }
 
-      // Enter: open selected ticket
-      if (isTickets && e.key === "Enter" && ctx.activeTicketId) {
+      // Enter: open selected task
+      if (isTasks && e.key === "Enter" && ctx.activeTaskId) {
         e.preventDefault();
         setTimeout(() => {
           const editor = document.querySelector(".tiptap-editor .ProseMirror") as HTMLElement;
@@ -334,8 +334,8 @@ function RootLayoutInner() {
         return;
       }
 
-      // 1-4: set priority when a ticket is selected
-      if (isTickets && ctx.activeTicketId && e.key >= "1" && e.key <= "4") {
+      // 1-4: set priority when a task is selected
+      if (isTasks && ctx.activeTaskId && e.key >= "1" && e.key <= "4") {
         const priorityMap: Record<string, Priority> = {
           "1": "urgent",
           "2": "high",
@@ -344,8 +344,8 @@ function RootLayoutInner() {
         };
         const priority = priorityMap[e.key];
         if (priority) {
-          patchTicket(ctx.activeTicketId, { priority })
-            .then(() => ctx.loadTickets())
+          patchTask(ctx.activeTaskId, { priority })
+            .then(() => ctx.loadTasks())
             .catch(console.error);
         }
         return;
@@ -355,18 +355,18 @@ function RootLayoutInner() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    ctx.activeTicketId,
+    ctx.activeTaskId,
     ctx.isCreating,
     ctx.confirmDelete,
-    flatTicketList,
+    flatTaskList,
     handleViewModeChange,
-    isTickets,
+    isTasks,
     isPlans,
     ctx,
   ]);
 
   // Determine space string for the + button / status bar
-  const space = isPlans ? "plans" : "tickets";
+  const space = isPlans ? "plans" : "tasks";
 
   return (
     <div className={`app-layout ${currentView === "board" && !isHome ? "app-layout-board" : ""}`}>
@@ -383,10 +383,10 @@ function RootLayoutInner() {
         </Button>
         <ButtonGroup aria-label="Space">
           <Button
-            variant={isTickets ? "default" : "outline"}
+            variant={isTasks ? "default" : "outline"}
             onClick={() => navigate({ to: "/tasks", search: { view: "list", status: [], project: [], epic: [], sprint: [] } })}
             role="radio"
-            aria-checked={isTickets}
+            aria-checked={isTasks}
             aria-label="Tasks"
           >
             Tasks
@@ -427,31 +427,31 @@ function RootLayoutInner() {
         )}
         {!isHome && (
           <div className="order-10 flex w-full shrink-0 items-center gap-1 overflow-x-auto md:order-none md:w-auto">
-            {isTickets ? (
+            {isTasks ? (
               <>
                 <FilterChip
                   label="Status"
                   options={["draft", "backlog", "open", "in-progress", "done", "cancelled"]}
-                  selected={ticketFilters.status}
-                  onToggle={(v) => toggleTicketFilter("status", v)}
+                  selected={taskFilters.status}
+                  onToggle={(v) => toggleTaskFilter("status", v)}
                 />
                 <FilterChip
                   label="Project"
                   options={ctx.meta.projects}
-                  selected={ticketFilters.project}
-                  onToggle={(v) => toggleTicketFilter("project", v)}
+                  selected={taskFilters.project}
+                  onToggle={(v) => toggleTaskFilter("project", v)}
                 />
                 <FilterChip
                   label="Epic"
                   options={ctx.meta.epics}
-                  selected={ticketFilters.epic}
-                  onToggle={(v) => toggleTicketFilter("epic", v)}
+                  selected={taskFilters.epic}
+                  onToggle={(v) => toggleTaskFilter("epic", v)}
                 />
                 <FilterChip
                   label="Sprint"
                   options={ctx.meta.sprints}
-                  selected={ticketFilters.sprint}
-                  onToggle={(v) => toggleTicketFilter("sprint", v)}
+                  selected={taskFilters.sprint}
+                  onToggle={(v) => toggleTaskFilter("sprint", v)}
                 />
               </>
             ) : isPlans ? (
@@ -477,9 +477,9 @@ function RootLayoutInner() {
           <Button
             variant="outline"
             size="icon"
-            onClick={isPlans ? ctx.handleNewPlan : ctx.handleNewTicket}
-            title={isPlans ? "New plan (C)" : "New ticket (C)"}
-            aria-label={isPlans ? "New plan" : "New ticket"}
+            onClick={isPlans ? ctx.handleNewPlan : ctx.handleNewTask}
+            title={isPlans ? "New plan (C)" : "New task (C)"}
+            aria-label={isPlans ? "New plan" : "New task"}
           >
             <PlusIcon />
           </Button>
@@ -499,8 +499,8 @@ function RootLayoutInner() {
             <InputGroupAddon align="inline-end">
               {(currentQ || hasActiveFilters) && (
                 <InputGroupText className="text-[11px] tabular-nums">
-                  {isTickets
-                    ? `${filteredTicketCount} result${filteredTicketCount !== 1 ? "s" : ""}`
+                  {isTasks
+                    ? `${filteredTaskCount} result${filteredTaskCount !== 1 ? "s" : ""}`
                     : `${filteredPlanCount} result${filteredPlanCount !== 1 ? "s" : ""}`}
                 </InputGroupText>
               )}
@@ -598,24 +598,24 @@ function RootLayoutInner() {
         ) : (
           <>
             <StatusBarItem tone="muted">
-              {ctx.tickets.length} ticket{ctx.tickets.length !== 1 ? "s" : ""}
+              {ctx.tasks.length} task{ctx.tasks.length !== 1 ? "s" : ""}
             </StatusBarItem>
             <StatusBarItem tone="primary">
-              {ctx.tickets.filter((t) => t.status === "open").length} open
+              {ctx.tasks.filter((t) => t.status === "open").length} open
             </StatusBarItem>
             <StatusBarItem tone="warning">
-              {ctx.tickets.filter((t) => t.status === "in-progress").length} in progress
+              {ctx.tasks.filter((t) => t.status === "in-progress").length} in progress
             </StatusBarItem>
           </>
         )}
       </footer>
 
       {/* Global modals */}
-      {ctx.isCreating && isTickets && (
-        <CreateTicketModal
+      {ctx.isCreating && isTasks && (
+        <CreateTaskModal
           meta={ctx.meta}
           defaultStatus={ctx.createDefaultStatus}
-          onCreate={ctx.handleCreateTicket}
+          onCreate={ctx.handleCreateTask}
           onCancel={ctx.handleCancelCreate}
         />
       )}

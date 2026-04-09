@@ -6,20 +6,20 @@ import { startServer, type ServerHandle } from "./index.js";
 
 describe("REST API", () => {
   let dir: string;
-  let ticketsDir: string;
+  let tasksDir: string;
   let plansDir: string;
   let handle: ServerHandle;
   let base: string;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-api-"));
-    ticketsDir = join(dir, ".tickets");
+    tasksDir = join(dir, ".tasks");
     plansDir = join(dir, ".plans");
-    await mkdir(join(ticketsDir, ".archive"), { recursive: true });
+    await mkdir(join(tasksDir, ".archive"), { recursive: true });
     await mkdir(plansDir, { recursive: true });
-    await writeFile(join(ticketsDir, ".counter"), "0", "utf-8");
-    await writeFile(join(ticketsDir, ".config.yaml"), "prefix: TASK\ndeleteMode: archive\n", "utf-8");
-    handle = startServer({ ticketsDir, plansDir, port: 0 });
+    await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
+    await writeFile(join(tasksDir, ".config.yaml"), "prefix: TASK\ndeleteMode: archive\n", "utf-8");
+    handle = startServer({ tasksDir, plansDir, port: 0 });
     base = `http://localhost:${handle.port}`;
   });
 
@@ -35,20 +35,20 @@ describe("REST API", () => {
     expect(data).toEqual([]);
   });
 
-  test("POST /api/tasks creates a ticket", async () => {
+  test("POST /api/tasks creates a task", async () => {
     const res = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Test ticket" }),
+      body: JSON.stringify({ title: "Test task" }),
     });
     expect(res.status).toBe(201);
-    const ticket = await res.json();
-    expect(ticket.id).toBe("TASK-001");
-    expect(ticket.title).toBe("Test ticket");
-    expect(ticket.status).toBe("open");
+    const task = await res.json();
+    expect(task.id).toBe("TASK-001");
+    expect(task.title).toBe("Test task");
+    expect(task.status).toBe("open");
   });
 
-  test("GET /api/tasks/:id returns a ticket", async () => {
+  test("GET /api/tasks/:id returns a task", async () => {
     // Create first
     await fetch(`${base}/api/tasks`, {
       method: "POST",
@@ -58,8 +58,8 @@ describe("REST API", () => {
 
     const res = await fetch(`${base}/api/tasks/TASK-001`);
     expect(res.status).toBe(200);
-    const ticket = await res.json();
-    expect(ticket.title).toBe("Findable");
+    const task = await res.json();
+    expect(task.title).toBe("Findable");
   });
 
   test("GET /api/tasks/:id returns 404 for missing", async () => {
@@ -80,9 +80,9 @@ describe("REST API", () => {
       body: JSON.stringify({ status: "in-progress", priority: "high" }),
     });
     expect(res.status).toBe(200);
-    const ticket = await res.json();
-    expect(ticket.status).toBe("in-progress");
-    expect(ticket.priority).toBe("high");
+    const task = await res.json();
+    expect(task.status).toBe("in-progress");
+    expect(task.priority).toBe("high");
   });
 
   test("PATCH /api/tasks/:id/body updates body", async () => {
@@ -98,11 +98,11 @@ describe("REST API", () => {
       body: JSON.stringify({ body: "New content" }),
     });
     expect(res.status).toBe(200);
-    const ticket = await res.json();
-    expect(ticket.body).toBe("New content");
+    const task = await res.json();
+    expect(task.body).toBe("New content");
   });
 
-  test("DELETE /api/tasks/:id archives a ticket", async () => {
+  test("DELETE /api/tasks/:id archives a task", async () => {
     await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,11 +116,11 @@ describe("REST API", () => {
 
     // Verify it's gone from the list
     const listRes = await fetch(`${base}/api/tasks`);
-    const tickets = await listRes.json();
-    expect(tickets).toHaveLength(0);
+    const tasks = await listRes.json();
+    expect(tasks).toHaveLength(0);
   });
 
-  test("POST /api/tasks/:id/restore restores a ticket", async () => {
+  test("POST /api/tasks/:id/restore restores a task", async () => {
     await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -132,8 +132,8 @@ describe("REST API", () => {
       method: "POST",
     });
     expect(res.status).toBe(200);
-    const ticket = await res.json();
-    expect(ticket.title).toBe("Restorable");
+    const task = await res.json();
+    expect(task.title).toBe("Restorable");
   });
 
   test("GET /api/meta returns aggregated metadata", async () => {
