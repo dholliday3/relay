@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckIcon,
   ChevronDownIcon,
+  CopyIcon,
   PlusIcon,
   SparkleIcon,
   Trash2Icon,
@@ -14,6 +16,11 @@ import {
   type CopilotPromptEditorRef,
 } from "./copilot/CopilotPromptEditor";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Conversation,
   ConversationContent,
   ConversationEmptyState,
@@ -21,6 +28,8 @@ import {
 } from "@/components/ai-elements/conversation";
 import {
   Message,
+  MessageAction,
+  MessageActions,
   MessageBranch,
   MessageBranchContent,
   MessageContent,
@@ -318,29 +327,37 @@ function CopilotPanelInner({ onClose }: CopilotPanelProps) {
                   icon={<SparkleIcon className="size-6" />}
                 />
               ) : (
-                session.messages.map((msg) => (
-                  <MessageBranch defaultBranch={0} key={msg.id}>
-                    <MessageBranchContent>
-                      <Message
-                        from={msg.role}
-                        data-testid="copilot-message"
-                        data-role={msg.role}
-                      >
-                        {msg.parts.map((part, i) => (
-                          <CopilotPartView
-                            key={`${msg.id}-${i}`}
-                            part={part}
-                            isStreaming={
-                              session.isStreaming &&
-                              msg.role === "assistant" &&
-                              i === msg.parts.length - 1
-                            }
-                          />
-                        ))}
-                      </Message>
-                    </MessageBranchContent>
-                  </MessageBranch>
-                ))
+                session.messages.map((msg, msgIndex) => {
+                  const isLastMessage = msgIndex === session.messages.length - 1;
+                  const isStillStreaming =
+                    session.isStreaming && isLastMessage && msg.role === "assistant";
+                  return (
+                    <MessageBranch defaultBranch={0} key={msg.id}>
+                      <MessageBranchContent>
+                        <Message
+                          from={msg.role}
+                          data-testid="copilot-message"
+                          data-role={msg.role}
+                        >
+                          {msg.parts.map((part, i) => (
+                            <CopilotPartView
+                              key={`${msg.id}-${i}`}
+                              part={part}
+                              isStreaming={
+                                session.isStreaming &&
+                                msg.role === "assistant" &&
+                                i === msg.parts.length - 1
+                              }
+                            />
+                          ))}
+                          {msg.role === "assistant" && !isStillStreaming && (
+                            <CopilotMessageActions message={msg} />
+                          )}
+                        </Message>
+                      </MessageBranchContent>
+                    </MessageBranch>
+                  );
+                })
               )}
             </ConversationContent>
             <ConversationScrollButton />
@@ -496,24 +513,71 @@ function ToolBlock({
     /* not JSON, leave as-is */
   }
   return (
-    <div
+    <Collapsible
       className={cn(
-        "not-prose w-full rounded-md border text-xs",
+        "not-prose group/tool w-full rounded-md border text-xs",
         kind === "use"
           ? "border-border bg-muted/40"
           : "border-border bg-muted/20",
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border px-2.5 py-1.5">
+      <CollapsibleTrigger className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/50">
         <WrenchIcon className="size-3 text-muted-foreground" />
-        <span className="font-medium text-muted-foreground">
+        <span className="flex-1 truncate font-medium text-muted-foreground">
           {kind === "use" ? (name ?? "tool call") : (name ?? "result")}
         </span>
-      </div>
-      <pre className="overflow-x-auto px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/80">
-        {pretty}
-      </pre>
-    </div>
+        <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/tool:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="border-t border-border">
+        <pre className="overflow-x-auto px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/80">
+          {pretty}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/**
+ * Copy + (future) retry actions rendered beneath an assistant message.
+ * Shown on hover via group-hover so the chat stays visually quiet while
+ * reading, and only reveals affordances when the user points at a reply.
+ */
+function CopilotMessageActions({ message }: { message: { parts: CopilotPart[] } }) {
+  const [copied, setCopied] = useState(false);
+
+  const plainText = useMemo(
+    () =>
+      message.parts
+        .filter((p): p is Extract<CopilotPart, { type: "text" }> => p.type === "text")
+        .map((p) => p.content)
+        .join("\n\n")
+        .trim(),
+    [message.parts],
+  );
+
+  // No text to copy (e.g. assistant message is only tool calls) — hide the row.
+  if (!plainText) return null;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(plainText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — silently no-op */
+    }
+  };
+
+  return (
+    <MessageActions className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <MessageAction
+        tooltip={copied ? "Copied!" : "Copy message"}
+        onClick={handleCopy}
+        data-testid="copilot-message-copy"
+      >
+        {copied ? <CheckIcon /> : <CopyIcon />}
+      </MessageAction>
+    </MessageActions>
   );
 }
 
