@@ -1,7 +1,7 @@
 ---
 id: TKTB-054
 title: Terminal session event stream + OSC 133/633 shell integration
-status: open
+status: backlog
 tags:
   - terminal
   - shell-integration
@@ -12,7 +12,7 @@ relatedTo:
   - TKTB-064
   - TKTB-046
 created: '2026-04-06T07:28:38.615Z'
-updated: '2026-04-08T05:18:43.256Z'
+updated: '2026-04-09T12:16:35.253Z'
 ---
 
 ## Context

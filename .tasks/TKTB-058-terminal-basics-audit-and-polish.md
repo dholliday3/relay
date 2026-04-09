@@ -1,12 +1,12 @@
 ---
 id: TKTB-058
 title: Terminal basics audit and polish
-status: open
+status: backlog
 tags:
   - terminal
   - polish
 created: '2026-04-06T07:30:30.314Z'
-updated: '2026-04-06T07:30:30.314Z'
+updated: '2026-04-09T12:16:35.370Z'
 ---
 
 ## Context

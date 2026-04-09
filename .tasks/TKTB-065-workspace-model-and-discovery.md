@@ -1,14 +1,14 @@
 ---
 id: TKTB-065
 title: Workspace model and discovery
-status: open
+status: backlog
 tags:
   - workspace
   - data-model
   - agent-experience
   - v1-foundations
 created: '2026-04-08T05:17:54.830Z'
-updated: '2026-04-08T05:17:54.830Z'
+updated: '2026-04-09T12:16:35.376Z'
 ---
 
 ## Context

@@ -1,14 +1,14 @@
 ---
 id: TKTB-066
 title: Session feed view (grouped by workspace)
-status: open
+status: backlog
 tags:
   - ui
   - workspace
   - agent-experience
   - v1-foundations
 created: '2026-04-08T05:18:14.789Z'
-updated: '2026-04-08T05:18:14.789Z'
+updated: '2026-04-09T12:16:35.379Z'
 ---
 
 ## Context

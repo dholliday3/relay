@@ -1,7 +1,7 @@
 ---
 id: TKTB-055
 title: SessionRecord model tied to tickets
-status: open
+status: backlog
 tags:
   - terminal
   - agent-experience
@@ -14,7 +14,7 @@ relatedTo:
   - TKTB-065
   - TKTB-067
 created: '2026-04-06T07:29:26.491Z'
-updated: '2026-04-08T05:18:44.054Z'
+updated: '2026-04-09T12:16:35.260Z'
 ---
 
 ## Context

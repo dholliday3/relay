@@ -1,7 +1,7 @@
 ---
 id: TKTB-067
 title: Session MCP tools
-status: open
+status: backlog
 tags:
   - mcp
   - agent-experience
@@ -9,7 +9,7 @@ tags:
 relatedTo:
   - TKTB-055
 created: '2026-04-08T05:18:27.871Z'
-updated: '2026-04-08T05:18:27.871Z'
+updated: '2026-04-09T12:16:35.381Z'
 ---
 
 ## Context
