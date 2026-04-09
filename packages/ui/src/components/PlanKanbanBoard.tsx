@@ -2,12 +2,14 @@ import { useState, useEffect, useMemo } from "react";
 import {
   DndContext,
   closestCorners,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
   useDroppable,
+  type CollisionDetection,
   type DragStartEvent,
   type DragOverEvent,
   type DragEndEvent,
@@ -38,6 +40,20 @@ function sortByUpdated(plans: Plan[]): Plan[] {
     (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime(),
   );
 }
+
+// Use pointer-based collision detection so empty columns remain reachable.
+// closestCorners alone routes drags to the nearest item, which (for an empty
+// column) lives in an adjacent column — so the empty column never wins.
+const kanbanCollisionDetection: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) {
+    const itemHit = pointerHits.find(
+      (c) => !String(c.id).startsWith("column-"),
+    );
+    return itemHit ? [itemHit] : pointerHits;
+  }
+  return closestCorners(args);
+};
 
 function buildGroups(plans: Plan[]): Record<PlanStatus, string[]> {
   const grouped: Partial<Record<PlanStatus, Plan[]>> = {};
@@ -310,7 +326,7 @@ export function PlanKanbanBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={kanbanCollisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}

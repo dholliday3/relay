@@ -118,6 +118,7 @@ function PlansRoute() {
               activePlanId={ctx.activePlanId}
               hideBadges={ctx.hideItemBadges}
               onSelect={ctx.handleSelectPlan}
+              onMove={ctx.handlePlanKanbanMove}
             />
           )}
         </aside>

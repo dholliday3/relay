@@ -2,12 +2,14 @@ import { useState, useEffect, useMemo } from "react";
 import {
   DndContext,
   closestCorners,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
   useDroppable,
+  type CollisionDetection,
   type DragStartEvent,
   type DragOverEvent,
   type DragEndEvent,
@@ -64,6 +66,21 @@ function sortWithinGroup(tasks: Task[]): Task[] {
     return new Date(b.updated).getTime() - new Date(a.updated).getTime();
   });
 }
+
+// Use pointer-based collision detection so empty columns remain reachable.
+// closestCorners alone routes drags to the nearest item, which (for an empty
+// column) lives in an adjacent column — so the empty column never wins.
+const kanbanCollisionDetection: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) {
+    // Prefer hitting a sortable card over the containing column when both match.
+    const itemHit = pointerHits.find(
+      (c) => !String(c.id).startsWith("column-"),
+    );
+    return itemHit ? [itemHit] : pointerHits;
+  }
+  return closestCorners(args);
+};
 
 function buildGroups(tasks: Task[]): Record<Status, string[]> {
   const grouped: Partial<Record<Status, Task[]>> = {};
@@ -357,7 +374,7 @@ export function KanbanBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={kanbanCollisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
