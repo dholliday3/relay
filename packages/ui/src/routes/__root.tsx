@@ -7,6 +7,7 @@ import {
   HouseIcon,
   KanbanIcon,
   ListIcon,
+  BookOpenIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   SparkleIcon,
@@ -18,6 +19,7 @@ import type { ViewMode } from "../context/AppContext";
 import { FilterChip } from "../components/FilterChip";
 import { CreateTaskModal } from "../components/CreateTaskModal";
 import { CreatePlanModal } from "../components/CreatePlanModal";
+import { CreateDocModal } from "../components/CreateDocModal";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
 import { TerminalPane } from "../components/TerminalPane";
@@ -65,11 +67,13 @@ function RootLayoutInner() {
   // Detect current route
   const tasksMatch = useMatch({ from: "/tasks", shouldThrow: false });
   const plansMatch = useMatch({ from: "/plans", shouldThrow: false });
+  const docsMatch = useMatch({ from: "/docs", shouldThrow: false });
   const indexMatch = useMatch({ from: "/", shouldThrow: false });
 
-  const isHome = indexMatch != null && !tasksMatch && !plansMatch;
+  const isHome = indexMatch != null && !tasksMatch && !plansMatch && !docsMatch;
   const isTasks = tasksMatch != null;
   const isPlans = plansMatch != null;
+  const isDocs = docsMatch != null;
 
   // Read search params from matched routes
   const tasksSearch = (tasksMatch as any)?.search as
@@ -78,16 +82,27 @@ function RootLayoutInner() {
   const plansSearch = (plansMatch as any)?.search as
     | { view?: string; status?: string[]; project?: string[]; q?: string }
     | undefined;
+  const docsSearch = (docsMatch as any)?.search as
+    | { project?: string[]; tags?: string[]; q?: string }
+    | undefined;
 
   const currentView: ViewMode =
     isTasks
       ? (tasksSearch?.view === "board" ? "board" : "list")
       : isPlans
         ? (plansSearch?.view === "board" ? "board" : "list")
+        : isDocs
+          ? "list"
         : "list";
 
   // Search input with debounce
-  const currentQ = isTasks ? (tasksSearch?.q ?? "") : isPlans ? (plansSearch?.q ?? "") : "";
+  const currentQ = isTasks
+    ? (tasksSearch?.q ?? "")
+    : isPlans
+      ? (plansSearch?.q ?? "")
+      : isDocs
+        ? (docsSearch?.q ?? "")
+        : "";
   const [searchInput, setSearchInput] = useState(currentQ);
   const [showFilters, setShowFilters] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +121,8 @@ function RootLayoutInner() {
           navigate({ to: "/tasks", search: (prev: any) => ({ ...prev, q: searchInput || undefined }) });
         } else if (isPlans) {
           navigate({ to: "/plans", search: (prev: any) => ({ ...prev, q: searchInput || undefined }) });
+        } else if (isDocs) {
+          navigate({ to: "/docs", search: (prev: any) => ({ ...prev, q: searchInput || undefined }) });
         }
       }
     }, 200);
@@ -125,12 +142,18 @@ function RootLayoutInner() {
     status: plansSearch?.status ?? [],
     project: plansSearch?.project ?? [],
   };
+  const docFilterState = {
+    project: docsSearch?.project ?? [],
+    tags: docsSearch?.tags ?? [],
+  };
 
   const hasActiveFilters =
     isTasks
       ? (taskFilters.status.length > 0 || taskFilters.project.length > 0 || taskFilters.epic.length > 0 || taskFilters.sprint.length > 0)
       : isPlans
         ? (planFilterState.status.length > 0 || planFilterState.project.length > 0)
+        : isDocs
+          ? (docFilterState.project.length > 0 || docFilterState.tags.length > 0)
         : false;
 
   // Filtered counts (for result badge)
@@ -162,6 +185,19 @@ function RootLayoutInner() {
     }).length;
   }, [isPlans, ctx.plans, currentQ, planFilterState]);
 
+  const filteredDocCount = useMemo(() => {
+    if (!isDocs) return 0;
+    return ctx.docs.filter((doc) => {
+      if (currentQ) {
+        const q = currentQ.toLowerCase();
+        if (!doc.title.toLowerCase().includes(q) && !doc.body.toLowerCase().includes(q)) return false;
+      }
+      if (docFilterState.project.length > 0 && (!doc.project || !docFilterState.project.includes(doc.project))) return false;
+      if (docFilterState.tags.length > 0 && (!doc.tags || !docFilterState.tags.every((tag) => doc.tags!.includes(tag)))) return false;
+      return true;
+    }).length;
+  }, [isDocs, ctx.docs, currentQ, docFilterState]);
+
   // Filter toggle helpers
   const toggleTaskFilter = useCallback(
     (key: string, value: string) => {
@@ -184,6 +220,22 @@ function RootLayoutInner() {
         search: (prev: any) => {
           const current: string[] = prev[key] ?? [];
           const next = current.includes(value) ? current.filter((v: string) => v !== value) : [...current, value];
+          return { ...prev, [key]: next.length > 0 ? next : undefined };
+        },
+      });
+    },
+    [navigate],
+  );
+
+  const toggleDocFilter = useCallback(
+    (key: string, value: string) => {
+      navigate({
+        to: "/docs",
+        search: (prev: any) => {
+          const current: string[] = prev[key] ?? [];
+          const next = current.includes(value)
+            ? current.filter((entry: string) => entry !== value)
+            : [...current, value];
           return { ...prev, [key]: next.length > 0 ? next : undefined };
         },
       });
@@ -292,6 +344,8 @@ function RootLayoutInner() {
           return;
         }
         ctx.setActiveTaskId(null);
+        ctx.setActivePlanId(null);
+        ctx.setActiveDocId(null);
         return;
       }
 
@@ -303,6 +357,8 @@ function RootLayoutInner() {
         e.preventDefault();
         if (isPlans) {
           ctx.handleNewPlan();
+        } else if (isDocs) {
+          ctx.handleNewDoc();
         } else {
           ctx.setCreateDefaultStatus("open");
           ctx.setIsCreating(true);
@@ -372,6 +428,7 @@ function RootLayoutInner() {
     handleViewModeChange,
     isTasks,
     isPlans,
+    isDocs,
     ctx,
   ]);
 
@@ -410,8 +467,18 @@ function RootLayoutInner() {
           >
             Plans
           </Button>
+          <Button
+            variant={isDocs ? "default" : "outline"}
+            onClick={() => navigate({ to: "/docs", search: { project: [], tags: [] } })}
+            role="radio"
+            aria-checked={isDocs}
+            aria-label="Docs"
+          >
+            <BookOpenIcon />
+            Docs
+          </Button>
         </ButtonGroup>
-        {!isHome && (
+        {!isHome && !isDocs && (
           <ButtonGroup aria-label="View mode">
             <Button
               variant={currentView === "list" ? "default" : "outline"}
@@ -488,6 +555,21 @@ function RootLayoutInner() {
                         onToggle={(v) => togglePlanFilter("project", v)}
                       />
                     </>
+                  ) : isDocs ? (
+                    <>
+                      <FilterChip
+                        label="Project"
+                        options={ctx.docMeta.projects}
+                        selected={docFilterState.project}
+                        onToggle={(v) => toggleDocFilter("project", v)}
+                      />
+                      <FilterChip
+                        label="Tags"
+                        options={ctx.docMeta.tags}
+                        selected={docFilterState.tags}
+                        onToggle={(v) => toggleDocFilter("tags", v)}
+                      />
+                    </>
                   ) : null}
                 </div>
               </CollapsibleContent>
@@ -523,9 +605,9 @@ function RootLayoutInner() {
           <Button
             variant="outline"
             size="icon"
-            onClick={isPlans ? ctx.handleNewPlan : ctx.handleNewTask}
-            title={isPlans ? "New plan (C)" : "New task (C)"}
-            aria-label={isPlans ? "New plan" : "New task"}
+            onClick={isPlans ? ctx.handleNewPlan : isDocs ? ctx.handleNewDoc : ctx.handleNewTask}
+            title={isPlans ? "New plan (C)" : isDocs ? "New doc (C)" : "New task (C)"}
+            aria-label={isPlans ? "New plan" : isDocs ? "New doc" : "New task"}
           >
             <PlusIcon />
           </Button>
@@ -547,7 +629,9 @@ function RootLayoutInner() {
                 <InputGroupText className="text-[11px] tabular-nums">
                   {isTasks
                     ? `${filteredTaskCount} result${filteredTaskCount !== 1 ? "s" : ""}`
-                    : `${filteredPlanCount} result${filteredPlanCount !== 1 ? "s" : ""}`}
+                    : isPlans
+                      ? `${filteredPlanCount} result${filteredPlanCount !== 1 ? "s" : ""}`
+                      : `${filteredDocCount} result${filteredDocCount !== 1 ? "s" : ""}`}
                 </InputGroupText>
               )}
               {searchInput && (
@@ -646,6 +730,18 @@ function RootLayoutInner() {
               {ctx.plans.filter((p) => p.status === "draft").length} draft
             </StatusBarItem>
           </>
+        ) : isDocs ? (
+          <>
+            <StatusBarItem tone="muted">
+              {ctx.docs.length} doc{ctx.docs.length !== 1 ? "s" : ""}
+            </StatusBarItem>
+            <StatusBarItem tone="primary">
+              {ctx.docs.filter((doc) => !!doc.project).length} in projects
+            </StatusBarItem>
+            <StatusBarItem tone="warning">
+              {ctx.docs.filter((doc) => (doc.tags?.length ?? 0) > 0).length} tagged
+            </StatusBarItem>
+          </>
         ) : (
           <>
             <StatusBarItem tone="muted">
@@ -674,6 +770,13 @@ function RootLayoutInner() {
         <CreatePlanModal
           planMeta={ctx.planMeta}
           onCreate={ctx.handleCreatePlan}
+          onCancel={ctx.handleCancelCreate}
+        />
+      )}
+      {ctx.isCreating && isDocs && (
+        <CreateDocModal
+          docMeta={ctx.docMeta}
+          onCreate={ctx.handleCreateDoc}
           onCancel={ctx.handleCancelCreate}
         />
       )}

@@ -5,7 +5,7 @@ import { writeFile, unlink, mkdtemp } from "node:fs/promises";
 /**
  * Generates a per-session MCP config file pointing at ticketbook's own MCP
  * server, so the spawned `claude` (or future `codex`) gets read/write access
- * to the user's tasks and plans without us building a parallel tool layer.
+ * to the user's tasks, plans, and docs without us building a parallel tool layer.
  *
  * The shape matches Claude Code's `--mcp-config` expectation:
  *   { "mcpServers": { "<name>": { "command": "...", "args": ["..."] } } }

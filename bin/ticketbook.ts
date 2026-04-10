@@ -195,8 +195,11 @@ async function main(): Promise<void> {
   if (args.mcp) {
     const { startMcpServer } = await import("../packages/server/src/mcp.ts");
     const mcpPlansDir = join(dirname(tasksDir), ".plans");
-    console.error(`Ticketbook MCP server (stdio) — tasks: ${tasksDir}, plans: ${mcpPlansDir}`);
-    await startMcpServer(tasksDir, mcpPlansDir);
+    const mcpDocsDir = join(dirname(tasksDir), ".docs");
+    console.error(
+      `Ticketbook MCP server (stdio) — tasks: ${tasksDir}, plans: ${mcpPlansDir}, docs: ${mcpDocsDir}`,
+    );
+    await startMcpServer(tasksDir, mcpPlansDir, mcpDocsDir);
     return;
   }
 
@@ -209,6 +212,7 @@ async function main(): Promise<void> {
 
   // Derive plans dir from tasks dir (sibling .plans/ directory)
   const plansDir = join(dirname(tasksDir), ".plans");
+  const docsDir = join(dirname(tasksDir), ".docs");
 
   // Absolute path to this script — passed through so the copilot manager can
   // wire up an MCP config that re-invokes us in --mcp mode for tool access.
@@ -217,6 +221,7 @@ async function main(): Promise<void> {
   const handle = startServer({
     tasksDir,
     plansDir,
+    docsDir,
     port: args.port ?? 0,
     staticDir: uiDistDir,
     binPath,
@@ -225,6 +230,7 @@ async function main(): Promise<void> {
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
   console.log(`Tasks directory: ${tasksDir}`);
   console.log(`Plans directory: ${plansDir}`);
+  console.log(`Docs directory: ${docsDir}`);
   if (!args.noUi && uiDistDir) {
     console.log(`UI: http://localhost:${handle.port}`);
   }

@@ -6,6 +6,7 @@ import type {
   CopilotProvider,
   CopilotProviderHealth,
   CopilotProviderId,
+  CopilotSendOptions,
   CopilotSessionEvents,
 } from "./types.js";
 import {
@@ -28,6 +29,12 @@ export interface CopilotManagerConfig {
    * forwarded to the provider as-is instead of being expanded.
    */
   plansDir?: string;
+  /**
+   * Directory holding doc markdown files. Required for expanding
+   * `<doc id="..." />` context refs — if omitted, doc markers are
+   * forwarded to the provider as-is instead of being expanded.
+   */
+  docsDir?: string;
   binPath?: string;
   cwd?: string;
   providers?: CopilotProvider[];
@@ -72,9 +79,9 @@ interface InternalSessionMeta extends CopilotSessionMetadata {
   currentAssistantCreatedAt: number | null;
 }
 
-const SYSTEM_PROMPT = `You are the Ticketbook copilot — an in-app assistant that helps the user plan, write, and edit tasks and plans for their project.
+const SYSTEM_PROMPT = `You are the Ticketbook copilot — an in-app assistant that helps the user plan, write, and edit tasks, plans, and docs for their project.
 
-You have access to the user's tasks and plans through the "ticketbook" MCP server. Use those tools when the user asks you to read, create, update, or organize their tasks and plans. Don't ask permission to read — just look. When you make changes, summarize what you did in one short paragraph.
+You have access to the user's tasks, plans, and docs through the "ticketbook" MCP server. Use those tools when the user asks you to read, create, update, or organize those primitives. Don't ask permission to read — just look. When you make changes, summarize what you did in one short paragraph.
 
 Be terse. Skip preamble. Lead with the action or the answer.`;
 
@@ -203,7 +210,11 @@ export class CopilotManager {
     return { sessionId };
   }
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
+  async sendMessage(
+    sessionId: string,
+    text: string,
+    opts: CopilotSendOptions = {},
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Copilot session not found: ${sessionId}`);
@@ -230,11 +241,12 @@ export class CopilotManager {
       ? await expandContextRefs(text, {
           tasksDir: this.config.tasksDir,
           plansDir: this.config.plansDir,
+          docsDir: this.config.docsDir,
         })
       : text;
 
     const provider = this.getProvider(session.providerId);
-    await provider.sendMessage(sessionId, forwardText);
+    await provider.sendMessage(sessionId, forwardText, opts);
     session.providerConversationId = provider.getConversationId(sessionId);
     this.ensureConversationRecord(session);
   }

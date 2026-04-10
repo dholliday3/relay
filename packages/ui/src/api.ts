@@ -1,4 +1,18 @@
-import type { Task, TaskPatch, Meta, TicketbookConfig, CreateTaskInput, Plan, PlanPatch, CreatePlanInput, PlanMeta } from "./types";
+import type {
+  Task,
+  TaskPatch,
+  Meta,
+  TicketbookConfig,
+  CreateTaskInput,
+  Plan,
+  PlanPatch,
+  CreatePlanInput,
+  PlanMeta,
+  Doc,
+  DocPatch,
+  CreateDocInput,
+  DocMeta,
+} from "./types";
 
 const BASE = "/api";
 
@@ -174,4 +188,59 @@ export function subscribeSSE(onEvent: (event: { type: string; taskId?: string; s
       es = null;
     }
   };
+}
+
+export async function fetchDocs(): Promise<Doc[]> {
+  const res = await fetch(`${BASE}/docs`);
+  if (!res.ok) throw new Error(`Failed to fetch docs: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchDoc(id: string): Promise<Doc> {
+  const res = await fetch(`${BASE}/docs/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Failed to fetch doc: ${res.status}`);
+  return res.json();
+}
+
+export async function patchDoc(id: string, patch: DocPatch): Promise<Doc> {
+  const res = await fetch(`${BASE}/docs/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Failed to patch doc: ${res.status}`);
+  return res.json();
+}
+
+export async function patchDocBody(id: string, body: string): Promise<Doc> {
+  const res = await fetch(`${BASE}/docs/${encodeURIComponent(id)}/body`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) throw new Error(`Failed to patch doc body: ${res.status}`);
+  return res.json();
+}
+
+export async function createDoc(input: CreateDocInput): Promise<Doc> {
+  const res = await fetch(`${BASE}/docs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`Failed to create doc: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteDoc(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/docs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete doc: ${res.status}`);
+}
+
+export async function fetchDocMeta(): Promise<DocMeta> {
+  const res = await fetch(`${BASE}/docs/meta`);
+  if (!res.ok) throw new Error(`Failed to fetch doc meta: ${res.status}`);
+  return res.json();
 }

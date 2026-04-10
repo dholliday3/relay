@@ -10,7 +10,7 @@ export interface TaskChangeEvent {
   changeType: ChangeType;
   filename: string;
   timestamp: string;
-  source?: "task" | "plan";
+  source?: "task" | "plan" | "doc";
 }
 
 type EventCallback = (event: TaskChangeEvent) => void;

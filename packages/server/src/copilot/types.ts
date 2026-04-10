@@ -41,6 +41,26 @@ export interface CopilotSessionEvents {
 }
 
 /**
+ * Per-turn overrides the UI can set when sending a message. Everything is
+ * optional — undefined means "don't touch the CLI default". Each provider
+ * honors whichever fields it supports and silently ignores the rest so
+ * callers can pass the same shape regardless of which CLI is on the other
+ * end.
+ */
+export interface CopilotSendOptions {
+  /**
+   * Provider-specific model alias or full model name. For claude-code this
+   * maps to `--model`; for codex it maps to `-m`.
+   */
+  model?: string;
+  /**
+   * Reasoning effort level. Only honored by providers that expose a
+   * reasoning-effort knob — currently just codex (`model_reasoning_effort`).
+   */
+  reasoningEffort?: string;
+}
+
+/**
  * Minimal provider contract the manager talks to. Lets us swap in a
  * stub provider for e2e tests without spawning real `claude` (and
  * without the manager caring which one it's using). The real provider
@@ -50,7 +70,7 @@ export interface CopilotProvider {
   readonly id: CopilotProviderId | "stub";
   checkHealth(): Promise<CopilotProviderHealth>;
   startSession(sessionId: string, opts: CopilotSessionOptions & { mcpConfigPath?: string }): void;
-  sendMessage(sessionId: string, text: string): Promise<void>;
+  sendMessage(sessionId: string, text: string, opts?: CopilotSendOptions): Promise<void>;
   stopSession(sessionId: string): void;
   stopAll(): void;
   getConversationId(sessionId: string): string | null;

@@ -1,11 +1,11 @@
 ---
 name: ticketbook
-description: Use whenever the user mentions tasks, plans, TKT-*/TKTB-*/PLAN-* IDs, the .tasks/ or .plans/ directories, creating/updating/reviewing tasks or plans, picking up work, handing off tasks to an agent, reviewing what an agent did, breaking plans into actionable tasks, linking commits/PRs to tasks, or asking "what should I work on next". Covers the full ticketbook workflow via the ticketbook MCP server.
+description: Use whenever the user mentions tasks, plans, docs, TKT-*/TKTB-*/PLAN-*/DOC-* IDs, the .tasks/, .plans/, or .docs/ directories, creating/updating/reviewing tasks, plans, or docs, picking up work, handing off tasks to an agent, reviewing what an agent did, breaking plans into actionable tasks, linking commits/PRs to tasks, or asking "what should I work on next". Covers the full ticketbook workflow via the ticketbook MCP server.
 ---
 
 # Ticketbook
 
-Ticketbook is a local-first task and plan tracker. Tasks live in `.tasks/` and plans live in `.plans/` as markdown files with YAML frontmatter. The `ticketbook` MCP server exposes tools for reading and writing them — **always prefer the MCP tools over editing the markdown files directly**. Direct edits skip ID assignment, file naming, ordering, and watcher sync.
+Ticketbook is a local-first task, plan, and reference-doc tracker. Tasks live in `.tasks/`, plans live in `.plans/`, and docs live in `.docs/` as markdown files with YAML frontmatter. The `ticketbook` MCP server exposes tools for reading and writing them — **always prefer the MCP tools over editing the markdown files directly**. Direct edits skip ID assignment, file naming, ordering, and watcher sync.
 
 ## Primitives
 
@@ -13,7 +13,9 @@ Ticketbook is a local-first task and plan tracker. Tasks live in `.tasks/` and p
 
 **Tasks** (`TKT-*`, or a project prefix like `TKTB-*`) are the unit of work. Statuses: `draft`, `backlog`, `open`, `in-progress`, `done`, `cancelled`. Priorities: `low`, `medium`, `high`, `urgent`. Tasks can have subtasks (markdown checkboxes in the body), be blocked by other tasks, relate to other tasks, and link to commits/PRs via `refs`.
 
-The typical flow is: brainstorm in a plan → cut tasks from the plan → pick up a task → hand off to an agent → review what changed → mark done and link the commit.
+**Docs** (`DOC-*`) are durable reference material — architecture notes, UX guidance, integration docs, and research summaries worth keeping around. They do not have workflow state. Treat them as stable context for humans and agents.
+
+The typical flow is: capture durable context in docs → brainstorm in a plan → cut tasks from the plan → pick up a task → hand off to an agent → review what changed → mark done and link the commit.
 
 ## Task statuses
 
@@ -77,6 +79,10 @@ Call `get_task`. The `<!-- agent-notes -->` section, linked `refs`, and current 
 
 Call `create_plan`. Plans default to `status: "draft"`. Put the brainstorm or spec content in `body`. If the user wants to kick off work immediately, finish writing the body first, then use `cut_tasks_from_plan` to break it into tasks — don't interleave plan writing with task creation.
 
+## When the user wants to create or update a doc
+
+Use docs for reference material that should stay true or useful beyond a single implementation cycle: architecture notes, UX principles, integration guides, and distilled research. Call `create_doc` with at minimum a `title`, and include `body`, `project`, `tags`, or `refs` when the context makes them obvious. Use `update_doc` when the user wants to refine the reference over time.
+
 ## Reference: MCP tools
 
 **Tasks**
@@ -103,9 +109,18 @@ Call `create_plan`. Plans default to `status: "draft"`. Put the brainstorm or sp
 | `link_task_to_plan` | Attach an existing task to a plan |
 | `cut_tasks_from_plan` | Parse unchecked checkboxes into tasks and link them |
 
+**Docs**
+| Tool | Purpose |
+|---|---|
+| `list_docs` | List reference docs with filters (project, tags, search) |
+| `get_doc` | Full doc including body |
+| `create_doc` | New doc; `title` required |
+| `update_doc` | Change any doc field |
+| `delete_doc` | Archive a doc |
+
 ## Rules of thumb
 
-- **Never edit `.tasks/*.md` or `.plans/*.md` directly.** Use the MCP tools.
+- **Never edit `.tasks/*.md`, `.plans/*.md`, or `.docs/*.md` directly.** Use the MCP tools.
 - **Never invent task or plan IDs.** IDs are assigned by `create_task` / `create_plan`.
 - **Preserve prior agent notes when updating a body.** Append to the existing `<!-- agent-notes -->` section; don't overwrite it.
 - **Prefer `list_tasks` filters over loading everything.** The server already sorts and filters.

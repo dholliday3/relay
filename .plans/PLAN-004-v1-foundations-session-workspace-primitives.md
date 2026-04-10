@@ -1,7 +1,7 @@
 ---
 id: PLAN-004
 title: V1 Foundations — Session & Workspace Primitives
-status: active
+status: draft
 tags:
   - v1
   - foundations
@@ -20,7 +20,7 @@ tasks:
   - TKTB-068
   - TKTB-041
 created: '2026-04-08T05:17:04.298Z'
-updated: '2026-04-09T05:15:01.829Z'
+updated: '2026-04-09T13:08:06.446Z'
 ---
 
 # V1 Foundations — Session & Workspace Primitives

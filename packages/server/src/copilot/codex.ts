@@ -4,9 +4,49 @@ import type {
   CopilotMessagePart,
   CopilotProviderHealth,
   CopilotProviderId,
+  CopilotSendOptions,
   CopilotSessionEvents,
   CopilotSessionOptions,
 } from "./types.js";
+
+/**
+ * Effort levels the current Codex frontier models accept, read straight
+ * from `~/.codex/models_cache.json` (the CLI's own model catalog). The
+ * `list`-visibility models on codex-cli 0.118.0+ — gpt-5.4, gpt-5.4-mini,
+ * gpt-5.3-codex, gpt-5.2 — all support exactly these four levels.
+ * Older hidden models (gpt-5, gpt-5.1) had `minimal`, which we drop
+ * since those models aren't user-selectable in our UI anyway.
+ */
+const CODEX_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh"]);
+
+/**
+ * Flags whose value is long/uninteresting for logs — elide to keep the
+ * ground-truth spawn line legible. We keep model, effort, and resume
+ * IDs visible because those are the ones worth verifying.
+ */
+function summarizeCodexArgs(args: string[]): string {
+  // -c overrides can include very long values (mcp server args, etc).
+  // Drop the value part of -c but keep the flag so we know how many
+  // overrides were applied.
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "-c" && i + 1 < args.length) {
+      const value = args[i + 1];
+      // Keep model_reasoning_effort="..." legible since that's the
+      // effort knob we want to verify.
+      if (value.startsWith("model_reasoning_effort=")) {
+        out.push(arg, value);
+      } else {
+        out.push(arg, "<…>");
+      }
+      i++;
+      continue;
+    }
+    out.push(arg);
+  }
+  return out.join(" ");
+}
 
 interface InternalSession {
   id: string;
@@ -130,7 +170,7 @@ export class CodexProvider extends EventEmitter {
     });
   }
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
+  async sendMessage(sessionId: string, text: string, opts: CopilotSendOptions = {}): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Copilot session not found: ${sessionId}`);
     if (session.status === "stopped") throw new Error(`Copilot session ${sessionId} is stopped`);
@@ -149,6 +189,16 @@ export class CodexProvider extends EventEmitter {
     args.push("-c", 'approval_policy="never"');
     args.push("-c", 'sandbox_mode="danger-full-access"');
 
+    // Per-turn model + reasoning-effort overrides. Codex takes the model
+    // via -m and reasoning effort via a -c config override. Unknown effort
+    // values are dropped rather than passed blindly to the CLI.
+    if (opts.model) {
+      args.push("-m", opts.model);
+    }
+    if (opts.reasoningEffort && CODEX_REASONING_EFFORTS.has(opts.reasoningEffort)) {
+      args.push("-c", `model_reasoning_effort="${opts.reasoningEffort}"`);
+    }
+
     for (const override of codexMcpOverrides(session.mcpConfig)) {
       args.push("-c", override);
     }
@@ -157,6 +207,13 @@ export class CodexProvider extends EventEmitter {
       ? text
       : buildInitialPrompt(session.systemPrompt, text);
     args.push(prompt);
+
+    // Ground-truth spawn log (skip the final prompt — it's already
+    // captured by the dbgApi copilotMessage line). Shows exactly which
+    // -m and -c model_reasoning_effort values made it to the CLI.
+    console.log(
+      `[copilot:codex:${sessionId}] spawn codex ${summarizeCodexArgs(args.slice(0, -1))}`,
+    );
 
     const proc = spawn("codex", args, {
       cwd: session.cwd,

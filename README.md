@@ -1,6 +1,6 @@
 # Ticketbook
 
-A local-first task tracker that stores tasks as markdown files in a `.tasks/` directory.
+A local-first project tracker that stores tasks in `.tasks/`, plans in `.plans/`, and durable reference docs in `.docs/`.
 
 ## Quick Start
 
@@ -64,12 +64,25 @@ Replace `/path/to/your/repo` with the absolute path to the directory containing 
 | `complete_subtask` | Mark a subtask as done (by index or text match) |
 | `add_subtask` | Add a new subtask to a task |
 | `reorder_task` | Reorder a task within its status group |
+| `list_plans` | List plans with optional filters (status, project, tags) |
+| `get_plan` | Get full plan details including body content |
+| `create_plan` | Create a new plan |
+| `update_plan` | Update plan fields |
+| `delete_plan` | Delete (archive) a plan |
+| `cut_tasks_from_plan` | Create linked tasks from unchecked plan checklist items |
+| `list_docs` | List reference docs with optional filters (project, tags, search) |
+| `get_doc` | Get full doc details including body content |
+| `create_doc` | Create a new reference doc |
+| `update_doc` | Update doc fields |
+| `delete_doc` | Delete (archive) a doc |
 
 ### Available MCP Resources
 
 | Resource | URI | Description |
 |----------|-----|-------------|
 | Task List | `tasks://list` | Full task list in compact format |
+| Plan List | `plans://list` | Full plan list in compact format |
+| Doc List | `docs://list` | Full doc list in compact format |
 
 ### Available MCP Prompts
 

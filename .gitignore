@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .tasks/.archive/
+.docs/.archive/
 *.log
 .DS_Store
 *.tsbuildinfo

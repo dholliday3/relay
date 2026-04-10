@@ -1,4 +1,4 @@
-import { FileTextIcon, ListChecksIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, ListChecksIcon } from "lucide-react";
 import type { ContextRef } from "@ticketbook/core/context-refs";
 import { cn } from "@/lib/utils";
 import {
@@ -11,7 +11,7 @@ interface ContextRefChipProps {
 }
 
 /**
- * Inline pill rendered in place of a `<task />` / `<plan />` marker in
+ * Inline pill rendered in place of a primitive marker in
  * rendered copilot messages. Compact single-line chip (icon + ID +
  * truncated title), click navigates to the detail view, hover shows a
  * preview card via the shared ContextRefHoverCard.
@@ -28,8 +28,18 @@ export function ContextRefChip({ refData }: ContextRefChipProps) {
     refData.id,
   );
 
-  const Icon = refData.kind === "task" ? FileTextIcon : ListChecksIcon;
-  const kindLabel = refData.kind === "task" ? "Task" : "Plan";
+  const Icon =
+    refData.kind === "task"
+      ? FileTextIcon
+      : refData.kind === "plan"
+        ? ListChecksIcon
+        : BookOpenIcon;
+  const kindLabel =
+    refData.kind === "task"
+      ? "Task"
+      : refData.kind === "plan"
+        ? "Plan"
+        : "Doc";
   const displayTitle =
     (primitive?.title ?? refData.title ?? "").trim() || "(untitled)";
 

@@ -4,7 +4,7 @@
  * These produce the `<context>...</context>` blocks that the server
  * substitutes into outgoing copilot messages before forwarding them to
  * the provider. The agent sees the full, current state of each
- * referenced primitive in a shape identical to the task/plan `.md`
+ * referenced primitive in a shape identical to the task/plan/doc `.md`
  * file on disk.
  *
  * Kept separate from `context-refs.ts` so the pure string/regex logic
@@ -16,18 +16,22 @@ import matter from "gray-matter";
 import { encodeTitleAttr, type ContextRefKind } from "./context-refs.js";
 import type { Task } from "./types.js";
 import type { Plan } from "./plan-types.js";
+import type { Doc } from "./doc-types.js";
 
 /**
- * Render a primitive (task or plan) as a `<context>` expansion block.
+ * Render a primitive (task, plan, or doc) as a `<context>` expansion block.
  * This is what the copilot provider actually sees — the agent gets the
  * full frontmatter + body, matching the shape it would see if it read
  * the `.md` file directly.
  */
 export function renderContextRefExpansion(
   kind: ContextRefKind,
-  primitive: Task | Plan,
+  primitive: Task | Plan | Doc,
 ): string {
-  const { body, filePath: _filePath, ...frontmatterFields } = primitive as Task & Plan;
+  const { body, filePath: _filePath, ...frontmatterFields } = primitive as
+    Task &
+    Plan &
+    Doc;
   const frontmatter = normalizeFrontmatter(
     frontmatterFields as Record<string, unknown>,
   );

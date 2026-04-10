@@ -31,16 +31,30 @@ describe("parseContextRefs", () => {
     });
   });
 
+  test("parses a doc marker", () => {
+    const text = '<doc id="DOC-001" title="Architecture notes" />';
+    const refs = parseContextRefs(text);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      kind: "doc",
+      id: "DOC-001",
+      title: "Architecture notes",
+    });
+  });
+
   test("parses multiple markers in order", () => {
     const text =
-      'Start with <task id="TKTB-001" /> then <plan id="PLAN-006" title="Rename" />.';
+      'Start with <task id="TKTB-001" /> then <plan id="PLAN-006" title="Rename" /> then <doc id="DOC-001" title="Notes" />.';
     const refs = parseContextRefs(text);
-    expect(refs).toHaveLength(2);
+    expect(refs).toHaveLength(3);
     expect(refs[0].kind).toBe("task");
     expect(refs[0].id).toBe("TKTB-001");
     expect(refs[1].kind).toBe("plan");
     expect(refs[1].id).toBe("PLAN-006");
     expect(refs[1].title).toBe("Rename");
+    expect(refs[2].kind).toBe("doc");
+    expect(refs[2].id).toBe("DOC-001");
+    expect(refs[2].title).toBe("Notes");
   });
 
   test("decodes HTML entities in title", () => {
@@ -78,22 +92,25 @@ describe("splitByContextRefs", () => {
 
   test("interleaves text and refs in order", () => {
     const text =
-      'See <task id="TKTB-025" title="Foo" /> and <plan id="PLAN-006" /> please.';
+      'See <task id="TKTB-025" title="Foo" /> and <plan id="PLAN-006" /> plus <doc id="DOC-001" /> please.';
     const spans = splitByContextRefs(text);
-    expect(spans).toHaveLength(5);
+    expect(spans).toHaveLength(7);
     expect(spans[0]).toEqual({ type: "text", content: "See " });
     expect(spans[1].type).toBe("ref");
     expect(spans[2]).toEqual({ type: "text", content: " and " });
     expect(spans[3].type).toBe("ref");
-    expect(spans[4]).toEqual({ type: "text", content: " please." });
+    expect(spans[4]).toEqual({ type: "text", content: " plus " });
+    expect(spans[5].type).toBe("ref");
+    expect(spans[6]).toEqual({ type: "text", content: " please." });
   });
 
   test("handles leading and trailing refs without empty spans", () => {
-    const text = '<task id="TKTB-001" /><plan id="PLAN-002" />';
+    const text = '<task id="TKTB-001" /><plan id="PLAN-002" /><doc id="DOC-001" />';
     const spans = splitByContextRefs(text);
-    expect(spans).toHaveLength(2);
+    expect(spans).toHaveLength(3);
     expect(spans[0].type).toBe("ref");
     expect(spans[1].type).toBe("ref");
+    expect(spans[2].type).toBe("ref");
   });
 });
 
@@ -107,6 +124,12 @@ describe("renderContextRefMarker", () => {
   test("renders without title", () => {
     expect(renderContextRefMarker({ kind: "plan", id: "PLAN-006" })).toBe(
       '<plan id="PLAN-006" />',
+    );
+  });
+
+  test("renders docs", () => {
+    expect(renderContextRefMarker({ kind: "doc", id: "DOC-001" })).toBe(
+      '<doc id="DOC-001" />',
     );
   });
 

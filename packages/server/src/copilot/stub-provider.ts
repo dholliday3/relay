@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type {
   CopilotProvider,
   CopilotProviderHealth,
+  CopilotSendOptions,
   CopilotSessionEvents,
   CopilotSessionOptions,
 } from "./types.js";
@@ -56,7 +57,11 @@ export class StubCopilotProvider extends EventEmitter implements CopilotProvider
     });
   }
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
+  async sendMessage(
+    sessionId: string,
+    text: string,
+    _opts: CopilotSendOptions = {},
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Stub session not found: ${sessionId}`);
 

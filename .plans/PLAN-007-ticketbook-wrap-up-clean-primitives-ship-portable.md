@@ -1,22 +1,15 @@
 ---
 id: PLAN-007
 title: 'Ticketbook wrap-up — clean primitives, ship portable'
-status: draft
+status: active
 tags:
   - wrap-up
   - primitives
   - packaging
   - agent-handoff
 project: ticketbook
-tickets:
-  - TKTB-040
-  - TKTB-041
-  - TKTB-043
-  - TKTB-045
-  - TKTB-046
-  - TKTB-062
 created: '2026-04-09T05:12:56.550Z'
-updated: '2026-04-09T05:12:56.550Z'
+updated: '2026-04-09T13:08:11.533Z'
 ---
 
 # Ticketbook wrap-up — clean primitives, ship portable

@@ -45,15 +45,17 @@ describe("initTicketbook", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("creates .tasks/ and .plans/ with config and counters", async () => {
+  test("creates .tasks/, .plans/, and .docs/ with config and counters", async () => {
     const result = await initTicketbook({ baseDir: dir, skillSourcePath });
 
     expect(result.createdTasksDir).toBe(true);
     expect(result.createdPlansDir).toBe(true);
+    expect(result.createdDocsDir).toBe(true);
     expect(result.wroteConfig).toBe(true);
 
     expect(await fileExists(join(dir, ".tasks", ".archive"))).toBe(true);
     expect(await fileExists(join(dir, ".plans", ".archive"))).toBe(true);
+    expect(await fileExists(join(dir, ".docs", ".archive"))).toBe(true);
 
     const config = await readFile(
       join(dir, ".tasks", ".config.yaml"),
@@ -61,6 +63,7 @@ describe("initTicketbook", () => {
     );
     expect(config).toContain("prefix: TASK");
     expect(config).toContain("planPrefix: PLAN");
+    expect(config).toContain("docPrefix: DOC");
 
     const ticketsCounter = await readFile(
       join(dir, ".tasks", ".counter"),
@@ -73,6 +76,12 @@ describe("initTicketbook", () => {
       "utf-8",
     );
     expect(plansCounter).toBe("0");
+
+    const docsCounter = await readFile(
+      join(dir, ".docs", ".counter"),
+      "utf-8",
+    );
+    expect(docsCounter).toBe("0");
   });
 
   test("copies SKILL.md into both Claude and Codex discovery paths", async () => {
@@ -233,6 +242,7 @@ describe("initTicketbook", () => {
     const agentsMd = await readFile(join(dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("ticketbook");
     expect(agentsMd).toContain(".tasks/");
+    expect(agentsMd).toContain(".docs/");
 
     // Simulate user editing the file.
     await writeFile(join(dir, "AGENTS.md"), "# Custom\n", "utf-8");
@@ -251,6 +261,7 @@ describe("initTicketbook", () => {
     const gitignore = await readFile(join(dir, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".tasks/.archive/");
     expect(gitignore).toContain(".plans/.archive/");
+    expect(gitignore).toContain(".docs/.archive/");
   });
 
   test("preserves existing .gitignore entries and only appends missing patterns", async () => {
@@ -267,6 +278,7 @@ describe("initTicketbook", () => {
     expect(gitignore).toContain(".env");
     expect(gitignore).toContain(".tasks/.archive/");
     expect(gitignore).toContain(".plans/.archive/");
+    expect(gitignore).toContain(".docs/.archive/");
   });
 
   test("is idempotent — running twice does not overwrite anything", async () => {

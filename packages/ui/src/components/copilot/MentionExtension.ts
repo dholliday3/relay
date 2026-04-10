@@ -13,7 +13,7 @@ import {
   type SuggestionProps,
 } from "@tiptap/suggestion";
 import type { ContextRefKind } from "@ticketbook/core/context-refs";
-import type { Plan, Task } from "@/types";
+import type { Doc, Plan, Task } from "@/types";
 
 export interface MentionItem {
   kind: ContextRefKind;
@@ -44,6 +44,7 @@ const MAX_RESULTS = 5;
  *   "task TKT"      → { category: "task", needle: "tkt" }
  *   "tasks foo"     → { category: "task", needle: "foo" }
  *   "plan "         → { category: "plan", needle: "" }
+ *   "doc editor"    → { category: "doc", needle: "editor" }
  *   "TKT-025"       → { category: null,   needle: "tkt-025" }
  *
  * The space after the category keyword is required — typing just
@@ -53,13 +54,16 @@ function parseQuery(query: string): {
   category: ContextRefKind | null;
   needle: string;
 } {
-  const match = /^(tasks?|plans?)\s+(.*)$/i.exec(query);
+  const match = /^(tasks?|plans?|docs?)\s+(.*)$/i.exec(query);
   if (!match) {
     return { category: null, needle: query.toLowerCase() };
   }
-  const kind: ContextRefKind = match[1].toLowerCase().startsWith("task")
+  const token = match[1].toLowerCase();
+  const kind: ContextRefKind = token.startsWith("task")
     ? "task"
-    : "plan";
+    : token.startsWith("plan")
+      ? "plan"
+      : "doc";
   return { category: kind, needle: match[2].toLowerCase() };
 }
 
@@ -67,6 +71,7 @@ function filterItems(
   query: string,
   tasks: Task[],
   plans: Plan[],
+  docs: Doc[],
 ): MentionItem[] {
   const { category, needle } = parseQuery(query);
   const matches: MentionItem[] = [];
@@ -94,6 +99,9 @@ function filterItems(
   if (category === null || category === "plan") {
     for (const plan of plans) pushIfMatches("plan", plan.id, plan.title);
   }
+  if (category === null || category === "doc") {
+    for (const doc of docs) pushIfMatches("doc", doc.id, doc.title);
+  }
 
   // Prioritise exact ID prefix hits so typing a partial ID jumps the
   // match to the top even if title matches come alphabetically first.
@@ -113,6 +121,8 @@ export interface CreateMentionExtensionOptions {
   getTasks: () => Task[];
   /** Source of truth for plans — called every render tick. */
   getPlans: () => Plan[];
+  /** Source of truth for docs — called every render tick. */
+  getDocs: () => Doc[];
   /** React state setter bridging the suggestion lifecycle. */
   onStateChange: (state: MentionMenuState | null) => void;
   /** Imperative keydown handler — set by the popover component. */
@@ -122,6 +132,7 @@ export interface CreateMentionExtensionOptions {
 export function createMentionExtension({
   getTasks,
   getPlans,
+  getDocs,
   onStateChange,
   keyDownRef,
 }: CreateMentionExtensionOptions) {
@@ -141,7 +152,7 @@ export function createMentionExtension({
           allowSpaces: true,
           startOfLine: false,
           items: ({ query }: { query: string }) =>
-            filterItems(query, getTasks(), getPlans()),
+            filterItems(query, getTasks(), getPlans(), getDocs()),
           command: ({
             editor,
             range,

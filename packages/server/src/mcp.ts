@@ -17,8 +17,13 @@ import {
   updatePlan,
   deletePlan,
   cutTasksFromPlan,
+  listDocs,
+  getDoc,
+  createDoc,
+  updateDoc,
+  deleteDoc,
 } from "@ticketbook/core";
-import type { Plan } from "@ticketbook/core";
+import type { Doc, Plan } from "@ticketbook/core";
 
 function taskSummary(t: {
   id: string;
@@ -106,7 +111,31 @@ function formatPlanFull(p: Plan): string {
   return lines.join("\n");
 }
 
-export async function startMcpServer(tasksDir: string, plansDir?: string): Promise<void> {
+function docSummary(doc: Doc): string {
+  const parts = [`[${doc.id}] ${doc.title}`];
+  if (doc.project) parts.push(`project: ${doc.project}`);
+  if (doc.tags && doc.tags.length > 0) parts.push(`tags: ${doc.tags.join(", ")}`);
+  return parts.join(" | ");
+}
+
+function formatDocFull(doc: Doc): string {
+  const lines = [`# ${doc.id}: ${doc.title}`, ""];
+  if (doc.project) lines.push(`- Project: ${doc.project}`);
+  if (doc.tags && doc.tags.length > 0) lines.push(`- Tags: ${doc.tags.join(", ")}`);
+  if (doc.refs && doc.refs.length > 0) lines.push(`- Refs: ${doc.refs.join(", ")}`);
+  lines.push(`- Created: ${doc.created.toISOString()}`);
+  lines.push(`- Updated: ${doc.updated.toISOString()}`);
+  if (doc.body) {
+    lines.push("", "---", "", doc.body);
+  }
+  return lines.join("\n");
+}
+
+export async function startMcpServer(
+  tasksDir: string,
+  plansDir?: string,
+  docsDir?: string,
+): Promise<void> {
   const server = new McpServer({
     name: "ticketbook",
     version: "0.1.0",
@@ -840,6 +869,132 @@ export async function startMcpServer(tasksDir: string, plansDir?: string): Promi
               },
             },
           ],
+        };
+      },
+    );
+  }
+
+  if (docsDir) {
+    server.tool(
+      "list_docs",
+      "List reference docs with optional filters. Docs are durable references rather than active work items.",
+      {
+        project: z.string().optional().describe("Filter by project name"),
+        tags: z.array(z.string()).optional().describe("Filter by tags (all must match)"),
+      },
+      async (args) => {
+        const filters: Record<string, unknown> = {};
+        if (args.project) filters.project = args.project;
+        if (args.tags) filters.tags = args.tags;
+
+        const docs = await listDocs(
+          docsDir,
+          Object.keys(filters).length > 0 ? filters : undefined,
+        );
+
+        if (docs.length === 0) {
+          return { content: [{ type: "text", text: "No docs found." }] };
+        }
+
+        const text = docs.map((doc) => docSummary(doc)).join("\n");
+        return {
+          content: [{ type: "text", text: `${docs.length} doc(s):\n\n${text}` }],
+        };
+      },
+    );
+
+    server.tool(
+      "get_doc",
+      "Get full details of a reference doc by ID, including body content.",
+      {
+        id: z.string().describe("Doc ID (e.g. DOC-001)"),
+      },
+      async (args) => {
+        const doc = await getDoc(docsDir, args.id);
+        if (!doc) {
+          return {
+            content: [{ type: "text", text: `Doc not found: ${args.id}` }],
+            isError: true,
+          };
+        }
+        return { content: [{ type: "text", text: formatDocFull(doc) }] };
+      },
+    );
+
+    server.tool(
+      "create_doc",
+      "Create a new reference doc. Use docs for durable references and notes rather than plans or tasks.",
+      {
+        title: z.string().min(1).describe("Doc title (required)"),
+        tags: z.array(z.string()).optional().describe("Tags (lowercase)"),
+        project: z.string().optional().describe("Project name"),
+        refs: z.array(z.string()).optional().describe("Linked refs or URLs"),
+        body: z.string().optional().describe("Markdown body content"),
+      },
+      async (args) => {
+        const doc = await createDoc(tasksDir, docsDir, args);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Created ${doc.id}: ${doc.title}\n\n${formatDocFull(doc)}`,
+            },
+          ],
+        };
+      },
+    );
+
+    server.tool(
+      "update_doc",
+      "Update an existing doc's fields. Only provided fields are changed.",
+      {
+        id: z.string().describe("Doc ID to update"),
+        title: z.string().min(1).optional().describe("New title"),
+        tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
+        project: z.string().nullable().optional().describe("New project (null to clear)"),
+        refs: z.array(z.string()).optional().describe("Refs (replaces existing)"),
+        body: z.string().optional().describe("New markdown body content"),
+      },
+      async (args) => {
+        const { id, ...patch } = args;
+        const doc = await updateDoc(docsDir, id, patch);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Updated ${doc.id}\n\n${formatDocFull(doc)}`,
+            },
+          ],
+        };
+      },
+    );
+
+    server.tool(
+      "delete_doc",
+      "Delete (archive) a doc by ID.",
+      {
+        id: z.string().describe("Doc ID to delete"),
+      },
+      async (args) => {
+        await deleteDoc(tasksDir, docsDir, args.id);
+        return {
+          content: [{ type: "text", text: `Deleted doc ${args.id}` }],
+        };
+      },
+    );
+
+    server.resource(
+      "doc-list",
+      "docs://list",
+      { description: "Full doc list in compact format", mimeType: "text/plain" },
+      async () => {
+        const docs = await listDocs(docsDir);
+        const text =
+          docs.length === 0
+            ? "No docs found."
+            : docs.map((doc) => docSummary(doc)).join("\n");
+        return {
+          contents: [{ uri: "docs://list", text, mimeType: "text/plain" }],
         };
       },
     );

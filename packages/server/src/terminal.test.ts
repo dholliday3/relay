@@ -102,6 +102,7 @@ describe("terminal protocol", () => {
   let dir: string;
   let tasksDir: string;
   let plansDir: string;
+  let docsDir: string;
   let handle: ServerHandle;
   let base: string;
 
@@ -109,11 +110,13 @@ describe("terminal protocol", () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-term-"));
     tasksDir = join(dir, ".tasks");
     plansDir = join(dir, ".plans");
+    docsDir = join(dir, ".docs");
     await mkdir(join(tasksDir, ".archive"), { recursive: true });
     await mkdir(plansDir, { recursive: true });
+    await mkdir(docsDir, { recursive: true });
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
     await writeFile(join(tasksDir, ".config.yaml"), "prefix: TKT\ndeleteMode: archive\n", "utf-8");
-    handle = startServer({ tasksDir, plansDir, port: 0 });
+    handle = startServer({ tasksDir, plansDir, docsDir, port: 0 });
     base = `http://localhost:${handle.port}`;
   });
 
@@ -375,7 +378,7 @@ describe("terminal protocol", () => {
       "prefix: TKT\ndeleteMode: archive\nterminalScrollback: 50\n",
       "utf-8",
     );
-    handle = startServer({ tasksDir, plansDir, port: 0 });
+    handle = startServer({ tasksDir, plansDir, docsDir, port: 0 });
     base = `http://localhost:${handle.port}`;
 
     const { id } = await (await fetch(`${base}/api/terminal/sessions`, {

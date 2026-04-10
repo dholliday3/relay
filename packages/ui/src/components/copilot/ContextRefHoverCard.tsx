@@ -1,14 +1,19 @@
 /**
- * Shared hover-card preview for a task/plan context reference.
+ * Shared hover-card preview for a task/plan/doc context reference.
  *
  * Both the in-input chip (ContextRefNode's NodeView) and the
  * message-bubble chip (ContextRefChip) wrap their trigger in
- * `<ContextRefHoverCard>` so they render the same task/plan preview
+ * `<ContextRefHoverCard>` so they render the same primitive preview
  * with the same "Open" link — keeping the two surfaces in sync.
  */
 
 import { useCallback, useMemo, type ReactNode } from "react";
-import { FileTextIcon, ListChecksIcon, ExternalLinkIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  ListChecksIcon,
+} from "lucide-react";
 import type { ContextRefKind } from "@ticketbook/core/context-refs";
 import {
   HoverCard,
@@ -18,16 +23,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/AppContext";
-import type { Plan, Task } from "@/types";
+import type { Doc, Plan, Task } from "@/types";
 
 export interface UseContextRefLookup {
-  primitive: Task | Plan | null;
+  primitive: Task | Plan | Doc | null;
   deleted: boolean;
   handleOpen: () => void;
 }
 
 /**
- * Resolve a context ref to its current task/plan record via in-memory
+ * Resolve a context ref to its current primitive record via in-memory
  * AppContext lookup, and give the caller a ready-made `handleOpen`
  * that navigates to the detail view. Used by both the in-input chip
  * and the message-bubble chip.
@@ -36,18 +41,27 @@ export function useContextRefLookup(
   kind: ContextRefKind,
   id: string,
 ): UseContextRefLookup {
-  const { tasks, plans, handleSelect, handleSelectPlan } = useAppContext();
+  const {
+    tasks,
+    plans,
+    docs,
+    handleSelect,
+    handleSelectPlan,
+    handleSelectDoc,
+  } = useAppContext();
 
-  const primitive = useMemo<Task | Plan | null>(() => {
+  const primitive = useMemo<Task | Plan | Doc | null>(() => {
     if (kind === "task") return tasks.find((t) => t.id === id) ?? null;
-    return plans.find((p) => p.id === id) ?? null;
-  }, [kind, id, tasks, plans]);
+    if (kind === "plan") return plans.find((p) => p.id === id) ?? null;
+    return docs.find((d) => d.id === id) ?? null;
+  }, [kind, id, tasks, plans, docs]);
 
   const handleOpen = useCallback(() => {
     if (!primitive) return;
     if (kind === "task") handleSelect(primitive as Task);
-    else handleSelectPlan(primitive as Plan);
-  }, [primitive, kind, handleSelect, handleSelectPlan]);
+    else if (kind === "plan") handleSelectPlan(primitive as Plan);
+    else handleSelectDoc(primitive as Doc);
+  }, [primitive, kind, handleSelect, handleSelectPlan, handleSelectDoc]);
 
   return { primitive, deleted: primitive === null, handleOpen };
 }
@@ -96,8 +110,10 @@ function ContextRefHoverCardPreview({
   titleFallback: string | null;
 }) {
   const { primitive, handleOpen } = useContextRefLookup(kind, id);
-  const Icon = kind === "task" ? FileTextIcon : ListChecksIcon;
-  const kindLabel = kind === "task" ? "Task" : "Plan";
+  const Icon =
+    kind === "task" ? FileTextIcon : kind === "plan" ? ListChecksIcon : BookOpenIcon;
+  const kindLabel =
+    kind === "task" ? "Task" : kind === "plan" ? "Plan" : "Doc";
 
   if (primitive === null) {
     return (

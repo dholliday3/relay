@@ -1,10 +1,10 @@
 ---
 id: PLAN-006
 title: primitive rename from task to task
-status: draft
+status: completed
 project: ticketbook
 created: '2026-04-09T02:39:58.351Z'
-updated: '2026-04-09T02:42:59.685Z'
+updated: '2026-04-09T13:08:23.720Z'
 ---
 
 > **Status:** draft. Scope the primitive rename from task -> task across code, API, MCP, and UI, while explicitly avoiding historical repo-content migration and deferring docs as a primitive.

@@ -31,6 +31,17 @@ import {
   CreatePlanInputSchema,
   PlanPatchSchema,
   PlanFiltersSchema,
+  listDocs,
+  getDoc,
+  getDocProjects,
+  getDocTags,
+  createDoc,
+  updateDoc,
+  deleteDoc,
+  restoreDoc,
+  CreateDocInputSchema,
+  DocPatchSchema,
+  DocFiltersSchema,
 } from "@ticketbook/core";
 import { createDebug } from "./debug.js";
 import type { TaskChangeEvent } from "./watcher.js";
@@ -115,6 +126,7 @@ function buildRouteRegex(path: string): { regex: RegExp; paramNames: string[] } 
 export function createRoutes(
   tasksDir: string,
   plansDir?: string,
+  docsDir?: string,
   copilot?: CopilotManager,
 ): Route[] {
   const base = "/api";
@@ -388,6 +400,80 @@ export function createRoutes(
     });
   }
 
+  if (docsDir) {
+    route("GET", "/docs/meta", async () => {
+      const [projects, tags] = await Promise.all([
+        getDocProjects(docsDir),
+        getDocTags(docsDir),
+      ]);
+      return json({ projects, tags });
+    });
+
+    route("GET", "/docs", async (req) => {
+      const url = new URL(req.url);
+      const rawFilters: Record<string, unknown> = {};
+
+      for (const key of ["project", "search"] as const) {
+        const value = url.searchParams.get(key);
+        if (value) rawFilters[key] = value;
+      }
+
+      const tagsParam = url.searchParams.getAll("tags");
+      if (tagsParam.length > 0) rawFilters.tags = tagsParam;
+
+      const filters = DocFiltersSchema.parse(rawFilters);
+      const docs = await listDocs(
+        docsDir,
+        Object.keys(rawFilters).length > 0 ? filters : undefined,
+      );
+      return json(docs);
+    });
+
+    route("GET", "/docs/:id", async (_req, params) => {
+      const doc = await getDoc(docsDir, params.id);
+      if (!doc) return errorResponse(`Doc not found: ${params.id}`, 404);
+      return json(doc);
+    });
+
+    route("POST", "/docs", async (req) => {
+      const body = await readJsonBody(req);
+      const input = CreateDocInputSchema.parse(body);
+      const doc = await createDoc(tasksDir, docsDir, input);
+      dbgApi(`docCreate   ${doc.id}  "${doc.title}"`);
+      return json(doc, 201);
+    });
+
+    route("PATCH", "/docs/:id", async (req, params) => {
+      const body = await readJsonBody(req);
+      const patch = DocPatchSchema.parse(body);
+      const doc = await updateDoc(docsDir, params.id, patch);
+      dbgApi(`docPatch    ${params.id}  [${Object.keys(patch).join(",")}]`);
+      return json(doc);
+    });
+
+    route("PATCH", "/docs/:id/body", async (req, params) => {
+      const body = (await readJsonBody(req)) as { body?: string };
+      if (typeof body.body !== "string") {
+        return errorResponse("Missing 'body' field", 400);
+      }
+      const doc = await updateDoc(docsDir, params.id, { body: body.body });
+      dbgApi(`docBody     ${params.id}`);
+      return json(doc);
+    });
+
+    route("DELETE", "/docs/:id", async (_req, params) => {
+      dbgApi(`docDelete   ${params.id}`);
+      await deleteDoc(tasksDir, docsDir, params.id);
+      return json({ ok: true });
+    });
+
+    route("POST", "/docs/:id/restore", async (_req, params) => {
+      const doc = await restoreDoc(docsDir, params.id);
+      dbgApi(`docRestore  ${params.id}`);
+      return json(doc);
+    });
+  }
+
   // ─── Copilot routes ─────────────────────────────────────────────
   // Mounted only if a CopilotManager was passed in. Streaming output is
   // delivered over the WebSocket bridge in index.ts (frames `copilot.stream`
@@ -442,13 +528,31 @@ export function createRoutes(
 
     // Send a turn — fire and forget; output streams over the WebSocket bridge.
     route("POST", "/copilot/sessions/:id/messages", async (req, params) => {
-      const body = (await readJsonBody(req)) as { text?: string };
+      const body = (await readJsonBody(req)) as {
+        text?: string;
+        model?: string;
+        reasoningEffort?: string;
+      };
       if (typeof body.text !== "string" || !body.text.trim()) {
         return errorResponse("Missing 'text' field", 400);
       }
-      dbgApi(`copilotMessage  ${params.id}  ${body.text.length}ch`);
+      const sendOpts = {
+        model: typeof body.model === "string" && body.model.trim() ? body.model : undefined,
+        reasoningEffort:
+          typeof body.reasoningEffort === "string" && body.reasoningEffort.trim()
+            ? body.reasoningEffort
+            : undefined,
+      };
+      // Log provider + model + effort alongside the existing session/length
+      // fields so it's obvious from the server log exactly which CLI
+      // configuration each turn will use. "default" means the CLI's own
+      // built-in default is in effect (no flag override passed).
+      const sessionMeta = copilot.getSession(params.id);
+      dbgApi(
+        `copilotMessage  ${params.id}  ${body.text.length}ch  provider=${sessionMeta?.providerId ?? "?"}  model=${sendOpts.model ?? "default"}  effort=${sendOpts.reasoningEffort ?? "default"}`,
+      );
       try {
-        await copilot.sendMessage(params.id, body.text);
+        await copilot.sendMessage(params.id, body.text, sendOpts);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.toLowerCase().includes("not found")) {

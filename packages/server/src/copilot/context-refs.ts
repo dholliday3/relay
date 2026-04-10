@@ -1,9 +1,10 @@
 /**
  * Server-side expansion of context ref markers.
  *
- * Walks an outgoing copilot message for `<task id="..." />` and
- * `<plan id="..." />` markers, fetches each primitive's current state
- * from the filesystem, and substitutes a `<context>` expansion inline.
+ * Walks an outgoing copilot message for `<task id="..." />`,
+ * `<plan id="..." />`, and `<doc id="..." />` markers, fetches each
+ * primitive's current state from the filesystem, and substitutes a
+ * `<context>` expansion inline.
  *
  * The stored user message keeps the marker form — this expansion only
  * affects the text that's forwarded to the provider, so the agent
@@ -14,16 +15,19 @@ import {
   createContextRefRegex,
   getTask,
   getPlan,
+  getDoc,
   renderContextRefExpansion,
   renderDeletedContextRef,
   type ContextRefKind,
   type Task,
   type Plan,
+  type Doc,
 } from "@ticketbook/core";
 
 export interface ExpandContextRefsOptions {
   tasksDir: string;
   plansDir: string;
+  docsDir?: string;
 }
 
 /**
@@ -61,7 +65,7 @@ export async function expandContextRefs(
   const uniqueKeys = Array.from(
     new Set(matches.map((match) => `${match.kind}:${match.id}`)),
   );
-  const fetched = new Map<string, Task | Plan | null>();
+  const fetched = new Map<string, Task | Plan | Doc | null>();
   await Promise.all(
     uniqueKeys.map(async (key) => {
       const sep = key.indexOf(":");
@@ -69,8 +73,12 @@ export async function expandContextRefs(
       const id = key.slice(sep + 1);
       if (kind === "task") {
         fetched.set(key, await getTask(opts.tasksDir, id));
-      } else {
+      } else if (kind === "plan") {
         fetched.set(key, await getPlan(opts.plansDir, id));
+      } else if (opts.docsDir) {
+        fetched.set(key, await getDoc(opts.docsDir, id));
+      } else {
+        fetched.set(key, null);
       }
     }),
   );

@@ -4,9 +4,42 @@ import type {
   CopilotMessagePart,
   CopilotProviderHealth,
   CopilotProviderId,
+  CopilotSendOptions,
   CopilotSessionEvents,
   CopilotSessionOptions,
 } from "./types.js";
+
+/**
+ * Effort levels the Claude Code CLI's `--effort` flag accepts (per
+ * `claude --help` on 2.1.97). Unknown values are dropped rather than
+ * forwarded so we don't pass an arbitrary string to the spawned process.
+ */
+const CLAUDE_EFFORT_LEVELS = new Set(["low", "medium", "high", "max"]);
+
+/**
+ * Trim noisy values out of the arg list for logging so the important
+ * bits (--model, --effort, --resume, etc.) stay legible. Flags whose
+ * values are long and uninteresting get elided with `<…>`.
+ */
+const NOISY_ARG_FLAGS = new Set([
+  "--append-system-prompt",
+  "--system-prompt",
+  "--mcp-config",
+  "--allowed-tools",
+]);
+
+function summarizeCliArgs(args: string[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    out.push(arg);
+    if (NOISY_ARG_FLAGS.has(arg) && i + 1 < args.length) {
+      out.push("<…>");
+      i++;
+    }
+  }
+  return out.join(" ");
+}
 
 interface InternalSession {
   id: string;
@@ -95,7 +128,7 @@ export class ClaudeCodeProvider extends EventEmitter {
     return this.sessions.has(sessionId);
   }
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
+  async sendMessage(sessionId: string, text: string, opts: CopilotSendOptions = {}): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Copilot session not found: ${sessionId}`);
     if (session.status === "stopped") throw new Error(`Copilot session ${sessionId} is stopped`);
@@ -125,6 +158,19 @@ export class ClaudeCodeProvider extends EventEmitter {
       "mcp__ticketbook__*,Read,Glob,Grep,WebSearch,Bash,Edit,Write,NotebookEdit",
     ];
 
+    // Per-turn model override (e.g. sonnet/opus/haiku). claude-code resolves
+    // short aliases to full model IDs itself, so either an alias or a full
+    // `claude-sonnet-4-6`-style name works.
+    if (opts.model) {
+      args.push("--model", opts.model);
+    }
+    // Per-turn reasoning effort. The CLI validates this value, but we also
+    // pre-validate against the known set so an invalid selection never gets
+    // as far as spawning a subprocess with bad args.
+    if (opts.reasoningEffort && CLAUDE_EFFORT_LEVELS.has(opts.reasoningEffort)) {
+      args.push("--effort", opts.reasoningEffort);
+    }
+
     if (session.conversationId) {
       args.push("--resume", session.conversationId);
     } else if (session.systemPrompt) {
@@ -137,6 +183,14 @@ export class ClaudeCodeProvider extends EventEmitter {
     }
 
     const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    // Ground-truth spawn log — shows exactly which flags reached the CLI,
+    // so if the UI shows "sonnet + high" we can verify `--model sonnet
+    // --effort high` actually landed here. System prompt + MCP paths are
+    // long and not interesting, so summarize them rather than dump.
+    console.log(
+      `[copilot:claude-code:${sessionId}] spawn claude ${summarizeCliArgs(args)}`,
+    );
 
     const proc = spawn("claude", args, {
       cwd: session.cwd,

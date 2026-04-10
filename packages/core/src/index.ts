@@ -78,6 +78,36 @@ export {
 
 export type { CutTasksResult } from "./plan-writer.js";
 
+export {
+  DocFrontmatterSchema,
+  CreateDocInputSchema,
+  DocPatchSchema,
+  DocFiltersSchema,
+} from "./doc-schema.js";
+
+export type {
+  Doc,
+  DocFrontmatter,
+  CreateDocInput,
+  DocPatch,
+  DocFilters,
+} from "./doc-types.js";
+
+export {
+  listDocs,
+  getDoc,
+  searchDocs,
+  getDocProjects,
+  getDocTags,
+} from "./doc-reader.js";
+
+export {
+  createDoc,
+  updateDoc,
+  deleteDoc,
+  restoreDoc,
+} from "./doc-writer.js";
+
 export type { ClientMessage, ServerMessage } from "./terminal-protocol.js";
 
 export { initTicketbook, codexMcpInstructions } from "./init.js";

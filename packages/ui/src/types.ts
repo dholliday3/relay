@@ -99,3 +99,35 @@ export interface PlanMeta {
   projects: string[];
   tags: string[];
 }
+
+export interface Doc {
+  id: string;
+  title: string;
+  created: string;
+  updated: string;
+  tags?: string[];
+  project?: string;
+  refs?: string[];
+  body: string;
+  filePath: string;
+}
+
+export interface DocPatch {
+  title?: string;
+  tags?: string[];
+  project?: string | null;
+  refs?: string[];
+}
+
+export interface CreateDocInput {
+  title: string;
+  tags?: string[];
+  project?: string;
+  refs?: string[];
+  body?: string;
+}
+
+export interface DocMeta {
+  projects: string[];
+  tags: string[];
+}

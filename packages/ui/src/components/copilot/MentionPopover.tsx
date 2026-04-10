@@ -1,4 +1,4 @@
-import { FileTextIcon, ListChecksIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, ListChecksIcon } from "lucide-react";
 import type { ContextRefKind } from "@ticketbook/core/context-refs";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +42,9 @@ export function MentionPopover({
             ? "Tasks"
             : category === "plan"
               ? "Plans"
-              : "Tasks and plans"}
+              : category === "doc"
+                ? "Docs"
+                : "Tasks, plans, and docs"}
           {query && <span className="normal-case tracking-normal"> · {query}</span>}
         </span>
         <span className="text-muted-foreground/60">↑↓ ↵ esc</span>
@@ -54,7 +56,12 @@ export function MentionPopover({
       ) : (
         <ul className="flex flex-col gap-0.5">
           {items.map((item, i) => {
-            const Icon = item.kind === "task" ? FileTextIcon : ListChecksIcon;
+            const Icon =
+              item.kind === "task"
+                ? FileTextIcon
+                : item.kind === "plan"
+                  ? ListChecksIcon
+                  : BookOpenIcon;
             const isActive = i === activeIndex;
             return (
               <li key={`${item.kind}:${item.id}`}>

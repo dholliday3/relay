@@ -8,6 +8,7 @@ describe("REST API", () => {
   let dir: string;
   let tasksDir: string;
   let plansDir: string;
+  let docsDir: string;
   let handle: ServerHandle;
   let base: string;
 
@@ -15,11 +16,15 @@ describe("REST API", () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-api-"));
     tasksDir = join(dir, ".tasks");
     plansDir = join(dir, ".plans");
+    docsDir = join(dir, ".docs");
     await mkdir(join(tasksDir, ".archive"), { recursive: true });
     await mkdir(plansDir, { recursive: true });
+    await mkdir(docsDir, { recursive: true });
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
+    await writeFile(join(plansDir, ".counter"), "0", "utf-8");
+    await writeFile(join(docsDir, ".counter"), "0", "utf-8");
     await writeFile(join(tasksDir, ".config.yaml"), "prefix: TASK\ndeleteMode: archive\n", "utf-8");
-    handle = startServer({ tasksDir, plansDir, port: 0 });
+    handle = startServer({ tasksDir, plansDir, docsDir, port: 0 });
     base = `http://localhost:${handle.port}`;
   });
 
@@ -167,6 +172,48 @@ describe("REST API", () => {
     expect(res.status).toBe(200);
     const config = await res.json();
     expect(config.prefix).toBe("BUG");
+  });
+
+  test("POST /api/docs creates a doc", async () => {
+    const res = await fetch(`${base}/api/docs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Reference Doc" }),
+    });
+    expect(res.status).toBe(201);
+    const doc = await res.json();
+    expect(doc.id).toBe("DOC-001");
+    expect(doc.title).toBe("Reference Doc");
+  });
+
+  test("GET /api/docs/:id returns a doc", async () => {
+    await fetch(`${base}/api/docs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Findable Doc" }),
+    });
+
+    const res = await fetch(`${base}/api/docs/DOC-001`);
+    expect(res.status).toBe(200);
+    const doc = await res.json();
+    expect(doc.title).toBe("Findable Doc");
+  });
+
+  test("PATCH /api/docs/:id/body updates body", async () => {
+    await fetch(`${base}/api/docs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Body Doc" }),
+    });
+
+    const res = await fetch(`${base}/api/docs/DOC-001/body`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: "Updated notes" }),
+    });
+    expect(res.status).toBe(200);
+    const doc = await res.json();
+    expect(doc.body).toBe("Updated notes");
   });
 
   test("POST /api/tasks with invalid body returns 400", async () => {

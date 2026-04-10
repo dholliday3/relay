@@ -1,8 +1,8 @@
 /**
  * Tiptap-based rich input for the copilot panel.
  *
- * Replaces the plain-textarea PromptInputTextarea so that `<task />` /
- * `<plan />` context ref markers render as inline chips inside the
+ * Replaces the plain-textarea PromptInputTextarea so that primitive
+ * context-ref markers render as inline chips inside the
  * input (same primitive shape as the message bubble chips). Syncs its
  * serialized value back to the PromptInputProvider controller on every
  * update so the existing form submission path still works unchanged.
@@ -53,8 +53,8 @@ export interface CopilotPromptEditorRef {
   /**
    * Apply a pending insertion. `mode="append"` adds to the end of the
    * current content (with a leading space if needed); `mode="replace"`
-   * swaps the entire doc. Text is parsed for markers — any `<task />`
-   * / `<plan />` substrings become inline chips.
+   * swaps the entire doc. Text is parsed for markers and primitive
+   * refs become inline chips.
    */
   insertFromMarkerString: (text: string, mode: "append" | "replace") => void;
 }
@@ -77,6 +77,7 @@ export const CopilotPromptEditor = forwardRef<
   const {
     tasks,
     plans,
+    docs,
     pendingCopilotInsertion,
     consumePendingCopilotInsertion,
   } = useAppContext();
@@ -90,20 +91,23 @@ export const CopilotPromptEditor = forwardRef<
     ((props: SuggestionKeyDownProps) => boolean) | null
   >(null);
 
-  // Keep the latest tasks/plans available to the extension without
+  // Keep the latest primitives available to the extension without
   // recreating it — the extension closes over these getters once.
   const tasksRef = useRef(tasks);
   const plansRef = useRef(plans);
+  const docsRef = useRef(docs);
   useEffect(() => {
     tasksRef.current = tasks;
     plansRef.current = plans;
-  }, [tasks, plans]);
+    docsRef.current = docs;
+  }, [tasks, plans, docs]);
 
   const mentionExtension = useMemo(
     () =>
       createMentionExtension({
         getTasks: () => tasksRef.current,
         getPlans: () => plansRef.current,
+        getDocs: () => docsRef.current,
         onStateChange: setMentionState,
         keyDownRef: mentionKeyDownRef,
       }),
@@ -384,8 +388,7 @@ export const CopilotPromptEditor = forwardRef<
 /**
  * Walk the editor document and produce the same marker-flavored string
  * the rest of the system deals with: paragraphs join with `\n`, text
- * nodes concat, contextRef nodes expand to `<task id="..." title="..." />`
- * / `<plan ... />` markers.
+ * nodes concat, contextRef nodes expand back to primitive markers.
  */
 function serializeEditor(editor: Editor): string {
   const paragraphs: string[] = [];

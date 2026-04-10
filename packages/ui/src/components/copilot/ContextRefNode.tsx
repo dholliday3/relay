@@ -1,7 +1,7 @@
 /**
- * Tiptap inline atom node for a task/plan context reference.
+ * Tiptap inline atom node for a task/plan/doc context reference.
  *
- * Used in the copilot prompt editor so that `<task id="..." />` markers
+ * Used in the copilot prompt editor so that primitive markers
  * render as compact single-line chips inside the input (similar to
  * @file mentions in Zed / Cursor / Claude Code). The node carries
  * `kind` / `id` / `title` attrs and is atomic — Backspace removes it as
@@ -19,7 +19,7 @@ import {
   ReactNodeViewRenderer,
   type NodeViewProps,
 } from "@tiptap/react";
-import { FileTextIcon, ListChecksIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, ListChecksIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ContextRefHoverCard,
@@ -27,7 +27,7 @@ import {
 } from "./ContextRefHoverCard";
 
 export interface ContextRefAttrs {
-  kind: "task" | "plan";
+  kind: "task" | "plan" | "doc";
   id: string;
   title: string | null;
 }
@@ -95,7 +95,8 @@ export const ContextRefNode = Node.create({
 function ContextRefChipNodeView({ node, selected }: NodeViewProps) {
   const { kind, id, title } = node.attrs as ContextRefAttrs;
   const { primitive, deleted } = useContextRefLookup(kind, id);
-  const Icon = kind === "task" ? FileTextIcon : ListChecksIcon;
+  const Icon =
+    kind === "task" ? FileTextIcon : kind === "plan" ? ListChecksIcon : BookOpenIcon;
   const displayTitle =
     (primitive?.title ?? title ?? "").trim() || "(untitled)";
 

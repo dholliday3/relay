@@ -22,13 +22,14 @@ const dbgCop = createDebug("copilot");
 export interface ServerConfig {
   tasksDir: string;
   plansDir: string;
+  docsDir: string;
   port: number;
   staticDir?: string;
   /**
    * Absolute path to the bin/ticketbook.ts entry script. When set, the
    * copilot manager generates a per-session MCP config that points the
    * spawned `claude` CLI back at this same script in --mcp mode, so the
-   * copilot has read/write access to the user's tasks and plans for free.
+   * copilot has read/write access to the user's tasks, plans, and docs for free.
    * If omitted, the copilot still works but without ticketbook tool access.
    */
   binPath?: string;
@@ -63,7 +64,7 @@ function sendMsg(ws: { send(data: string): void }, msg: ServerMessage): void {
 }
 
 export function startServer(config: ServerConfig): ServerHandle {
-  const { tasksDir, plansDir, port, staticDir, binPath } = config;
+  const { tasksDir, plansDir, docsDir, port, staticDir, binPath } = config;
 
   // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy)
   const terminalBackend = new BunPtyHeadlessBackend(tasksDir);
@@ -78,11 +79,12 @@ export function startServer(config: ServerConfig): ServerHandle {
   const copilot = new CopilotManager({
     tasksDir,
     plansDir,
+    docsDir,
     binPath,
     providers: useStub ? [new StubCopilotProvider()] : [new ClaudeCodeProvider(), new CodexProvider()],
   });
 
-  const routes = createRoutes(tasksDir, plansDir, copilot);
+  const routes = createRoutes(tasksDir, plansDir, docsDir, copilot);
 
   // Track active WebSocket connections per session for graceful teardown.
   // Used by both terminal and copilot WS bridges.
@@ -391,12 +393,16 @@ export function startServer(config: ServerConfig): ServerHandle {
   const planWatcher = createWatcher(plansDir, (event) =>
     broadcastEvent({ ...event, source: "plan" }),
   );
+  const docWatcher = createWatcher(docsDir, (event) =>
+    broadcastEvent({ ...event, source: "doc" }),
+  );
 
   const shutdown = () => {
     terminalBackend.destroyAll();
     void copilot.stopAll();
     taskWatcher.close();
     planWatcher.close();
+    docWatcher.close();
     server.stop();
     process.exit(0);
   };
@@ -410,6 +416,7 @@ export function startServer(config: ServerConfig): ServerHandle {
       void copilot.stopAll();
       taskWatcher.close();
       planWatcher.close();
+      docWatcher.close();
       server.stop();
     },
   };
@@ -419,13 +426,15 @@ export function startServer(config: ServerConfig): ServerHandle {
 if (import.meta.main) {
   const tasksDir = resolve(process.env.TASKS_DIR ?? ".tasks");
   const plansDir = resolve(process.env.PLANS_DIR ?? ".plans");
+  const docsDir = resolve(process.env.DOCS_DIR ?? ".docs");
   const port = parseInt(process.env.PORT ?? "4242", 10);
   const staticDir = resolve(
     process.env.STATIC_DIR ?? join(import.meta.dir, "../../ui/dist"),
   );
 
-  const handle = startServer({ tasksDir, plansDir, port, staticDir });
+  const handle = startServer({ tasksDir, plansDir, docsDir, port, staticDir });
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
   console.log(`Tasks directory: ${tasksDir}`);
   console.log(`Plans directory: ${plansDir}`);
+  console.log(`Docs directory: ${docsDir}`);
 }

@@ -15,6 +15,10 @@ import {
   createPlan,
   deletePlan as apiDeletePlan,
   fetchPlanMeta,
+  fetchDocs,
+  createDoc,
+  deleteDoc as apiDeleteDoc,
+  fetchDocMeta,
 } from "../api";
 import type {
   Task,
@@ -27,6 +31,9 @@ import type {
   PlanStatus,
   CreatePlanInput,
   PlanMeta,
+  Doc,
+  CreateDocInput,
+  DocMeta,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -51,20 +58,25 @@ interface AppContextValue {
   // Data
   tasks: Task[];
   plans: Plan[];
+  docs: Doc[];
   config: TicketbookConfig;
   meta: Meta;
   planMeta: PlanMeta;
+  docMeta: DocMeta;
 
   // Loaders
   loadTasks: () => Promise<void>;
   loadPlans: () => Promise<void>;
+  loadDocs: () => Promise<void>;
 
   // Selection / tabs
   openTabs: string[];
   activeTaskId: string | null;
   activePlanId: string | null;
+  activeDocId: string | null;
   setActiveTaskId: (id: string | null) => void;
   setActivePlanId: (id: string | null) => void;
+  setActiveDocId: (id: string | null) => void;
 
   // Create state
   isCreating: boolean;
@@ -76,7 +88,7 @@ interface AppContextValue {
   confirmDelete: string | null;
   setConfirmDelete: (id: string | null) => void;
   deleteItemTitle: string;
-  deleteItemType: "task" | "plan";
+  deleteItemType: "task" | "plan" | "doc";
 
   // Settings
   showSettings: boolean;
@@ -115,10 +127,13 @@ interface AppContextValue {
   // Handlers
   handleSelect: (task: Task) => void;
   handleSelectPlan: (plan: Plan) => void;
+  handleSelectDoc: (doc: Doc) => void;
   handleNewTask: () => void;
   handleNewPlan: () => void;
+  handleNewDoc: () => void;
   handleCreateTask: (input: CreateTaskInput) => Promise<void>;
   handleCreatePlan: (input: CreatePlanInput) => Promise<void>;
+  handleCreateDoc: (input: CreateDocInput) => Promise<void>;
   handleCreateInColumn: (status: Status) => void;
   handleCloseTab: (tabId: string) => void;
   handleDeleteRequest: (id: string) => void;
@@ -156,6 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Data state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
   const [config, setConfig] = useState<TicketbookConfig>({
     prefix: "TASK",
     deleteMode: "archive",
@@ -163,11 +179,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
   const [meta, setMeta] = useState<Meta>({ projects: [], epics: [], sprints: [], tags: [] });
   const [planMeta, setPlanMeta] = useState<PlanMeta>({ projects: [], tags: [] });
+  const [docMeta, setDocMeta] = useState<DocMeta>({ projects: [], tags: [] });
 
   // Selection / UI
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [createDefaultStatus, setCreateDefaultStatus] = useState<Status>("open");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -233,13 +251,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loadDocs = useCallback(async () => {
+    try {
+      const data = await fetchDocs();
+      setDocs(data);
+    } catch (err) {
+      console.error("Failed to load docs:", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadTasks();
     loadPlans();
+    loadDocs();
     fetchConfig().then(setConfig).catch(console.error);
     fetchMeta().then(setMeta).catch(console.error);
     fetchPlanMeta().then(setPlanMeta).catch(console.error);
-  }, [loadTasks, loadPlans]);
+    fetchDocMeta().then(setDocMeta).catch(console.error);
+  }, [loadTasks, loadPlans, loadDocs]);
 
   // SSE
   useEffect(() => {
@@ -247,22 +276,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (event.source === "plan") {
         loadPlans();
         fetchPlanMeta().then(setPlanMeta).catch(console.error);
+      } else if (event.source === "doc") {
+        loadDocs();
+        fetchDocMeta().then(setDocMeta).catch(console.error);
       } else {
         loadTasks();
         fetchMeta().then(setMeta).catch(console.error);
       }
     });
     return unsub;
-  }, [loadTasks, loadPlans]);
+  }, [loadTasks, loadPlans, loadDocs]);
 
   // ---- Derived ----
   const deleteItemTitle = confirmDelete
     ? (tasks.find((t) => t.id === confirmDelete)?.title
       ?? plans.find((p) => p.id === confirmDelete)?.title
+      ?? docs.find((d) => d.id === confirmDelete)?.title
       ?? confirmDelete)
     : "";
-  const deleteItemType: "task" | "plan" =
-    confirmDelete && plans.some((p) => p.id === confirmDelete) ? "plan" : "task";
+  const deleteItemType: "task" | "plan" | "doc" =
+    confirmDelete && plans.some((p) => p.id === confirmDelete)
+      ? "plan"
+      : confirmDelete && docs.some((d) => d.id === confirmDelete)
+        ? "doc"
+        : "task";
 
   const toggleHideItemBadges = useCallback(() => {
     setHideItemBadges((prev) => {
@@ -294,6 +331,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [isMobile],
   );
 
+  const handleSelectDoc = useCallback(
+    (doc: Doc) => {
+      setIsCreating(false);
+      setActiveDocId(doc.id);
+      setOpenTabs((tabs) => (tabs.includes(doc.id) ? tabs : [...tabs, doc.id]));
+      if (isMobile) setMobileShowDetail(true);
+    },
+    [isMobile],
+  );
+
   const handleCloseTab = useCallback(
     (tabId: string) => {
       setOpenTabs((tabs) => {
@@ -308,10 +355,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const next = newTabs[Math.min(idx, newTabs.length - 1)] ?? null;
           setActivePlanId(next);
         }
+        if (activeDocId === tabId) {
+          const idx = tabs.indexOf(tabId);
+          const next = newTabs[Math.min(idx, newTabs.length - 1)] ?? null;
+          setActiveDocId(next);
+        }
         return newTabs;
       });
     },
-    [activeTaskId, activePlanId],
+    [activeTaskId, activePlanId, activeDocId],
   );
 
   const handleNewTask = useCallback(() => {
@@ -324,6 +376,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleNewPlan = useCallback(() => {
     setIsCreating(true);
     setActivePlanId(null);
+    if (isMobile) setMobileShowDetail(true);
+  }, [isMobile]);
+
+  const handleNewDoc = useCallback(() => {
+    setIsCreating(true);
+    setActiveDocId(null);
     if (isMobile) setMobileShowDetail(true);
   }, [isMobile]);
 
@@ -357,6 +415,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [loadPlans],
   );
 
+  const handleCreateDoc = useCallback(
+    async (input: CreateDocInput) => {
+      try {
+        const doc = await createDoc(input);
+        setIsCreating(false);
+        await loadDocs();
+        setActiveDocId(doc.id);
+        setOpenTabs((tabs) => (tabs.includes(doc.id) ? tabs : [...tabs, doc.id]));
+      } catch (err) {
+        console.error("Failed to create doc:", err);
+      }
+    },
+    [loadDocs],
+  );
+
   const handleCreateInColumn = useCallback((status: Status) => {
     setCreateDefaultStatus(status);
     setIsCreating(true);
@@ -374,6 +447,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleConfirmDelete = useCallback(async () => {
     if (!confirmDelete) return;
     const isPlan = plans.some((p) => p.id === confirmDelete);
+    const isDoc = docs.some((d) => d.id === confirmDelete);
     try {
       if (isPlan) {
         await apiDeletePlan(confirmDelete);
@@ -381,6 +455,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setActivePlanId(null);
         setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
         await loadPlans();
+      } else if (isDoc) {
+        await apiDeleteDoc(confirmDelete);
+        setConfirmDelete(null);
+        setActiveDocId(null);
+        setOpenTabs((tabs) => tabs.filter((id) => id !== confirmDelete));
+        await loadDocs();
       } else {
         await deleteTask(confirmDelete);
         setConfirmDelete(null);
@@ -391,7 +471,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("Failed to delete:", err);
     }
-  }, [confirmDelete, plans, loadPlans, loadTasks]);
+  }, [confirmDelete, plans, docs, loadPlans, loadDocs, loadTasks]);
 
   const handleCancelDelete = useCallback(() => {
     setConfirmDelete(null);
@@ -505,6 +585,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleMobileBack = useCallback(() => {
     setMobileShowDetail(false);
     setActiveTaskId(null);
+    setActivePlanId(null);
+    setActiveDocId(null);
     setIsCreating(false);
   }, []);
 
@@ -600,16 +682,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     tasks,
     plans,
+    docs,
     config,
     meta,
     planMeta,
+    docMeta,
     loadTasks,
     loadPlans,
+    loadDocs,
     openTabs,
     activeTaskId,
     activePlanId,
+    activeDocId,
     setActiveTaskId,
     setActivePlanId,
+    setActiveDocId,
     isCreating,
     setIsCreating,
     createDefaultStatus,
@@ -636,10 +723,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     consumePendingCopilotInsertion,
     handleSelect,
     handleSelectPlan,
+    handleSelectDoc,
     handleNewTask,
     handleNewPlan,
+    handleNewDoc,
     handleCreateTask,
     handleCreatePlan,
+    handleCreateDoc,
     handleCreateInColumn,
     handleCloseTab,
     handleDeleteRequest,

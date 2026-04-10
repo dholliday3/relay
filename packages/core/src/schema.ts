@@ -82,6 +82,7 @@ export const DebriefStyleEnum = z.enum(["very-concise", "concise", "detailed", "
 export const TicketbookConfigSchema = z.object({
   prefix: z.string().default("TASK"),
   planPrefix: z.string().default("PLAN"),
+  docPrefix: z.string().default("DOC"),
   deleteMode: DeleteModeEnum.default("archive"),
   debriefStyle: DebriefStyleEnum.default("very-concise"),
   /**

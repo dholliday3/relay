@@ -1,20 +1,20 @@
 # AGENTS.md
 
-This project uses **ticketbook** for task and plan tracking. Tasks live in `.tasks/` and plans live in `.plans/` as markdown files with YAML frontmatter.
+This project uses **ticketbook** for task, plan, and reference-doc tracking. Tasks live in `.tasks/`, plans live in `.plans/`, and durable reference docs live in `.docs/` as markdown files with YAML frontmatter.
 
 ## If your agent supports Skills
 
-The `ticketbook` skill at `skills/ticketbook/SKILL.md` covers the full workflow. Claude Code discovers it via the `.claude-plugin/` manifest; Codex discovers it via `.agents/skills/ticketbook/`. Nothing to configure — just ask about tasks or plans and the skill will load.
+The `ticketbook` skill at `skills/ticketbook/SKILL.md` covers the full workflow. Claude Code discovers it via the `.claude-plugin/` manifest; Codex discovers it via `.agents/skills/ticketbook/`. Nothing to configure — just ask about tasks, plans, or docs and the skill will load.
 
 ## If your agent does not support Skills
 
-Use the `ticketbook` MCP server for all task and plan operations. Start it with:
+Use the `ticketbook` MCP server for all task, plan, and doc operations. Start it with:
 
 ```
 bunx ticketbook --mcp
 ```
 
-Never hand-edit files in `.tasks/` or `.plans/` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
+Never hand-edit files in `.tasks/`, `.plans/`, or `.docs/` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
 
 ### Core workflow
 
@@ -28,5 +28,11 @@ Never hand-edit files in `.tasks/` or `.plans/` — the MCP server owns ID assig
 - **Task status:** `draft`, `backlog`, `open`, `in-progress`, `done`, `cancelled`
 - **Task priority:** `low`, `medium`, `high`, `urgent`
 - **Plan status:** `draft`, `active`, `completed`, `archived`
+
+### Primitive roles
+
+- **Docs:** stable reference material, architecture notes, and durable guidance that should stay useful over time
+- **Plans:** higher-level proposals and implementation breakdowns that are expected to evolve as work gets clarified
+- **Tasks:** concrete units of work that move through an execution lifecycle
 
 See the full MCP tool list in the ticketbook README or by connecting to the MCP server.

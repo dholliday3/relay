@@ -45,6 +45,11 @@ import {
   PromptInputBody,
   PromptInputFooter,
   PromptInputProvider,
+  PromptInputSelect,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
   PromptInputSubmit,
   PromptInputTools,
   usePromptInputController,
@@ -63,13 +68,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCopilotSession, type CopilotPart } from "@/hooks/useCopilotSession";
 import { useCopilotConversations } from "@/hooks/useCopilotConversations";
@@ -267,23 +265,6 @@ function CopilotPanelInner({ onClose }: CopilotPanelProps) {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Select
-            value={session.selectedProviderId ?? "claude-code"}
-            onValueChange={(value) =>
-              session.setProviderId(value as "claude-code" | "codex")
-            }
-          >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <SelectValue placeholder="Provider" />
-            </SelectTrigger>
-            <SelectContent>
-              {session.providers.map((provider) => (
-                <SelectItem key={provider.providerId} value={provider.providerId}>
-                  {providerLabel(provider.providerId)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
@@ -381,7 +362,7 @@ function CopilotPanelInner({ onClose }: CopilotPanelProps) {
                 <PromptInputBody>
                   <CopilotPromptEditor
                     ref={editorRef}
-                    placeholder="Ask the assistant… (type @ to reference a task or plan)"
+                    placeholder="Ask the assistant… (type @ to reference a task, plan, or doc)"
                     disabled={!session.sessionId}
                     onSubmit={() => {
                       // Find the form wrapping the editor and request a
@@ -395,8 +376,105 @@ function CopilotPanelInner({ onClose }: CopilotPanelProps) {
                   />
                 </PromptInputBody>
                 <PromptInputFooter>
-                  <PromptInputTools>
-                    <span className="px-1 text-xs text-muted-foreground">
+                  <PromptInputTools className="min-w-0 flex-wrap">
+                    {/* Provider switcher — replaces the old header select.
+                        Changing provider restarts the session, so we only
+                        enable it when we're not mid-stream. */}
+                    <PromptInputSelect
+                      value={session.selectedProviderId ?? "claude-code"}
+                      onValueChange={(value) =>
+                        session.setProviderId(value as "claude-code" | "codex")
+                      }
+                      disabled={session.isStreaming}
+                    >
+                      <PromptInputSelectTrigger
+                        className="h-7 gap-1 px-2 text-xs"
+                        data-testid="copilot-provider-select"
+                      >
+                        <PromptInputSelectValue placeholder="Provider" />
+                      </PromptInputSelectTrigger>
+                      <PromptInputSelectContent>
+                        {session.providers.map((provider) => (
+                          <PromptInputSelectItem
+                            key={provider.providerId}
+                            value={provider.providerId}
+                          >
+                            {providerLabel(provider.providerId)}
+                          </PromptInputSelectItem>
+                        ))}
+                      </PromptInputSelectContent>
+                    </PromptInputSelect>
+
+                    {/* Model override — options depend on the active
+                        provider, "default" means "let the CLI pick".
+                        Radix Select sometimes re-fires onValueChange with
+                        an empty string when the controlled `value` prop
+                        transitions across an options-list change (e.g.
+                        during a provider swap). We ignore anything that
+                        isn't an explicit sentinel or a known option so
+                        those spurious callbacks can't wipe the persisted
+                        selection. */}
+                    <PromptInputSelect
+                      value={session.selectedModel ?? DEFAULT_SENTINEL}
+                      onValueChange={(value) => {
+                        if (value === DEFAULT_SENTINEL) {
+                          session.setModel(null);
+                        } else if (value) {
+                          session.setModel(value);
+                        }
+                      }}
+                    >
+                      <PromptInputSelectTrigger
+                        className="h-7 gap-1 px-2 text-xs"
+                        data-testid="copilot-model-select"
+                      >
+                        <PromptInputSelectValue placeholder="Model" />
+                      </PromptInputSelectTrigger>
+                      <PromptInputSelectContent>
+                        {modelOptionsFor(session.selectedProviderId).map((opt) => (
+                          <PromptInputSelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </PromptInputSelectItem>
+                        ))}
+                      </PromptInputSelectContent>
+                    </PromptInputSelect>
+
+                    {/* Reasoning effort — both providers expose an effort
+                        knob (`--effort` on claude-code, `model_reasoning_effort`
+                        on codex), but with different vocabularies. The
+                        options list is chosen per-provider so we never
+                        offer a level the active CLI will reject. */}
+                    <PromptInputSelect
+                      value={session.selectedReasoningEffort ?? DEFAULT_SENTINEL}
+                      onValueChange={(value) => {
+                        // Same spurious-empty-string guard as the model
+                        // select above.
+                        if (value === DEFAULT_SENTINEL) {
+                          session.setReasoningEffort(null);
+                        } else if (value) {
+                          session.setReasoningEffort(value);
+                        }
+                      }}
+                    >
+                      <PromptInputSelectTrigger
+                        className="h-7 gap-1 px-2 text-xs"
+                        data-testid="copilot-reasoning-select"
+                      >
+                        <PromptInputSelectValue placeholder="Effort" />
+                      </PromptInputSelectTrigger>
+                      <PromptInputSelectContent>
+                        {effortOptionsFor(session.selectedProviderId).map((opt) => (
+                          <PromptInputSelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </PromptInputSelectItem>
+                        ))}
+                      </PromptInputSelectContent>
+                    </PromptInputSelect>
+
+                    <span
+                      className="ml-auto truncate px-1 text-xs text-muted-foreground"
+                      aria-live="polite"
+                    >
                       {statusLabel}
                     </span>
                   </PromptInputTools>
@@ -587,6 +665,74 @@ const STARTER_SUGGESTIONS = [
   "Summarize the open backlog by tag",
   "Draft a task: fix terminal scrollback bug",
 ];
+
+/**
+ * Sentinel value used by the model / effort Selects to represent "no
+ * override, let the CLI pick its own default." Radix Select doesn't
+ * allow an empty-string value on <SelectItem>, so we use a non-empty
+ * marker and translate it to `null` in the onValueChange handlers.
+ */
+const DEFAULT_SENTINEL = "__default__";
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+// Claude model aliases — the CLI auto-resolves these to the latest
+// version (e.g. `sonnet` → `claude-sonnet-4-6`), so the selector stays
+// forward-compatible without us needing to chase new model IDs.
+const CLAUDE_MODEL_OPTIONS: SelectOption[] = [
+  { value: DEFAULT_SENTINEL, label: "Default" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+];
+
+// Codex models — sourced from the CLI's own `~/.codex/models_cache.json`
+// catalog, filtered to `visibility: "list"`. As of codex-cli 0.118.0 the
+// frontier set is gpt-5.4 / gpt-5.4-mini / gpt-5.3-codex / gpt-5.2.
+// Older `gpt-5-codex` / `gpt-5` / `gpt-5.1-*` entries are hidden in the
+// catalog and superseded by this list.
+const CODEX_MODEL_OPTIONS: SelectOption[] = [
+  { value: DEFAULT_SENTINEL, label: "Default" },
+  { value: "gpt-5.4", label: "gpt-5.4" },
+  { value: "gpt-5.4-mini", label: "gpt-5.4-mini" },
+  { value: "gpt-5.3-codex", label: "gpt-5.3-codex" },
+  { value: "gpt-5.2", label: "gpt-5.2" },
+];
+
+// Claude's `--effort` flag accepts these four levels (per `claude --help`
+// on 2.1.97). Note `max` — Codex doesn't have that level.
+const CLAUDE_EFFORT_OPTIONS: SelectOption[] = [
+  { value: DEFAULT_SENTINEL, label: "Default" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "max", label: "Max" },
+];
+
+// Codex's reasoning levels for the visible frontier models — all four
+// support exactly this set (from models_cache.json). Note `xhigh`, which
+// is Codex-specific and doesn't exist in Claude's vocabulary.
+const CODEX_EFFORT_OPTIONS: SelectOption[] = [
+  { value: DEFAULT_SENTINEL, label: "Default" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
+];
+
+function modelOptionsFor(providerId: "claude-code" | "codex" | null): SelectOption[] {
+  if (providerId === "codex") return CODEX_MODEL_OPTIONS;
+  // Default to claude-code's list — covers both `claude-code` and null.
+  return CLAUDE_MODEL_OPTIONS;
+}
+
+function effortOptionsFor(providerId: "claude-code" | "codex" | null): SelectOption[] {
+  if (providerId === "codex") return CODEX_EFFORT_OPTIONS;
+  return CLAUDE_EFFORT_OPTIONS;
+}
 
 function formatRelative(ms: number): string {
   const diff = Date.now() - ms;

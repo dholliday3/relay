@@ -7,7 +7,7 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { renderContextRefMarker } from "@ticketbook/core/context-refs";
-import { patchPlan, patchPlanBody, cutTasksFromPlan } from "../api";
+import { patchPlan, patchPlanBody } from "../api";
 import type { Plan, PlanStatus, PlanMeta } from "../types";
 import { useAppContext } from "../context/AppContext";
 import { TiptapEditor } from "./TiptapEditor";
@@ -44,7 +44,6 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(plan.title);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [cutting, setCutting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const bodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,18 +103,17 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
     }
   };
 
-  const handleCutTasks = useCallback(async () => {
-    setCutting(true);
-    try {
-      await cutTasksFromPlan(plan.id);
-      onUpdated();
-      onTasksCreated?.();
-    } catch (err) {
-      console.error("Failed to cut tasks:", err);
-    } finally {
-      setCutting(false);
-    }
-  }, [plan.id, onUpdated, onTasksCreated]);
+  const handleCutTasks = useCallback(() => {
+    const marker = renderContextRefMarker({
+      kind: "plan",
+      id: plan.id,
+      title: plan.title,
+    });
+    insertIntoCopilotInput(
+      `Please break down ${marker} into well-sequenced tasks. Create a task for each discrete unit of work, set appropriate priorities and ordering, and link them all back to this plan.`,
+    );
+    onRequestClose?.();
+  }, [plan.id, plan.title, insertIntoCopilotInput, onRequestClose]);
 
   const handleAddToChat = useCallback(() => {
     const marker = renderContextRefMarker({
@@ -223,11 +221,10 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
             variant="outline"
             size="sm"
             onClick={handleCutTasks}
-            disabled={cutting}
-            title="Cut tasks from unchecked checkboxes"
+            title="Ask the agent to cut tasks from this plan"
           >
             <ScissorsIcon />
-            {cutting ? "Cutting..." : "Cut Tasks"}
+            Cut Tasks
           </Button>
           {onDelete && (
             <Button

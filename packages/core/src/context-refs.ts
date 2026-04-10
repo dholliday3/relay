@@ -5,7 +5,7 @@
  * with context ref markers. It has no node or gray-matter dependencies
  * so it's safe to import from the UI bundle.
  *
- * The server-side expansion logic (which reads task/plan files from
+ * The server-side expansion logic (which reads task/plan/doc files from
  * disk and renders them as `<context>` blocks) lives in
  * `context-refs-expansion.ts`.
  *
@@ -17,6 +17,7 @@
  *
  *        <task id="TKTB-025" title="Copilot context refs" />
  *        <plan id="PLAN-006" title="Primitive rename" />
+ *        <doc id="DOC-001" title="Editor UX notes" />
  *
  *   2. Expansion form — what the server substitutes in before forwarding
  *      the outgoing message to the provider. The agent sees the full,
@@ -34,11 +35,11 @@
  *
  * Keeping these shapes distinct means the stored form stays compact and
  * the agent-facing form is always fresh (live refs, not snapshots). The
- * `<context>` wrapper is intentionally a different tag from `<task>` /
- * `<plan>` so it can never collide with a literal marker in user prose.
+ * `<context>` wrapper is intentionally a different tag from primitive
+ * marker tags so it can never collide with a literal marker in user prose.
  */
 
-export type ContextRefKind = "task" | "plan";
+export type ContextRefKind = "task" | "plan" | "doc";
 
 export interface ContextRef {
   kind: ContextRefKind;
@@ -58,7 +59,8 @@ export interface ContextRef {
  * instance via `createContextRefRegex()` when iterating, so callers don't
  * share `lastIndex` state.
  */
-const MARKER_SOURCE = '<(task|plan)\\s+id="([^"]+)"(?:\\s+title="([^"]*)")?\\s*/>';
+const MARKER_SOURCE =
+  '<(task|plan|doc)\\s+id="([^"]+)"(?:\\s+title="([^"]*)")?\\s*/>';
 const MARKER_FLAGS = "g";
 
 export function createContextRefRegex(): RegExp {
