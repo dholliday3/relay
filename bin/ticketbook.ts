@@ -7,6 +7,7 @@ import {
   initTicketbook,
   codexMcpInstructions,
 } from "../packages/core/src/init.ts";
+import { findTasksDirWithWorktree } from "../packages/core/src/worktree.ts";
 
 interface CliArgs {
   command: "serve" | "init";
@@ -60,22 +61,15 @@ Options:
   -h, --help     Show this help message`);
 }
 
-/** Walk up from startDir to find a .tasks/ directory (like git finds .git/) */
+/** Walk up from startDir to find a .tasks/ directory, with worktree awareness. */
 async function findTasksDir(startDir: string): Promise<string | null> {
-  let dir = resolve(startDir);
-  while (true) {
-    const candidate = join(dir, ".tasks");
-    try {
-      const s = await stat(candidate);
-      if (s.isDirectory()) return candidate;
-    } catch {
-      // Not found at this level, keep walking up
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
+  const { tasksDir, isWorktree } = await findTasksDirWithWorktree(startDir);
+  if (tasksDir && isWorktree) {
+    console.error(
+      `Detected git worktree — using main repo artifacts at ${tasksDir}`,
+    );
   }
-  return null;
+  return tasksDir;
 }
 
 /** Resolve a user-provided path to a .tasks/ directory */

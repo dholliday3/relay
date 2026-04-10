@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { dirname } from "node:path";
 import {
   listTasks,
   getTask,
@@ -22,6 +23,9 @@ import {
   createDoc,
   updateDoc,
   deleteDoc,
+  runDoctor,
+  formatDoctorReport,
+  sync,
 } from "@ticketbook/core";
 import type { Doc, Plan } from "@ticketbook/core";
 
@@ -999,6 +1003,69 @@ export async function startMcpServer(
       },
     );
   }
+
+  // --- doctor ---
+  server.tool(
+    "doctor",
+    "Run integrity checks on all ticketbook artifacts. Validates schema compliance, counter consistency, duplicate IDs, dangling references, stale locks, and .gitattributes. Use fix=true to auto-repair fixable issues.",
+    {
+      fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)"),
+    },
+    async (args) => {
+      // Derive project root from tasksDir (parent of .tasks/)
+      const projectRoot = dirname(tasksDir);
+      const result = await runDoctor({
+        tasksDir,
+        plansDir: plansDir ?? undefined,
+        docsDir: docsDir ?? undefined,
+        projectRoot,
+        fix: args.fix ?? false,
+      });
+      const report = formatDoctorReport(result);
+      return { content: [{ type: "text", text: report }] };
+    },
+  );
+
+  // --- sync ---
+  server.tool(
+    "sync",
+    "Stage and commit all pending artifact changes (.tasks/, .plans/, .docs/) with a structured commit message. Use dry_run=true to preview. Use push=true to push after committing.",
+    {
+      dry_run: z.boolean().optional().describe("Preview changes without committing (default: false)"),
+      push: z.boolean().optional().describe("Push to remote after committing (default: false)"),
+    },
+    async (args) => {
+      const projectRoot = dirname(tasksDir);
+      const result = await sync({
+        tasksDir,
+        plansDir: plansDir ?? undefined,
+        docsDir: docsDir ?? undefined,
+        projectRoot,
+        dryRun: args.dry_run ?? false,
+        push: args.push ?? false,
+      });
+
+      if (result.committed.length === 0) {
+        return { content: [{ type: "text", text: "No artifact changes to sync." }] };
+      }
+
+      const lines: string[] = [];
+      if (result.dryRun) {
+        lines.push("Dry run — would commit:");
+      } else {
+        lines.push("Committed:");
+      }
+      lines.push(`  Message: ${result.message}`);
+      lines.push(`  Files (${result.committed.length}):`);
+      for (const f of result.committed) {
+        lines.push(`    ${f}`);
+      }
+      if (result.pushed) {
+        lines.push("  Pushed to remote.");
+      }
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    },
+  );
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();

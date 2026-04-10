@@ -1,7 +1,6 @@
 import {
   readdir,
   readFile,
-  writeFile,
   rename,
   unlink,
   mkdir,
@@ -16,6 +15,7 @@ import {
 import type { Doc, CreateDocInput, DocPatch } from "./doc-types.js";
 import { nextIdForDir, formatFilename } from "./id.js";
 import { getConfig } from "./config.js";
+import { atomicWriteFile } from "./atomic.js";
 
 const ARCHIVE_DIR = ".archive";
 
@@ -99,7 +99,7 @@ export async function createDoc(
   const filePath = join(docsDir, filename(validated.title));
 
   await mkdir(docsDir, { recursive: true });
-  await writeFile(filePath, serializeDoc(frontmatter, body), "utf-8");
+  await atomicWriteFile(filePath, serializeDoc(frontmatter, body));
 
   return {
     id,
@@ -164,7 +164,7 @@ export async function updateDoc(
     newFilePath = join(docsDir, formatFilename(id, validated.title));
   }
 
-  await writeFile(newFilePath, serializeDoc(frontmatter, body), "utf-8");
+  await atomicWriteFile(newFilePath, serializeDoc(frontmatter, body));
   if (newFilePath !== filePath) {
     await unlink(filePath);
   }

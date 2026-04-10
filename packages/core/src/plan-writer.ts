@@ -1,7 +1,6 @@
 import {
   readdir,
   readFile,
-  writeFile,
   rename,
   unlink,
   mkdir,
@@ -18,6 +17,7 @@ import type { Task } from "./types.js";
 import { nextIdForDir, formatFilename } from "./id.js";
 import { getConfig } from "./config.js";
 import { createTask } from "./writer.js";
+import { atomicWriteFile } from "./atomic.js";
 
 const ARCHIVE_DIR = ".archive";
 
@@ -104,7 +104,7 @@ export async function createPlan(
   const filePath = join(plansDir, filename(validated.title));
 
   await mkdir(plansDir, { recursive: true });
-  await writeFile(filePath, serializePlan(fm, body), "utf-8");
+  await atomicWriteFile(filePath, serializePlan(fm, body));
 
   return {
     id,
@@ -177,7 +177,7 @@ export async function updatePlan(
     newFilePath = join(plansDir, formatFilename(id, validated.title));
   }
 
-  await writeFile(newFilePath, serializePlan(fm, body), "utf-8");
+  await atomicWriteFile(newFilePath, serializePlan(fm, body));
   if (newFilePath !== filePath) {
     await unlink(filePath);
   }
@@ -300,7 +300,7 @@ export async function cutTasksFromPlan(
     updated: now,
   });
 
-  await writeFile(filePath, serializePlan(fm, newBody), "utf-8");
+  await atomicWriteFile(filePath, serializePlan(fm, newBody));
 
   const updatedPlan: Plan = {
     ...planData,
