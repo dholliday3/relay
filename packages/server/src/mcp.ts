@@ -22,6 +22,8 @@ import {
   createDoc,
   updateDoc,
   deleteDoc,
+  runDoctor,
+  formatDoctorReport,
 } from "@ticketbook/core";
 import type { Doc, Plan } from "@ticketbook/core";
 
@@ -999,6 +1001,28 @@ export async function startMcpServer(
       },
     );
   }
+
+  // --- doctor ---
+  server.tool(
+    "doctor",
+    "Run integrity checks on all ticketbook artifacts. Validates schema compliance, counter consistency, duplicate IDs, dangling references, stale locks, and .gitattributes. Use fix=true to auto-repair fixable issues.",
+    {
+      fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)"),
+    },
+    async (args) => {
+      // Derive project root from tasksDir (parent of .tasks/)
+      const projectRoot = tasksDir.replace(/[/\\]\.tasks\/?$/, "") || tasksDir;
+      const result = await runDoctor({
+        tasksDir,
+        plansDir: plansDir ?? undefined,
+        docsDir: docsDir ?? undefined,
+        projectRoot,
+        fix: args.fix ?? false,
+      });
+      const report = formatDoctorReport(result);
+      return { content: [{ type: "text", text: report }] };
+    },
+  );
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();

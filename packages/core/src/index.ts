@@ -108,6 +108,11 @@ export {
   restoreDoc,
 } from "./doc-writer.js";
 
+export { withLock } from "./lock.js";
+export { atomicWriteFile } from "./atomic.js";
+export { runDoctor, formatDoctorReport } from "./doctor.js";
+export type { DoctorOptions, DoctorResult, DiagnosticItem, Severity } from "./doctor.js";
+
 export type { ClientMessage, ServerMessage } from "./terminal-protocol.js";
 
 export { initTicketbook, codexMcpInstructions } from "./init.js";

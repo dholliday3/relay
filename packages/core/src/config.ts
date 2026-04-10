@@ -1,8 +1,9 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import { TicketbookConfigSchema } from "./schema.js";
 import type { TicketbookConfig } from "./types.js";
+import { atomicWriteFile } from "./atomic.js";
 
 const CONFIG_FILENAME = ".config.yaml";
 
@@ -32,7 +33,7 @@ export async function updateConfig(
   const config = TicketbookConfigSchema.parse(merged);
 
   await mkdir(dir, { recursive: true });
-  await writeFile(configPath(dir), stringify(config), "utf-8");
+  await atomicWriteFile(configPath(dir), stringify(config));
 
   return config;
 }

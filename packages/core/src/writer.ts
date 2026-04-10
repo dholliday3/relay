@@ -1,7 +1,6 @@
 import {
   readdir,
   readFile,
-  writeFile,
   rename,
   unlink,
   mkdir,
@@ -16,6 +15,7 @@ import {
 import type { Task, CreateTaskInput, TaskPatch } from "./types.js";
 import { nextId, formatFilename } from "./id.js";
 import { getConfig } from "./config.js";
+import { atomicWriteFile } from "./atomic.js";
 
 const ARCHIVE_DIR = ".archive";
 
@@ -107,7 +107,7 @@ export async function createTask(
   const filePath = join(dir, filename(validated.title));
 
   await mkdir(dir, { recursive: true });
-  await writeFile(filePath, serializeTicket(fm, body), "utf-8");
+  await atomicWriteFile(filePath, serializeTicket(fm, body));
 
   return {
     id,
@@ -211,7 +211,7 @@ export async function updateTask(
     newFilePath = join(dir, formatFilename(id, validated.title));
   }
 
-  await writeFile(newFilePath, serializeTicket(fm, body), "utf-8");
+  await atomicWriteFile(newFilePath, serializeTicket(fm, body));
   if (newFilePath !== filePath) {
     await unlink(filePath);
   }
@@ -305,7 +305,7 @@ export async function toggleSubtask(
     updated: now,
   });
 
-  await writeFile(filePath, serializeTicket(fm, body), "utf-8");
+  await atomicWriteFile(filePath, serializeTicket(fm, body));
 
   return { ...data, updated: now, body, filePath };
 }
@@ -369,7 +369,7 @@ export async function addSubtask(
     updated: now,
   });
 
-  await writeFile(filePath, serializeTicket(fm, newBody), "utf-8");
+  await atomicWriteFile(filePath, serializeTicket(fm, newBody));
 
   return { ...data, updated: now, body: newBody, filePath };
 }

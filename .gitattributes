@@ -1,0 +1,11 @@
+# Consistent line endings
+*.md text eol=lf
+*.yaml text eol=lf
+*.ts text eol=lf
+*.json text eol=lf
+
+# Ticketbook: counter files use 'ours' merge to avoid conflicts
+# After merging, run `ticketbook doctor --fix` to reconcile counters
+.tasks/.counter merge=ours
+.plans/.counter merge=ours
+.docs/.counter merge=ours

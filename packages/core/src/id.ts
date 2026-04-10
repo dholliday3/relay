@@ -1,6 +1,8 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getConfig } from "./config.js";
+import { withLock } from "./lock.js";
+import { atomicWriteFile } from "./atomic.js";
 
 const COUNTER_FILENAME = ".counter";
 
@@ -23,7 +25,7 @@ async function readCounter(dir: string): Promise<number> {
 
 async function writeCounter(dir: string, value: number): Promise<void> {
   await mkdir(dir, { recursive: true });
-  await writeFile(counterPath(dir), String(value), "utf-8");
+  await atomicWriteFile(counterPath(dir), String(value));
 }
 
 export function slugify(title: string): string {
@@ -53,16 +55,18 @@ export async function nextIdForDir(
   dir: string,
   prefix: string,
 ): Promise<{ id: string; number: number; filename: (title: string) => string }> {
-  const current = await readCounter(dir);
-  const next = current + 1;
-  await writeCounter(dir, next);
+  return withLock(counterPath(dir), async () => {
+    const current = await readCounter(dir);
+    const next = current + 1;
+    await writeCounter(dir, next);
 
-  const id = formatId(prefix, next);
-  return {
-    id,
-    number: next,
-    filename: (title: string) => formatFilename(id, title),
-  };
+    const id = formatId(prefix, next);
+    return {
+      id,
+      number: next,
+      filename: (title: string) => formatFilename(id, title),
+    };
+  });
 }
 
 export async function nextId(
