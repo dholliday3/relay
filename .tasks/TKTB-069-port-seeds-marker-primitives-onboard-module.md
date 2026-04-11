@@ -1,15 +1,16 @@
 ---
 id: TKTB-069
 title: Port seeds' marker primitives + onboard module
-status: open
+status: done
 priority: high
 tags:
   - phase-0
   - onboard
   - packaging
 project: ticketbook
+assignee: claude-code
 created: '2026-04-11T07:05:00.422Z'
-updated: '2026-04-11T07:05:00.422Z'
+updated: '2026-04-11T07:22:12.131Z'
 ---
 
 Port the marker-wrapping infrastructure from seeds (`~/workspace/resources/seeds`) into ticketbook core, and build the new `runOnboard` module on top of it. Foundation for PLAN-005 Phase 0 — Tasks B and E both depend on this landing first.
@@ -90,3 +91,41 @@ Use `mkdtemp(join(tmpdir(), "ticketbook-onboard-"))` for isolation, matching the
 - `bun test packages/core/src/markers.test.ts packages/core/src/onboard.test.ts` passes
 - All new files typecheck clean (`bun run typecheck`)
 - No changes to existing files — this task is purely additive
+
+<!-- agent-notes -->
+
+## claude-code debrief — 2026-04-11
+
+**Done.** Four new files, purely additive in `packages/core/src/`. No existing files touched.
+
+### Tests + typecheck
+- `bun test packages/core/src/markers.test.ts packages/core/src/onboard.test.ts` → **30 pass / 0 fail / 63 expect() calls** (markers.test.ts: 11 tests; onboard.test.ts: 19 tests).
+- `bun run typecheck` → `packages/core` typecheck passes cleanly. **Unrelated error in `packages/server/src/index.ts:416`** referencing `bindWithIncrementUsing` — this is in-progress work from `claude-opus` on TKTB-071, not TKTB-069 scope. Flagged to the user; not blocking.
+
+### Files added
+- `packages/core/src/markers.ts` — lifted from seeds' `src/markers.ts` with delimiters changed to `<!-- ticketbook:start -->` / `<!-- ticketbook:end -->`. Three helpers: `hasMarkerSection`, `replaceMarkerSection`, `wrapInMarkers`.
+- `packages/core/src/markers.test.ts` — 11 tests covering `wrapInMarkers` (2), `hasMarkerSection` (4 — both present, only start, only end, neither), `replaceMarkerSection` (5 — happy path, outside-content byte-preservation, three null cases).
+- `packages/core/src/onboard.ts` — exports `runOnboard`, `ONBOARD_VERSION`, `onboardSnippet`, `findTargetFile`, `detectStatus`, `RunOnboardOptions`, `RunOnboardResult`. Three-state dispatch (missing/current/outdated → create/append/unchanged/updated), plus `--check` and `--stdout` short-circuits.
+- `packages/core/src/onboard.test.ts` — 19 tests: create (2), candidate preference (3), append (2 — with blank-line separator check), unchanged (1), outdated surgical replace (1 — verifies outside bytes preserved), `--check` (4 — missing-no-file, missing-has-file-no-marker, current, outdated), `--stdout` (2), helpers (4).
+
+### Design decisions worth knowing for Task B (TKTB-073)
+
+1. **Top-level heading is `## Ticketbook`** — simpler than seeds' `## Issue Tracking (Seeds)`. The body introduces itself. Change if user feedback pushes otherwise.
+2. **`ONBOARD_VERSION = 1`** as a hand-bumped plain constant per PLAN-005 Open Questions, with a prominent comment explaining the bump discipline.
+3. **`ONBOARD_SECTION_BODY` mirrors current `AGENTS_MD_CONTENT`** (in `init.ts:51`) verbatim — minus the `# AGENTS.md` top-level heading, with the former `##` subheadings demoted to `###` so they nest properly under `## Ticketbook`. **Task B should verify the body content matches before deleting the original** in `init.ts`.
+4. **Append separator logic matches seeds exactly:** `content.endsWith("\n") ? "\n" : "\n\n"`. Produces one blank line between existing content and the onboarding section. Tested explicitly.
+5. **Outdated surgical-replace test is the load-bearing one.** It writes a file with `## Other tool's section` content after the old ticketbook markers, then verifies that content is byte-identical after `runOnboard` replaces the section. This is the whole point of the marker design and the reason seeds' pattern is worth stealing — don't let this test regress.
+
+### Known follow-up for Phase 1
+
+`ONBOARD_SECTION_BODY` still contains `bunx ticketbook --mcp` — matching the current `init.ts` content, which is dead-on-arrival because the package is `"private": true`. When PLAN-005 Phase 1 flips `PUBLISHED_MCP_ENTRY` to plain `ticketbook`, this body should also flip to `ticketbook --mcp` **and** `ONBOARD_VERSION` should bump to 2 so existing projects get the corrected section on their next `ticketbook onboard` run. Not TKTB-069's job; not Task B's either. File a small follow-up when Phase 1 lands.
+
+### Out of scope (deliberately untouched)
+- `packages/core/src/init.ts` — Task B deletes `AGENTS_MD_CONTENT` there
+- `bin/ticketbook.ts` — Task B wires the `onboard` subcommand + `--check` / `--stdout` flags
+- `README.md` — Task E
+- `.claude-plugin/plugin.json` — Task E
+
+### Coordination note
+
+The parallel agent (`claude-opus`) claimed TKTB-070 and TKTB-071 within ~15 seconds of my claim on TKTB-069, and is working in the **same working tree**. Their in-progress changes span `bin/ticketbook.ts`, `packages/core/src/{init,config,schema,init.test,config.test,schema.test}.ts`, `packages/server/src/{index,mcp}.ts`, and two new files (`mcp.test.ts`, `port-bind.ts`). None overlap with TKTB-069's files, so staging is unambiguous: commit only the four new files in `packages/core/src/markers*` and `packages/core/src/onboard*`, plus this task file's status update. Left their WIP alone.
