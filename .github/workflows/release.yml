@@ -43,7 +43,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          # Pinned to 1.3.11 because 1.3.12 regressed darwin cross-compile
+          # code signing — the compile step produces a Mach-O binary with
+          # no LC_CODE_SIGNATURE load command at all, which AMFI on Apple
+          # Silicon rejects with SIGKILL. 1.3.11 produces a properly
+          # linker-signed adhoc signature. Bump cautiously; verify against
+          # the "Verify darwin signatures" step in build-darwin.
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -72,7 +78,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          # Pinned to 1.3.11 because 1.3.12 regressed darwin cross-compile
+          # code signing — the compile step produces a Mach-O binary with
+          # no LC_CODE_SIGNATURE load command at all, which AMFI on Apple
+          # Silicon rejects with SIGKILL. 1.3.11 produces a properly
+          # linker-signed adhoc signature. Bump cautiously; verify against
+          # the "Verify darwin signatures" step in build-darwin.
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -136,7 +148,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          # Pinned to 1.3.11 because 1.3.12 regressed darwin cross-compile
+          # code signing — the compile step produces a Mach-O binary with
+          # no LC_CODE_SIGNATURE load command at all, which AMFI on Apple
+          # Silicon rejects with SIGKILL. 1.3.11 produces a properly
+          # linker-signed adhoc signature. Bump cautiously; verify against
+          # the "Verify darwin signatures" step in build-darwin.
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -165,9 +183,29 @@ jobs:
           echo ""
           echo "==> Built Darwin artifacts:"
           ls -lh dist/
-          echo ""
-          echo "==> Verifying darwin-arm64 has a valid Mach-O code signature:"
-          codesign -dvvv dist/ticketbook-darwin-arm64 2>&1 | head -5 || true
+
+      - name: Verify darwin signatures
+        # Hard failure if either darwin binary is missing its ad-hoc
+        # signature. Catches Bun regressions in cross-compile signing
+        # (see bun-version pin comment above — 1.3.12 had this bug).
+        # Without this step, an unsigned darwin binary passes build,
+        # uploads to the release, and only surfaces as SIGKILL the
+        # first time a user actually runs it.
+        run: |
+          for binary in dist/ticketbook-darwin-arm64 dist/ticketbook-darwin-x64; do
+            echo "==> $binary"
+            if codesign -dvvv "$binary" 2>&1 | grep -q "code object is not signed at all"; then
+              echo "ERROR: $binary is unsigned — AMFI will kill it on Apple Silicon."
+              echo "This is usually a Bun version regression. See the bun-version pin"
+              echo "comment in .github/workflows/release.yml."
+              exit 1
+            fi
+            codesign -dvvv "$binary" 2>&1 | head -5
+            echo ""
+          done
+          echo "==> Smoke-testing darwin-arm64 binary (--help must exit 0)..."
+          dist/ticketbook-darwin-arm64 --help >/dev/null
+          echo "✓ darwin-arm64 runs"
 
       - name: Upload Darwin artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
