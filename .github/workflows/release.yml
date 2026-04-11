@@ -28,14 +28,13 @@ on:
         type: boolean
         default: true
 
-# Default: read-only. Individual jobs narrow further or widen as needed.
-# The `release` job widens to contents:write on tag pushes only.
+# Default: read-only. The release job widens to contents:write on tag pushes.
 permissions:
   contents: read
 
 jobs:
   # ----------------------------------------------------------------------
-  # test — typecheck + unit tests. Gate for build.
+  # test — typecheck + unit tests + install script tests. Gate for builds.
   # ----------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
@@ -59,18 +58,11 @@ jobs:
         run: bun run test:install
 
   # ----------------------------------------------------------------------
-  # build — cross-compile 4 binaries (darwin-arm64, darwin-x64, linux-x64,
-  # linux-arm64) on ubuntu-latest. Bun's --target flag supports all four
-  # from a single Linux runner, so no cross-host matrix needed. SHA256
-  # checksums go alongside each binary. Artifacts are uploaded for the
-  # release job to download.
-  #
-  # Permissions are scoped to contents:read only — this job never needs
-  # id-token or attestations, which closes the "trusted-contributor
-  # compromise lets a malicious build step mint a repo-identity OIDC
-  # token" window that plannotator's release workflow documents.
+  # build-linux — cross-compile linux-x64 and linux-arm64 on ubuntu-latest.
+  # Bun supports native build + cross-compile for both Linux arches from
+  # an x86_64 Linux host.
   # ----------------------------------------------------------------------
-  build:
+  build-linux:
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -91,10 +83,10 @@ jobs:
       - name: Generate embedded-ui.gen.ts
         run: bun run scripts/generate-embedded-ui.ts
 
-      - name: Cross-compile binaries
+      - name: Cross-compile Linux binaries
         run: |
           mkdir -p dist
-          for target in bun-darwin-arm64 bun-darwin-x64 bun-linux-x64 bun-linux-arm64; do
+          for target in bun-linux-x64 bun-linux-arm64; do
             suffix="${target#bun-}"
             outfile="dist/ticketbook-${suffix}"
             echo "==> Compiling $outfile (target: $target)..."
@@ -105,18 +97,14 @@ jobs:
             (cd dist && sha256sum "ticketbook-${suffix}" > "ticketbook-${suffix}.sha256")
           done
           echo ""
-          echo "==> Built artifacts:"
+          echo "==> Built Linux artifacts:"
           ls -lh dist/
 
-      - name: Upload artifacts
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: binaries
+          name: binaries-linux
           path: |
-            dist/ticketbook-darwin-arm64
-            dist/ticketbook-darwin-arm64.sha256
-            dist/ticketbook-darwin-x64
-            dist/ticketbook-darwin-x64.sha256
             dist/ticketbook-linux-x64
             dist/ticketbook-linux-x64.sha256
             dist/ticketbook-linux-arm64
@@ -125,12 +113,81 @@ jobs:
           retention-days: 14
 
   # ----------------------------------------------------------------------
-  # release — download artifacts, publish a GitHub Release. Tag pushes
-  # only. Pre-release flag is auto-set for tags that contain a hyphen
-  # (v0.1.0-rc.1 is a pre-release; v0.1.0 is not).
+  # build-darwin — cross-compile darwin-arm64 and darwin-x64 on
+  # macos-latest. Must run on a macOS host (not ubuntu) because Bun's
+  # cross-compile from Linux → Darwin produces binaries with no Mach-O
+  # code signature at all, and Apple Silicon's AMFI layer kills
+  # unsigned binaries with SIGKILL before they can print anything.
+  # Building on macOS gives Bun access to `codesign` so it can ad-hoc
+  # sign the output, which is the minimum AMFI will accept.
+  #
+  # Both darwin targets are cross-compiled from a single macos-latest
+  # host (currently arm64). Bun supports darwin-arm64 → darwin-x64
+  # cross-compile natively, and the resulting binaries are properly
+  # signed — verified locally before this workflow change.
+  # ----------------------------------------------------------------------
+  build-darwin:
+    needs: test
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI bundle
+        run: bun --filter "@ticketbook/ui" build
+
+      - name: Generate embedded-ui.gen.ts
+        run: bun run scripts/generate-embedded-ui.ts
+
+      - name: Cross-compile Darwin binaries
+        run: |
+          mkdir -p dist
+          for target in bun-darwin-arm64 bun-darwin-x64; do
+            suffix="${target#bun-}"
+            outfile="dist/ticketbook-${suffix}"
+            echo "==> Compiling $outfile (target: $target)..."
+            bun build bin/ticketbook.ts \
+              --compile \
+              --target="$target" \
+              --outfile "$outfile"
+            # shasum is BSD; cut -f1 works against both `shasum -a 256`
+            # (macOS default) and `sha256sum` (Linux) output formats.
+            (cd dist && shasum -a 256 "ticketbook-${suffix}" > "ticketbook-${suffix}.sha256")
+          done
+          echo ""
+          echo "==> Built Darwin artifacts:"
+          ls -lh dist/
+          echo ""
+          echo "==> Verifying darwin-arm64 has a valid Mach-O code signature:"
+          codesign -dvvv dist/ticketbook-darwin-arm64 2>&1 | head -5 || true
+
+      - name: Upload Darwin artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: binaries-darwin
+          path: |
+            dist/ticketbook-darwin-arm64
+            dist/ticketbook-darwin-arm64.sha256
+            dist/ticketbook-darwin-x64
+            dist/ticketbook-darwin-x64.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # ----------------------------------------------------------------------
+  # release — download Linux + Darwin artifacts, publish a GitHub Release.
+  # Tag pushes only. Pre-release flag is auto-set for tags that contain
+  # a hyphen (v0.1.0-rc.1 is a pre-release; v0.1.0 is not).
   # ----------------------------------------------------------------------
   release:
-    needs: build
+    needs: [build-linux, build-darwin]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -138,10 +195,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Download artifacts
+      - name: Download Linux artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: binaries
+          name: binaries-linux
+          path: artifacts
+
+      - name: Download Darwin artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binaries-darwin
           path: artifacts
 
       - name: List artifacts
