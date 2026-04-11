@@ -2,20 +2,54 @@
 
 A local-first project tracker that stores tasks in `.tasks/`, plans in `.plans/`, and durable reference docs in `.docs/`.
 
+## Install
+
+Install the latest release binary and (if `git` is available) the global ticketbook skill in one curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash
+```
+
+The installer:
+
+1. Detects your OS and architecture (macOS and Linux, x64 and arm64).
+2. Downloads the matching binary + `.sha256` from the latest GitHub release.
+3. Verifies the SHA256 and installs to `~/.local/bin/ticketbook`.
+4. Warns if `~/.local/bin` isn't on your `PATH` (with zsh/bash/fish hints).
+5. Sparse-checks-out `skills/ticketbook/` into `~/.claude/skills/ticketbook/` and `~/.agents/skills/ticketbook/` so agents in not-yet-initialized repos still discover the skill. Per-project skills written by `ticketbook init` take precedence.
+
+### Pin to a specific version
+
+```bash
+# Via --version flag:
+curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash -s -- --version v0.1.0
+
+# Or as a positional argument:
+curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash -s -- v0.1.0
+```
+
+### Upgrade
+
+Re-run the installer — it overwrites the existing binary. (A dedicated `ticketbook upgrade` command is tracked as PLAN-005 Phase 4.)
+
+### Manual install
+
+If you'd rather skip the script, download the binary + checksum from the [latest release](https://github.com/dholliday3/ticketbook/releases/latest), verify the SHA256 yourself, and drop the binary on your `PATH`.
+
 ## Quick Start
 
 ```bash
 # Scaffold data directories, .mcp.json, and skill files
-bunx ticketbook init
+ticketbook init
 
 # Add agent instructions to CLAUDE.md (or AGENTS.md)
-bunx ticketbook onboard
+ticketbook onboard
 
 # Start the web UI (default port 4242, auto-increments on collision)
-bunx ticketbook
+ticketbook
 
 # Start with a specific directory
-bunx ticketbook --dir /path/to/project
+ticketbook --dir /path/to/project
 ```
 
 ## CLI Options

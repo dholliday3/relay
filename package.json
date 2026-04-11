@@ -12,11 +12,12 @@
     "typecheck": "bash scripts/typecheck.sh",
     "lint": "bunx eslint packages/core/src packages/server/src",
     "test": "bun test",
+    "test:install": "bun test ./scripts/install.test.ts",
     "pretest:e2e": "bun --filter \"@ticketbook/ui\" build && bunx playwright install chromium",
     "test:e2e": "bunx playwright test --config e2e/playwright.config.ts",
     "test:e2e:headed": "bunx playwright test --config e2e/playwright.config.ts --headed",
     "test:e2e:ui": "bunx playwright test --config e2e/playwright.config.ts --ui",
-    "test:all": "bun run test && bun run test:e2e",
+    "test:all": "bun run test && bun run test:install && bun run test:e2e",
     "term:debug": "bun scripts/term-debug.ts",
     "db:reset": "bun -e \"import { resetDb } from './packages/server/src/db.ts'; resetDb('.'); console.log('Database reset.');\""
   },
