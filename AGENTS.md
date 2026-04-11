@@ -4,7 +4,7 @@ This project uses **ticketbook** for task, plan, and reference-doc tracking. Tas
 
 ## If your agent supports Skills
 
-The `ticketbook` skill at `skills/ticketbook/SKILL.md` covers the full workflow. Claude Code discovers it via the `.claude-plugin/` manifest; Codex discovers it via `.agents/skills/ticketbook/`. Nothing to configure — just ask about tasks, plans, or docs and the skill will load.
+The `ticketbook` skill covers the full workflow. Claude Code discovers it via `.claude/skills/ticketbook/SKILL.md`; Codex discovers it via `.agents/skills/ticketbook/SKILL.md`. Nothing to configure — just ask about tasks, plans, or docs and the skill will load.
 
 ## If your agent does not support Skills
 

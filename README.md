@@ -5,10 +5,13 @@ A local-first project tracker that stores tasks in `.tasks/`, plans in `.plans/`
 ## Quick Start
 
 ```bash
-# Initialize a new ticketbook in the current directory
+# Scaffold data directories, .mcp.json, and skill files
 bunx ticketbook init
 
-# Start the web UI
+# Add agent instructions to CLAUDE.md (or AGENTS.md)
+bunx ticketbook onboard
+
+# Start the web UI (default port 4242, auto-increments on collision)
 bunx ticketbook
 
 # Start with a specific directory
@@ -21,16 +24,39 @@ bunx ticketbook --dir /path/to/project
 ticketbook [command] [options] [path]
 
 Commands:
-  init        Scaffold a new .tasks/ directory
+  init        Scaffold .tasks/, .plans/, .docs/, .mcp.json, and skill files
+  onboard     Write/update the ticketbook agent instructions section in CLAUDE.md (or AGENTS.md)
   (default)   Start the server and open the UI
 
 Options:
   --dir <path>   Path to .tasks/ directory (or directory containing it)
-  --port <num>   Server port (default: auto-assigned)
+  --port <num>   Server port (default: 4242, auto-increment on collision)
   --no-ui        Server only, no static UI serving
   --mcp          Start MCP server mode (stdio transport, no HTTP)
+  --check        (onboard only) Report status without modifying files; exits 1 if stale
+  --stdout       (onboard only) Print the onboarding section to stdout, touching no files
+  --json         Emit structured JSON output (onboard mode)
   -h, --help     Show this help message
 ```
+
+## Onboarding
+
+`ticketbook onboard` writes a versioned, marker-wrapped section of agent instructions into your project's `CLAUDE.md` (or `.claude/CLAUDE.md`, or `AGENTS.md` — whichever exists first). The section is bracketed by `<!-- ticketbook:start -->` and `<!-- ticketbook:end -->` markers with an embedded `<!-- ticketbook-onboard-v:N -->` version comment. Re-running `onboard` after a ticketbook upgrade surgically replaces just the bracketed region — any content you wrote outside the markers is preserved byte-for-byte.
+
+**File preference.** `onboard` walks the following candidate paths and takes the first that exists. If none exist, it creates `CLAUDE.md` at the project root.
+
+1. `CLAUDE.md` at the project root
+2. `.claude/CLAUDE.md`
+3. `AGENTS.md`
+
+**Modes.**
+
+- `bunx ticketbook onboard` — create, update, append, or no-op based on current state
+- `bunx ticketbook onboard --check` — report current state without modifying files. Exits 1 when the section is `missing` or `outdated`, so CI can use it as a freshness gate (`ticketbook onboard --check || fail`)
+- `bunx ticketbook onboard --stdout` — print the wrapped snippet to stdout without touching any files. Useful for previewing before committing
+- `bunx ticketbook onboard --json` — emit a structured JSON envelope (`{success, command, action, file?, status?}`), pairs well with `--check` for scripting
+
+**Versioning.** The `<!-- ticketbook-onboard-v:N -->` version marker bumps when the onboarding content materially changes. Projects with an older marker get their bracketed section surgically replaced on the next `onboard` run; content outside the markers is left alone.
 
 ## Claude Code MCP Integration
 
