@@ -5,6 +5,7 @@ import { createWatcher } from "./watcher.js";
 import { BunPtyHeadlessBackend, type TerminalSession } from "./terminal/index.js";
 import { listTerminalTabs, upsertTerminalTab, getNextTabNumber, deleteTerminalTab } from "./db.js";
 import { createDebug } from "./debug.js";
+import { bindWithIncrementUsing } from "./port-bind.js";
 import {
   ClaudeCodeProvider,
   CodexProvider,
@@ -24,6 +25,13 @@ export interface ServerConfig {
   plansDir: string;
   docsDir: string;
   port: number;
+  /**
+   * When true (CLI did not receive `--port`), the server starts at `port`
+   * and auto-increments on EADDRINUSE up to 100 attempts. When false (user
+   * passed `--port` explicitly), a collision surfaces as an EADDRINUSE error
+   * without retry — the user picked a specific number and should be told.
+   */
+  autoIncrement?: boolean;
   staticDir?: string;
   /**
    * Absolute path to the bin/ticketbook.ts entry script. When set, the
@@ -36,9 +44,15 @@ export interface ServerConfig {
 }
 
 export interface ServerHandle {
+  /** The port the server is actually bound to (may differ from requested when autoIncrement is on). */
   port: number;
+  /** Ports that were tried and found in use before landing on `port`. Empty when the first attempt succeeded. */
+  triedPorts: number[];
   close: () => void;
 }
+
+/** Sanity cap on how many ports we'll try before giving up. Covers any realistic multi-repo setup. */
+const PORT_AUTO_INCREMENT_MAX_TRIES = 100;
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
@@ -65,6 +79,7 @@ function sendMsg(ws: { send(data: string): void }, msg: ServerMessage): void {
 
 export function startServer(config: ServerConfig): ServerHandle {
   const { tasksDir, plansDir, docsDir, port, staticDir, binPath } = config;
+  const autoIncrement = config.autoIncrement ?? false;
 
   // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy)
   const terminalBackend = new BunPtyHeadlessBackend(tasksDir);
@@ -137,9 +152,13 @@ export function startServer(config: ServerConfig): ServerHandle {
     | { kind: "terminal"; sessionId: string; tasksDir: string }
     | { kind: "copilot"; sessionId: string };
 
-  const server = Bun.serve<WsData>({
-    port,
-    idleTimeout: 255, // max; prevents Bun from killing WebSocket upgrade requests
+  // `tryServe` closes over the full options so type inference for ws.data
+  // flows through the WebSocket handlers. It's called either once (explicit
+  // --port path) or in a retry loop (auto-increment path) below.
+  const tryServe = (p: number) =>
+    Bun.serve<WsData>({
+      port: p,
+      idleTimeout: 255, // max; prevents Bun from killing WebSocket upgrade requests
     async fetch(req, server) {
       const origin = req.headers.get("Origin");
 
@@ -386,6 +405,19 @@ export function startServer(config: ServerConfig): ServerHandle {
     },
   });
 
+  // Bind the HTTP server. Two paths:
+  //   - autoIncrement (default for `ticketbook` with no --port): try `port`,
+  //     then port+1, port+2, ..., up to PORT_AUTO_INCREMENT_MAX_TRIES. This
+  //     makes multi-repo setups produce deterministic port sequences
+  //     (4242 → 4243 → 4244) instead of random OS-assigned ports.
+  //   - explicit --port: call Bun.serve() directly. If the port is in use,
+  //     let EADDRINUSE propagate — the user asked for that specific number.
+  const bound = autoIncrement
+    ? bindWithIncrementUsing(tryServe, port, PORT_AUTO_INCREMENT_MAX_TRIES)
+    : { server: tryServe(port), port, triedPorts: [] as number[] };
+  const server = bound.server;
+  const triedPorts = bound.triedPorts;
+
   // Start file watchers for live SSE updates
   const taskWatcher = createWatcher(tasksDir, (event) =>
     broadcastEvent({ ...event, source: "task" }),
@@ -411,6 +443,7 @@ export function startServer(config: ServerConfig): ServerHandle {
 
   return {
     port: server.port ?? port,
+    triedPorts,
     close() {
       terminalBackend.destroyAll();
       void copilot.stopAll();

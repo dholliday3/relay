@@ -55,7 +55,7 @@ Commands:
 
 Options:
   --dir <path>   Path to .tasks/ directory (or directory containing it)
-  --port <num>   Server port (default: auto-assigned)
+  --port <num>   Server port (default: 4242, auto-increment on collision)
   --no-ui        Server only, no static UI serving
   --mcp          Start MCP server mode (stdio transport, no HTTP)
   -h, --help     Show this help message`);
@@ -212,16 +212,28 @@ async function main(): Promise<void> {
   // wire up an MCP config that re-invokes us in --mcp mode for tool access.
   const binPath = fileURLToPath(import.meta.url);
 
+  // Default start port 4242 with auto-increment on EADDRINUSE. Multi-repo
+  // setups get a deterministic sequence (4242 → 4243 → …) instead of random
+  // OS-assigned ports. When the user passes --port explicitly, disable
+  // auto-increment so a collision surfaces clearly instead of being hidden.
   const handle = startServer({
     tasksDir,
     plansDir,
     docsDir,
-    port: args.port ?? 0,
+    port: args.port ?? 4242,
+    autoIncrement: args.port == null,
     staticDir: uiDistDir,
     binPath,
   });
 
-  console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
+  if (handle.triedPorts.length > 0) {
+    console.log(
+      `Ticketbook server listening on http://localhost:${handle.port} ` +
+        `(auto-selected; ${handle.triedPorts.join(", ")} in use)`,
+    );
+  } else {
+    console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
+  }
   console.log(`Tasks directory: ${tasksDir}`);
   console.log(`Plans directory: ${plansDir}`);
   console.log(`Docs directory: ${docsDir}`);

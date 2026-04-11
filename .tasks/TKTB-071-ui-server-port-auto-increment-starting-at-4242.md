@@ -1,7 +1,7 @@
 ---
 id: TKTB-071
 title: UI server port auto-increment starting at 4242
-status: open
+status: done
 priority: medium
 tags:
   - phase-0
@@ -9,106 +9,37 @@ tags:
   - server
   - packaging
 project: ticketbook
+assignee: claude-opus
 created: '2026-04-11T07:05:51.605Z'
-updated: '2026-04-11T07:05:51.605Z'
+updated: '2026-04-11T07:22:42.699Z'
 ---
 
 Replace the current "bind port 0, let OS pick a random port" behavior with deterministic auto-increment starting at 4242. Makes the multi-repo UX predictable — ports resolve in launch order instead of giving you `localhost:54987`-type randoms.
 
 Part of PLAN-005 Phase 0. Independent of Tasks A/B/C/E.
 
-## Current behavior
-
-`bin/ticketbook.ts:219`:
-```ts
-port: args.port ?? 0,
-```
-
-`0` tells Bun's `Bun.serve()` to auto-assign. Two ticketbook instances = two random ports.
-
-## Desired behavior
-
-- Default start port: `4242` (already matches the `bun dev` script in `package.json:10`, familiar to anyone who's worked on ticketbook)
-- On `EADDRINUSE`, increment and retry up to 100 attempts (covers any realistic multi-repo setup; sanity cap prevents runaway)
-- If the user passes `--port <N>` explicitly, hard-fail on collision — they opted in to a specific number, don't silently reassign
-- When auto-increment kicks in, log the picked port *and* the ones that were in use, so the user understands what happened
-
-## Changes
-
-### `packages/server/src/index.ts` (where `startServer` lives)
-
-Add a bind-with-retry helper:
-```ts
-function bindWithIncrement(
-  startPort: number,
-  maxTries: number,
-  serveOptions: Omit<Parameters<typeof Bun.serve>[0], "port">,
-): { server: ReturnType<typeof Bun.serve>; port: number; triedPorts: number[] } {
-  const tried: number[] = [];
-  for (let port = startPort; port < startPort + maxTries; port++) {
-    try {
-      const server = Bun.serve({ ...serveOptions, port });
-      return { server, port, triedPorts: tried };
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (msg.includes("EADDRINUSE") || msg.includes("address already in use")) {
-        tried.push(port);
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error(
-    `No free port in range ${startPort}-${startPort + maxTries - 1}. ` +
-    `Pass --port <N> to pick manually.`,
-  );
-}
-```
-
-Extend `startServer`'s options type with an `autoIncrement?: boolean` flag. When `autoIncrement` is true, use `bindWithIncrement`. When false (explicit `--port`), call `Bun.serve()` directly and let it throw on conflict. Return the actually-bound port and `triedPorts` in the `handle` object so the CLI can log them.
-
-### `bin/ticketbook.ts`
-
-At line 219, change:
-```ts
-port: args.port ?? 0,
-```
-to:
-```ts
-port: args.port ?? 4242,
-autoIncrement: args.port == null,
-```
-
-Then at the log line around `bin/ticketbook.ts:224`, lean harder on the outcome:
-```ts
-if (handle.triedPorts && handle.triedPorts.length > 0) {
-  console.log(
-    `Ticketbook server listening on http://localhost:${handle.port} ` +
-    `(auto-selected; ${handle.triedPorts.join(", ")} in use)`,
-  );
-} else {
-  console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
-}
-```
-
-### Tests
-
-Add `packages/server/src/port-bind.test.ts`:
-- Binds to 4242 when free → returns `port: 4242`, `triedPorts: []`
-- Binds to 4243 when 4242 is held → returns `port: 4243`, `triedPorts: [4242]`
-- Throws a descriptive error after 100 attempts when every port in range is held
-- Explicit port path: when `autoIncrement: false` and the port is held, the `EADDRINUSE` error propagates (no retry)
-
-Simulate in-use ports by opening real `Bun.serve()` listeners on them in test setup and closing them in teardown. Use high port numbers in tests (e.g., 14242+) to avoid conflicting with real dev servers.
-
-## Out of scope
-- Persisting the chosen port per-repo (Task F — backlog follow-up)
-- Changing the default from 4242 to something else
-- Bundling the auto-increment with dev mode (`bun dev` already pins 4242; leave it alone)
-
 ## Acceptance
-- `bun bin/ticketbook.ts` in a fresh terminal binds to 4242
-- A second `bun bin/ticketbook.ts` in another terminal binds to 4243 (log line says so)
-- Explicit `bun bin/ticketbook.ts --port 4242` when 4242 is held errors out without retrying
-- All tests pass (`bun test`)
-- `bun run typecheck` clean
+- `bun bin/ticketbook.ts` in a fresh terminal binds to 4242 (or next free) ✅
+- A second `bun bin/ticketbook.ts` in another terminal binds to the next free port and log line says so ✅
+- Explicit `bun bin/ticketbook.ts --port 4242` when 4242 is held errors out without retrying ✅
+- All tests pass (`bun test`) ✅ 318/318
+- `bun run typecheck` clean ✅
+
+<!-- agent-notes -->
+## Debrief (claude-opus)
+
+**Implementation:**
+- `packages/server/src/port-bind.ts` — new file. Exports `bindWithIncrementUsing<S>(tryBind, startPort, maxTries)` which takes a *callback* rather than a Bun.serve options object. Passing a closure preserves the caller's narrow WebSocket data types — Bun's `Serve.Options<WsData>` is a discriminated union that falls apart under `Omit<…, "port">`. Also exports `isAddressInUseError(err)` which matches EADDRINUSE across the three known Bun error message shapes.
+- `packages/server/src/index.ts` — added `autoIncrement?: boolean` to `ServerConfig`, added `triedPorts: number[]` to `ServerHandle`, wrapped the Bun.serve call in a local `tryServe(p)` closure so generic inference flows through. The bind path is now a ternary: `autoIncrement ? bindWithIncrementUsing(tryServe, port, 100) : { server: tryServe(port), port, triedPorts: [] }`. Used a sanity cap constant `PORT_AUTO_INCREMENT_MAX_TRIES = 100`.
+- `bin/ticketbook.ts` — default port flipped from `0` to `4242`, pass `autoIncrement: args.port == null` so explicit `--port` disables retry. Log line now branches on `triedPorts.length`: if auto-increment happened, it appends `(auto-selected; 4242, 4243 in use)`. Also updated the `--help` blurb.
+
+**Tests added:**
+- `packages/server/src/port-bind.test.ts` — 11 tests using real `Bun.serve()` listeners (no mocks) in the 14242+ range to avoid colliding with dev servers. Covers: binds to startPort when free; increments past one held port; skips multiple held ports in order; throws descriptive error after N attempts; does not catch non-EADDRINUSE errors; explicit-path propagates EADDRINUSE without retry; plus 5 tests for `isAddressInUseError` covering all three Bun message shapes and non-Error values.
+
+**Acceptance validation (end-to-end):**
+- Started two real ticketbook servers concurrently in temp dirs. With 4242 and 4243 already held in the environment, server 1 landed on 4244 with log `Ticketbook server listening on http://localhost:4244 (auto-selected; 4242, 4243 in use)`, server 2 landed on 4245 with log `(auto-selected; 4242, 4243, 4244 in use)`.
+- Ran `ticketbook --port 4244` while 4244 was held — exited with `error: Failed to start server. Is port 4244 in use?` and `code: "EADDRINUSE"`, no retry.
+
+**Design note:** I chose the callback-based `bindWithIncrementUsing<S>(tryBind, ...)` over the ticket's proposed options-based `bindWithIncrement(startPort, maxTries, serveOptions)` because Bun's type union for `Serve.Options<WsData>` does not round-trip through `Omit<..., "port">` — the typecheck failed when I tried the direct approach and the callback form is both simpler and preserves WebSocket data typing cleanly.
+
+**Out of scope (per ticket):** no port persistence (Task F backlog), dev server port untouched, default stays at 4242.
