@@ -1,0 +1,33 @@
+{
+  "$schema": "https://webreel.dev/schema/v1.json",
+  "outDir": "./docs",
+  "defaultDelay": 600,
+  "videos": {
+    "demo": {
+      "url": "http://localhost:5173/tasks?view=board",
+      "viewport": { "width": 1440, "height": 900 },
+      "waitFor": "[aria-label='Board view']",
+      "steps": [
+        { "action": "pause", "ms": 2000 },
+
+        { "action": "click", "selector": "[aria-label='List view']", "delay": 1500 },
+
+        { "action": "key", "key": "c", "label": "New task", "delay": 800 },
+        { "action": "wait", "text": "New task" },
+        { "action": "type", "text": "Record webreel demo for ticketbook", "charDelay": 35 },
+        { "action": "pause", "ms": 600 },
+        { "action": "click", "text": "Create", "delay": 1500 },
+
+        { "action": "click", "selector": "[aria-label='Open assistant']" },
+        { "action": "wait", "selector": "[data-testid='copilot-prompt-editor']" },
+        { "action": "click", "selector": "[data-testid='copilot-new-conversation-button']", "delay": 800 },
+        { "action": "click", "selector": "[data-testid='copilot-prompt-editor']" },
+        { "action": "type", "text": "show me my open tickets", "charDelay": 32 },
+        { "action": "pause", "ms": 500 },
+        { "action": "key", "key": "Enter" },
+
+        { "action": "pause", "ms": 15000 }
+      ]
+    }
+  }
+}

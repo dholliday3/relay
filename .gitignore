@@ -19,3 +19,6 @@ test-results/
 
 # Ticketbook advisory locks
 *.lock
+
+# Webreel intermediate outputs (the final demo.mp4 + demo.png live in docs/ and are committed)
+.webreel/

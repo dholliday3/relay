@@ -1,52 +1,42 @@
 # Ticketbook
 
-A local-first project tracker that stores tasks, plans, and reference docs under `.ticketbook/` as markdown files with YAML frontmatter.
+Local-first tasks, plans, and reference docs for working alongside coding agents. Everything is stored as markdown with YAML frontmatter under `.ticketbook/` — editable by hand, queryable by agents over MCP, and browsable in a small web UI.
+
+<video src="./docs/demo.mp4" controls poster="./docs/demo.png" width="720">
+  <a href="./docs/demo.mp4">Watch the demo</a>
+</video>
+
+> **Status: early.** The core primitives (tasks, plans, docs) and MCP integration are working, and the built-in copilot streams Claude Code. Expect rough edges and breaking changes — this is being built in the open.
 
 ## Install
-
-Install the latest release binary and (if `git` is available) the global ticketbook skill in one curl:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash
 ```
 
-The installer:
+Installs the release binary to `~/.local/bin/ticketbook` and the `ticketbook` agent skill to `~/.claude/skills/ticketbook/`. macOS and Linux, x64 and arm64.
 
-1. Detects your OS and architecture (macOS and Linux, x64 and arm64).
-2. Downloads the matching binary + `.sha256` from the latest GitHub release.
-3. Verifies the SHA256 and installs to `~/.local/bin/ticketbook`.
-4. Warns if `~/.local/bin` isn't on your `PATH` (with zsh/bash/fish hints).
-5. Sparse-checks-out `skills/ticketbook/` into `~/.claude/skills/ticketbook/` and `~/.agents/skills/ticketbook/` so agents in not-yet-initialized repos still discover the skill. Per-project skills written by `ticketbook init` take precedence.
-
-### Pin to a specific version
+<details>
+<summary>Pin a version · upgrade · install manually</summary>
 
 ```bash
-# Via --version flag:
-curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash -s -- --version v0.1.0
-
-# Or as a positional argument:
+# Pin to a specific release
 curl -fsSL https://raw.githubusercontent.com/dholliday3/ticketbook/main/scripts/install.sh | bash -s -- v0.1.0
+
+# Check whether a newer release is available (exits 1 if stale — safe for prompts and CI)
+ticketbook upgrade --check
+
+# Upgrade in place (re-runs the installer with SHA256 verification + atomic replace)
+ticketbook upgrade
+
+# Both commands accept --json for scripting:
+ticketbook upgrade --check --json
+# => {"success":true,"command":"upgrade","action":"checked","current":"0.1.0","latest":"0.2.0","upToDate":false}
 ```
 
-### Upgrade
+Prefer not to run a shell script? Grab the binary and `.sha256` from the [latest release](https://github.com/dholliday3/ticketbook/releases/latest), verify the checksum, and drop the binary on your `PATH`.
 
-```bash
-ticketbook upgrade --check   # is a newer release available? (exits 1 if stale)
-ticketbook upgrade           # if stale, re-invokes install.sh to fetch + verify + replace
-```
-
-`--check` is safe to call from shell prompt integrations or CI — it only reads the GitHub releases API and reports without touching the binary. `ticketbook upgrade` (no flag) performs the actual upgrade by re-invoking `install.sh`, which handles SHA256 verification and atomic replacement.
-
-Add `--json` to either form to get a structured envelope:
-
-```bash
-$ ticketbook upgrade --check --json
-{"success":true,"command":"upgrade","action":"checked","current":"0.1.0","latest":"0.2.0","upToDate":false}
-```
-
-### Manual install
-
-If you'd rather skip the script, download the binary + checksum from the [latest release](https://github.com/dholliday3/ticketbook/releases/latest), verify the SHA256 yourself, and drop the binary on your `PATH`.
+</details>
 
 ## Quick Start
 
