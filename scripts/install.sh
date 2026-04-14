@@ -138,7 +138,12 @@ binary_name="ticketbook-${platform}"
 
 if [ "$VERSION" = "latest" ]; then
     echo "Fetching latest version from github.com/${REPO}..."
-    latest_tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
+    # Extract just the `"tag_name":"vX.Y.Z"` fragment first, then cut. The
+    # naive `grep '"tag_name"' | cut -d'"' -f4` breaks against GitHub's
+    # single-line JSON response because the first quoted string in that
+    # blob is the `url` field, not `tag_name` — cut -f4 would return the
+    # URL, not the tag. `grep -o` pins the match to the tag fragment.
+    latest_tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -z "$latest_tag" ]; then
         echo "Failed to fetch latest version from GitHub API." >&2
         echo "Pass --version <tag> explicitly if you're hitting rate limits." >&2

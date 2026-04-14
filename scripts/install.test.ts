@@ -76,7 +76,25 @@ describe("install.sh — version resolution", () => {
 
   test("fetches latest tag from the GitHub releases API", () => {
     expect(script).toContain('"https://api.github.com/repos/${REPO}/releases/latest"');
-    expect(script).toContain('grep \'"tag_name"\'');
+    // Uses `grep -o '"tag_name":"[^"]*"'` — the `-o` is load-bearing.
+    // Without it, `grep '"tag_name"'` matches the entire single-line JSON
+    // response, and the follow-up `cut -d'"' -f4` grabs the first URL
+    // field instead of the tag. That bug shipped in v0.1.0 and v0.2.0.
+    expect(script).toContain(`grep -o '"tag_name":"[^"]*"'`);
+  });
+
+  test("tag_name parser extracts the tag from a realistic GitHub API response", () => {
+    // Behavioral test — run the actual parse pipeline against a real-world
+    // single-line JSON response (GitHub doesn't pretty-print its API). The
+    // naive `grep '"tag_name"' | cut -f4` version returns the URL field
+    // instead of the tag. This is the regression guard for that bug.
+    const mockResponse = `{"url":"https://api.github.com/repos/dholliday3/ticketbook/releases/308655336","assets_url":"https://api.github.com/repos/dholliday3/ticketbook/releases/308655336/assets","html_url":"https://github.com/dholliday3/ticketbook/releases/tag/v0.3.1","id":308655336,"tag_name":"v0.3.1","name":"v0.3.1","draft":false,"prerelease":false}`;
+    const proc = Bun.spawnSync(
+      ["sh", "-c", `echo '${mockResponse}' | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4`],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = new TextDecoder().decode(proc.stdout).trim();
+    expect(stdout).toBe("v0.3.1");
   });
 
   test("auto-prefixes v when version lacks it", () => {
