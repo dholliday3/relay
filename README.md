@@ -1,8 +1,10 @@
 # Ticketbook
 
-<video src="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.mp4" controls poster="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.png" width="720">
-  <a href="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.mp4">Watch the demo</a>
-</video>
+
+
+https://github.com/user-attachments/assets/bec73d7b-c4c6-43f5-ba0b-cef61e3719cb
+
+
 
 Local-first tasks, plans, and reference docs for working alongside coding agents. Everything is stored as markdown with YAML frontmatter under `.ticketbook/` — editable by hand, queryable by agents over MCP, and browsable in a small web UI.
 
