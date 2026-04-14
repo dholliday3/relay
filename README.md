@@ -76,22 +76,24 @@ Options:
 
 ## Onboarding
 
-`ticketbook onboard` writes a versioned, marker-wrapped section of agent instructions into your project's `CLAUDE.md` (or `.claude/CLAUDE.md`, or `AGENTS.md` — whichever exists first). The section is bracketed by `<!-- ticketbook:start -->` and `<!-- ticketbook:end -->` markers with an embedded `<!-- ticketbook-onboard-v:N -->` version comment. Re-running `onboard` after a ticketbook upgrade surgically replaces just the bracketed region — any content you wrote outside the markers is preserved byte-for-byte.
+`ticketbook onboard` injects a versioned agent instructions block into `CLAUDE.md` (or `.claude/CLAUDE.md` / `AGENTS.md`). Re-running after an upgrade surgically replaces only the bracketed region — content outside the markers is untouched.
 
-**File preference.** `onboard` walks the following candidate paths and takes the first that exists. If none exist, it creates `CLAUDE.md` at the project root.
+<details>
+<summary>File resolution · flags · versioning</summary>
 
-1. `CLAUDE.md` at the project root
+**File preference** (first match wins, falls back to creating `CLAUDE.md`):
+1. `CLAUDE.md` at project root
 2. `.claude/CLAUDE.md`
 3. `AGENTS.md`
 
-**Modes.**
+**Flags:**
+- `--check` — report state without writing; exits 1 if `missing` or `outdated` (CI-safe gate)
+- `--stdout` — print the snippet without touching any files
+- `--json` — structured `{success, command, action, file?, status?}` envelope
 
-- `bunx ticketbook onboard` — create, update, append, or no-op based on current state
-- `bunx ticketbook onboard --check` — report current state without modifying files. Exits 1 when the section is `missing` or `outdated`, so CI can use it as a freshness gate (`ticketbook onboard --check || fail`)
-- `bunx ticketbook onboard --stdout` — print the wrapped snippet to stdout without touching any files. Useful for previewing before committing
-- `bunx ticketbook onboard --json` — emit a structured JSON envelope (`{success, command, action, file?, status?}`), pairs well with `--check` for scripting
+**Versioning.** A `<!-- ticketbook-onboard-v:N -->` comment bumps when content changes materially. Stale sections are auto-replaced on the next `onboard` run.
 
-**Versioning.** The `<!-- ticketbook-onboard-v:N -->` version marker bumps when the onboarding content materially changes. Projects with an older marker get their bracketed section surgically replaced on the next `onboard` run; content outside the markers is left alone.
+</details>
 
 ## Claude Code MCP Integration
 
