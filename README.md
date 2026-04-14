@@ -5,10 +5,7 @@
 https://github.com/user-attachments/assets/bec73d7b-c4c6-43f5-ba0b-cef61e3719cb
 
 
-
 Local-first tasks, plans, and reference docs for working alongside coding agents. Everything is stored as markdown with YAML frontmatter under `.ticketbook/` — editable by hand, queryable by agents over MCP, and browsable in a small web UI.
-
-> **Status: early.** The core primitives (tasks, plans, docs) and MCP integration are working, and the built-in copilot streams Claude Code. Expect rough edges and breaking changes — this is being built in the open.
 
 ## Install
 
