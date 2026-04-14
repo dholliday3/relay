@@ -18,7 +18,7 @@ import {
  * hand-bumping forces a deliberate "is this actually user-facing?"
  * decision at each bump.
  */
-export const ONBOARD_VERSION = 1;
+export const ONBOARD_VERSION = 2;
 
 const VERSION_MARKER = `<!-- ticketbook-onboard-v:${ONBOARD_VERSION} -->`;
 
@@ -42,7 +42,7 @@ const CANDIDATE_FILES = [
  * Task B (TKTB-073) will delete the mirror copy of this content
  * (`AGENTS_MD_CONTENT` in `./init.ts`) once this module ships.
  */
-const ONBOARD_SECTION_BODY = `This project uses **ticketbook** for task and plan tracking. Tasks live in \`.tasks/\`, plans live in \`.plans/\`, and reference docs live in \`.docs/\` as markdown files with YAML frontmatter.
+const ONBOARD_SECTION_BODY = `This project uses **ticketbook** for task and plan tracking. Tasks live in \`.ticketbook/tasks/\`, plans live in \`.ticketbook/plans/\`, and reference docs live in \`.ticketbook/docs/\` as markdown files with YAML frontmatter.
 
 ### If your agent supports Skills
 
@@ -56,7 +56,7 @@ Use the \`ticketbook\` MCP server for all task, plan, and doc operations. Start 
 bunx ticketbook --mcp
 \`\`\`
 
-Never hand-edit files in \`.tasks/\`, \`.plans/\`, or \`.docs/\` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
+Never hand-edit files in \`.ticketbook/tasks/\`, \`.ticketbook/plans/\`, or \`.ticketbook/docs/\` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
 
 ### Workflow basics
 

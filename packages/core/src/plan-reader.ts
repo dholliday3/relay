@@ -4,7 +4,7 @@ import matter from "gray-matter";
 import { PlanFrontmatterSchema } from "./plan-schema.js";
 import type { Plan, PlanFilters } from "./plan-types.js";
 
-const IGNORED_FILES = new Set([".counter", ".config.yaml"]);
+const IGNORED_FILES = new Set([".counter"]);
 const IGNORED_DIRS = new Set([".archive"]);
 
 async function parsePlanFile(filePath: string): Promise<Plan | null> {

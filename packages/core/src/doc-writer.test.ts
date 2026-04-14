@@ -11,25 +11,22 @@ import {
 } from "./doc-writer.js";
 
 describe("doc-writer", () => {
-  let tasksDir: string;
+  let rootDir: string;
   let docsDir: string;
 
   beforeEach(async () => {
-    const root = await mkdtemp(join(tmpdir(), "ticketbook-doc-writer-"));
-    tasksDir = join(root, ".tasks");
-    docsDir = join(root, ".docs");
-    await mkdir(tasksDir, { recursive: true });
+    rootDir = await mkdtemp(join(tmpdir(), "ticketbook-doc-writer-"));
+    docsDir = join(rootDir, "docs");
     await mkdir(docsDir, { recursive: true });
     await writeFile(join(docsDir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(tasksDir, { recursive: true, force: true });
-    await rm(docsDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
   });
 
   test("creates a doc file with correct frontmatter", async () => {
-    const doc = await createDoc(tasksDir, docsDir, { title: "Reference Doc" });
+    const doc = await createDoc(rootDir, docsDir, { title: "Reference Doc" });
 
     expect(doc.id).toBe("DOC-001");
     expect(doc.title).toBe("Reference Doc");
@@ -45,7 +42,7 @@ describe("doc-writer", () => {
   });
 
   test("normalizes tags on write", async () => {
-    const doc = await createDoc(tasksDir, docsDir, {
+    const doc = await createDoc(rootDir, docsDir, {
       title: "Tagged",
       tags: ["  Editor  ", "EDITOR", "ux"],
     });
@@ -53,7 +50,7 @@ describe("doc-writer", () => {
   });
 
   test("includes body content", async () => {
-    const doc = await createDoc(tasksDir, docsDir, {
+    const doc = await createDoc(rootDir, docsDir, {
       title: "With Body",
       body: "## Notes\n\nSomething useful",
     });
@@ -62,16 +59,16 @@ describe("doc-writer", () => {
 
   test("uses custom prefix from config", async () => {
     await writeFile(
-      join(tasksDir, ".config.yaml"),
+      join(rootDir, "config.yaml"),
       "prefix: TKT\nplanPrefix: PLAN\ndocPrefix: REF\n",
       "utf-8",
     );
-    const doc = await createDoc(tasksDir, docsDir, { title: "Custom Prefix" });
+    const doc = await createDoc(rootDir, docsDir, { title: "Custom Prefix" });
     expect(doc.id).toBe("REF-001");
   });
 
   test("updates frontmatter fields", async () => {
-    const doc = await createDoc(tasksDir, docsDir, { title: "Original" });
+    const doc = await createDoc(rootDir, docsDir, { title: "Original" });
     const updated = await updateDoc(docsDir, doc.id, {
       project: "ticketbook",
       tags: ["editor"],
@@ -82,7 +79,7 @@ describe("doc-writer", () => {
   });
 
   test("clears optional fields when set to null", async () => {
-    const doc = await createDoc(tasksDir, docsDir, {
+    const doc = await createDoc(rootDir, docsDir, {
       title: "Project",
       project: "ticketbook",
     });
@@ -91,7 +88,7 @@ describe("doc-writer", () => {
   });
 
   test("updates body content", async () => {
-    const doc = await createDoc(tasksDir, docsDir, {
+    const doc = await createDoc(rootDir, docsDir, {
       title: "Body",
       body: "Original",
     });
@@ -100,8 +97,8 @@ describe("doc-writer", () => {
   });
 
   test("archives a doc by default", async () => {
-    const doc = await createDoc(tasksDir, docsDir, { title: "To Archive" });
-    await deleteDoc(tasksDir, docsDir, doc.id);
+    const doc = await createDoc(rootDir, docsDir, { title: "To Archive" });
+    await deleteDoc(rootDir, docsDir, doc.id);
 
     const mainFiles = await readdir(docsDir);
     expect(mainFiles.filter((file) => file.endsWith(".md"))).toHaveLength(0);
@@ -112,20 +109,20 @@ describe("doc-writer", () => {
 
   test("hard-deletes a doc when config says so", async () => {
     await writeFile(
-      join(tasksDir, ".config.yaml"),
+      join(rootDir, "config.yaml"),
       "prefix: TASK\nplanPrefix: PLAN\ndocPrefix: DOC\ndeleteMode: hard\n",
       "utf-8",
     );
-    const doc = await createDoc(tasksDir, docsDir, { title: "To Delete" });
-    await deleteDoc(tasksDir, docsDir, doc.id);
+    const doc = await createDoc(rootDir, docsDir, { title: "To Delete" });
+    await deleteDoc(rootDir, docsDir, doc.id);
 
     const files = await readdir(docsDir);
     expect(files.filter((file) => file.endsWith(".md"))).toHaveLength(0);
   });
 
   test("restores an archived doc", async () => {
-    const doc = await createDoc(tasksDir, docsDir, { title: "Archived" });
-    await deleteDoc(tasksDir, docsDir, doc.id);
+    const doc = await createDoc(rootDir, docsDir, { title: "Archived" });
+    await deleteDoc(rootDir, docsDir, doc.id);
 
     const restored = await restoreDoc(docsDir, doc.id);
     expect(restored.id).toBe(doc.id);

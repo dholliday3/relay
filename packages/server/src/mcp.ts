@@ -138,7 +138,7 @@ function formatDocFull(doc: Doc): string {
 }
 
 /**
- * Load `name` from `.tasks/.config.yaml` and derive the MCP server identity.
+ * Load `name` from `.ticketbook/config.yaml` and derive the MCP server identity.
  *
  * Returns `ticketbook-<name>` when the config has a non-empty `name` field so
  * multi-repo setups have distinguishable MCP identities at handshake time.
@@ -146,26 +146,27 @@ function formatDocFull(doc: Doc): string {
  * or has no `name` — **never throws**, because a bad config must not prevent
  * the server from booting. Parse errors are logged to stderr as a warning.
  */
-export async function resolveMcpServerName(tasksDir: string): Promise<string> {
+export async function resolveMcpServerName(rootDir: string): Promise<string> {
   try {
-    const cfg = await getConfig(tasksDir);
+    const cfg = await getConfig(rootDir);
     if (cfg.name && cfg.name.trim().length > 0) {
       return `ticketbook-${cfg.name}`;
     }
   } catch (err) {
     console.error(
-      `[ticketbook-mcp] failed to read ${tasksDir}/.config.yaml — falling back to default server name. ${(err as Error).message}`,
+      `[ticketbook-mcp] failed to read ${rootDir}/config.yaml — falling back to default server name. ${(err as Error).message}`,
     );
   }
   return "ticketbook";
 }
 
 export async function startMcpServer(
+  rootDir: string,
   tasksDir: string,
   plansDir?: string,
   docsDir?: string,
 ): Promise<void> {
-  const serverName = await resolveMcpServerName(tasksDir);
+  const serverName = await resolveMcpServerName(rootDir);
   const server = new McpServer({
     name: serverName,
     // Pulled from @ticketbook/core's VERSION constant (version.ts) so a
@@ -714,7 +715,7 @@ export async function startMcpServer(
         body: z.string().optional().describe("Markdown body content"),
       },
       async (args) => {
-        const plan = await createPlan(tasksDir, plansDir, args);
+        const plan = await createPlan(rootDir, plansDir, args);
         return {
           content: [
             {
@@ -774,7 +775,7 @@ export async function startMcpServer(
         id: z.string().describe("Plan ID to delete"),
       },
       async (args) => {
-        await deletePlan(tasksDir, plansDir, args.id);
+        await deletePlan(rootDir, plansDir, args.id);
         return {
           content: [{ type: "text", text: `Deleted plan ${args.id}` }],
         };
@@ -820,7 +821,7 @@ export async function startMcpServer(
         planId: z.string().describe("Plan ID to cut tasks from"),
       },
       async (args) => {
-        const result = await cutTasksFromPlan(tasksDir, plansDir, args.planId);
+        const result = await cutTasksFromPlan(rootDir, plansDir, args.planId);
         if (result.createdTasks.length === 0) {
           return {
             content: [{ type: "text", text: `No unchecked items found in ${args.planId}` }],
@@ -964,7 +965,7 @@ export async function startMcpServer(
         body: z.string().optional().describe("Markdown body content"),
       },
       async (args) => {
-        const doc = await createDoc(tasksDir, docsDir, args);
+        const doc = await createDoc(rootDir, docsDir, args);
         return {
           content: [
             {
@@ -1008,7 +1009,7 @@ export async function startMcpServer(
         id: z.string().describe("Doc ID to delete"),
       },
       async (args) => {
-        await deleteDoc(tasksDir, docsDir, args.id);
+        await deleteDoc(rootDir, docsDir, args.id);
         return {
           content: [{ type: "text", text: `Deleted doc ${args.id}` }],
         };
@@ -1040,8 +1041,8 @@ export async function startMcpServer(
       fix: z.boolean().optional().describe("Auto-fix fixable issues (default: false)"),
     },
     async (args) => {
-      // Derive project root from tasksDir (parent of .tasks/)
-      const projectRoot = dirname(tasksDir);
+      // Project root is the parent of .ticketbook/
+      const projectRoot = dirname(rootDir);
       const result = await runDoctor({
         tasksDir,
         plansDir: plansDir ?? undefined,
@@ -1057,13 +1058,13 @@ export async function startMcpServer(
   // --- sync ---
   server.tool(
     "sync",
-    "Stage and commit all pending artifact changes (.tasks/, .plans/, .docs/) with a structured commit message. Use dry_run=true to preview. Use push=true to push after committing.",
+    "Stage and commit all pending artifact changes with a structured commit message. Use dry_run=true to preview. Use push=true to push after committing.",
     {
       dry_run: z.boolean().optional().describe("Preview changes without committing (default: false)"),
       push: z.boolean().optional().describe("Push to remote after committing (default: false)"),
     },
     async (args) => {
-      const projectRoot = dirname(tasksDir);
+      const projectRoot = dirname(rootDir);
       const result = await sync({
         tasksDir,
         plansDir: plansDir ?? undefined,

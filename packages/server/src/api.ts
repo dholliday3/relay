@@ -124,6 +124,7 @@ function buildRouteRegex(path: string): { regex: RegExp; paramNames: string[] } 
 }
 
 export function createRoutes(
+  rootDir: string,
   tasksDir: string,
   plansDir?: string,
   docsDir?: string,
@@ -293,7 +294,7 @@ export function createRoutes(
 
   // GET /api/config
   route("GET", "/config", async () => {
-    const config = await getConfig(tasksDir);
+    const config = await getConfig(rootDir);
     return json(config);
   });
 
@@ -301,7 +302,7 @@ export function createRoutes(
   route("PATCH", "/config", async (req) => {
     const body = await readJsonBody(req);
     const patch = TicketbookConfigSchema.partial().parse(body);
-    const config = await updateConfig(tasksDir, patch);
+    const config = await updateConfig(rootDir, patch);
     return json(config);
   });
 
@@ -349,7 +350,7 @@ export function createRoutes(
     route("POST", "/plans", async (req) => {
       const body = await readJsonBody(req);
       const input = CreatePlanInputSchema.parse(body);
-      const plan = await createPlan(tasksDir, plansDir, input);
+      const plan = await createPlan(rootDir, plansDir, input);
       dbgApi(`planCreate  ${plan.id}  "${plan.title}"`);
       return json(plan, 201);
     });
@@ -377,7 +378,7 @@ export function createRoutes(
     // DELETE /api/plans/:id
     route("DELETE", "/plans/:id", async (_req, params) => {
       dbgApi(`planDelete  ${params.id}`);
-      await deletePlan(tasksDir, plansDir, params.id);
+      await deletePlan(rootDir, plansDir, params.id);
       return json({ ok: true });
     });
 
@@ -390,7 +391,7 @@ export function createRoutes(
 
     // POST /api/plans/:id/cut-tasks — create tasks from unchecked checkboxes
     route("POST", "/plans/:id/cut-tasks", async (_req, params) => {
-      const result = await cutTasksFromPlan(tasksDir, plansDir, params.id);
+      const result = await cutTasksFromPlan(rootDir, plansDir, params.id);
       dbgApi(`planCutTasks ${params.id}  ${result.createdTasks.length} tasks`);
       return json({
         plan: result.plan,
@@ -438,7 +439,7 @@ export function createRoutes(
     route("POST", "/docs", async (req) => {
       const body = await readJsonBody(req);
       const input = CreateDocInputSchema.parse(body);
-      const doc = await createDoc(tasksDir, docsDir, input);
+      const doc = await createDoc(rootDir, docsDir, input);
       dbgApi(`docCreate   ${doc.id}  "${doc.title}"`);
       return json(doc, 201);
     });
@@ -463,7 +464,7 @@ export function createRoutes(
 
     route("DELETE", "/docs/:id", async (_req, params) => {
       dbgApi(`docDelete   ${params.id}`);
-      await deleteDoc(tasksDir, docsDir, params.id);
+      await deleteDoc(rootDir, docsDir, params.id);
       return json({ ok: true });
     });
 

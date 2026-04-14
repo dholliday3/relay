@@ -275,9 +275,9 @@ describe("runOnboard", () => {
       const snippet = onboardSnippet();
       expect(snippet).toContain("## Ticketbook");
       expect(snippet).toContain(`ticketbook-onboard-v:${ONBOARD_VERSION}`);
-      expect(snippet).toContain(".tasks/");
-      expect(snippet).toContain(".plans/");
-      expect(snippet).toContain(".docs/");
+      expect(snippet).toContain(".ticketbook/tasks/");
+      expect(snippet).toContain(".ticketbook/plans/");
+      expect(snippet).toContain(".ticketbook/docs/");
       expect(snippet).toContain("MCP server");
     });
 

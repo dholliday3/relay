@@ -67,7 +67,7 @@ function serializePlan(
 }
 
 export async function createPlan(
-  tasksDir: string,
+  rootDir: string,
   plansDir: string,
   input: CreatePlanInput,
 ): Promise<Plan> {
@@ -77,7 +77,7 @@ export async function createPlan(
   }
   const validated = CreatePlanInputSchema.parse(rawInput);
 
-  const config = await getConfig(tasksDir);
+  const config = await getConfig(rootDir);
   const { id, filename } = await nextIdForDir(plansDir, config.planPrefix);
   const now = new Date();
 
@@ -186,14 +186,14 @@ export async function updatePlan(
 }
 
 export async function deletePlan(
-  tasksDir: string,
+  rootDir: string,
   plansDir: string,
   id: string,
 ): Promise<void> {
   const filePath = await findPlanFile(plansDir, id);
   if (!filePath) throw new Error(`Plan not found: ${id}`);
 
-  const config = await getConfig(tasksDir);
+  const config = await getConfig(rootDir);
 
   if (config.deleteMode === "archive") {
     const archiveDir = join(plansDir, ARCHIVE_DIR);
@@ -232,7 +232,7 @@ export interface CutTasksResult {
  * link them to the plan, and check off the items in the plan body.
  */
 export async function cutTasksFromPlan(
-  tasksDir: string,
+  rootDir: string,
   plansDir: string,
   planId: string,
 ): Promise<CutTasksResult> {
@@ -270,7 +270,7 @@ export async function cutTasksFromPlan(
     if (!match) continue;
 
     const taskText = match[4].trim();
-    const task = await createTask(tasksDir, {
+    const task = await createTask(join(rootDir, "tasks"), {
       title: taskText,
       status: "open",
       project: planData.project,

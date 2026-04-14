@@ -4,7 +4,7 @@ import matter from "gray-matter";
 import { TaskFrontmatterSchema } from "./schema.js";
 import type { Task, TaskFilters } from "./types.js";
 
-const IGNORED_FILES = new Set([".counter", ".config.yaml"]);
+const IGNORED_FILES = new Set([".counter"]);
 const IGNORED_DIRS = new Set([".archive"]);
 
 async function parseTicketFile(filePath: string): Promise<Task | null> {

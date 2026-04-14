@@ -45,20 +45,18 @@ describe("initTicketbook", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("creates .tasks/, .plans/, and .docs/ with config and counters", async () => {
+  test("creates .ticketbook/ with tasks/, plans/, docs/ subdirs, config, and counters", async () => {
     const result = await initTicketbook({ baseDir: dir, skillSourcePath });
 
-    expect(result.createdTasksDir).toBe(true);
-    expect(result.createdPlansDir).toBe(true);
-    expect(result.createdDocsDir).toBe(true);
+    expect(result.createdTicketbookDir).toBe(true);
     expect(result.wroteConfig).toBe(true);
 
-    expect(await fileExists(join(dir, ".tasks", ".archive"))).toBe(true);
-    expect(await fileExists(join(dir, ".plans", ".archive"))).toBe(true);
-    expect(await fileExists(join(dir, ".docs", ".archive"))).toBe(true);
+    expect(await fileExists(join(dir, ".ticketbook", "tasks", ".archive"))).toBe(true);
+    expect(await fileExists(join(dir, ".ticketbook", "plans", ".archive"))).toBe(true);
+    expect(await fileExists(join(dir, ".ticketbook", "docs", ".archive"))).toBe(true);
 
     const config = await readFile(
-      join(dir, ".tasks", ".config.yaml"),
+      join(dir, ".ticketbook", "config.yaml"),
       "utf-8",
     );
     expect(config).toContain("prefix: TASK");
@@ -69,19 +67,19 @@ describe("initTicketbook", () => {
     expect(config).toContain(`name: "${basename(dir)}"`);
 
     const ticketsCounter = await readFile(
-      join(dir, ".tasks", ".counter"),
+      join(dir, ".ticketbook", "tasks", ".counter"),
       "utf-8",
     );
     expect(ticketsCounter).toBe("0");
 
     const plansCounter = await readFile(
-      join(dir, ".plans", ".counter"),
+      join(dir, ".ticketbook", "plans", ".counter"),
       "utf-8",
     );
     expect(plansCounter).toBe("0");
 
     const docsCounter = await readFile(
-      join(dir, ".docs", ".counter"),
+      join(dir, ".ticketbook", "docs", ".counter"),
       "utf-8",
     );
     expect(docsCounter).toBe("0");
@@ -253,9 +251,9 @@ describe("initTicketbook", () => {
     expect(result.updatedGitignore).toBe(true);
 
     const gitignore = await readFile(join(dir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain(".tasks/.archive/");
-    expect(gitignore).toContain(".plans/.archive/");
-    expect(gitignore).toContain(".docs/.archive/");
+    expect(gitignore).toContain(".ticketbook/tasks/.archive/");
+    expect(gitignore).toContain(".ticketbook/plans/.archive/");
+    expect(gitignore).toContain(".ticketbook/docs/.archive/");
   });
 
   test("preserves existing .gitignore entries and only appends missing patterns", async () => {
@@ -270,22 +268,22 @@ describe("initTicketbook", () => {
     const gitignore = await readFile(join(dir, ".gitignore"), "utf-8");
     expect(gitignore).toContain("node_modules");
     expect(gitignore).toContain(".env");
-    expect(gitignore).toContain(".tasks/.archive/");
-    expect(gitignore).toContain(".plans/.archive/");
-    expect(gitignore).toContain(".docs/.archive/");
+    expect(gitignore).toContain(".ticketbook/tasks/.archive/");
+    expect(gitignore).toContain(".ticketbook/plans/.archive/");
+    expect(gitignore).toContain(".ticketbook/docs/.archive/");
   });
 
-  test("leaves an existing .config.yaml without a name field alone on re-init", async () => {
+  test("leaves an existing config.yaml without a name field alone on re-init", async () => {
     // Simulate a pre-0.x project whose config was written before the `name`
     // field existed. Re-running init should not overwrite or augment it.
     const preexisting = "prefix: TASK\nplanPrefix: PLAN\ndocPrefix: DOC\ndeleteMode: archive\n";
-    await mkdir(join(dir, ".tasks"), { recursive: true });
-    await writeFile(join(dir, ".tasks", ".config.yaml"), preexisting, "utf-8");
+    await mkdir(join(dir, ".ticketbook"), { recursive: true });
+    await writeFile(join(dir, ".ticketbook", "config.yaml"), preexisting, "utf-8");
 
     const result = await initTicketbook({ baseDir: dir, skillSourcePath });
     expect(result.wroteConfig).toBe(false);
 
-    const after = await readFile(join(dir, ".tasks", ".config.yaml"), "utf-8");
+    const after = await readFile(join(dir, ".ticketbook", "config.yaml"), "utf-8");
     expect(after).toBe(preexisting);
     expect(after).not.toContain("name:");
   });

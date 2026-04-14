@@ -43,11 +43,11 @@ export async function resolveWorktreeRoot(
 }
 
 /**
- * Check whether a directory contains a valid .tasks/ directory.
+ * Check whether a directory contains a valid .ticketbook/ directory.
  */
-async function hasTasksDir(dir: string): Promise<boolean> {
+async function hasTicketbookDir(dir: string): Promise<boolean> {
   try {
-    const s = await stat(join(dir, ".tasks"));
+    const s = await stat(join(dir, ".ticketbook"));
     return s.isDirectory();
   } catch {
     return false;
@@ -55,23 +55,23 @@ async function hasTasksDir(dir: string): Promise<boolean> {
 }
 
 /**
- * Find the .tasks/ directory, with worktree awareness.
+ * Find the .ticketbook/ directory, with worktree awareness.
  *
  * In a linked git worktree, this checks the main repo's root first.
- * If the main repo has a .tasks/ directory, we use that (artifacts are
+ * If the main repo has a .ticketbook/ directory, we use that (artifacts are
  * shared across worktrees, not duplicated). Otherwise falls back to
  * walking up from `startDir` as usual.
  */
-export async function findTasksDirWithWorktree(
+export async function findTicketbookDirWithWorktree(
   startDir: string,
-): Promise<{ tasksDir: string | null; isWorktree: boolean }> {
+): Promise<{ ticketbookDir: string | null; isWorktree: boolean }> {
   const mainRoot = await resolveWorktreeRoot(startDir);
 
   if (mainRoot) {
     // We're in a linked worktree — check the main repo first
-    if (await hasTasksDir(mainRoot)) {
+    if (await hasTicketbookDir(mainRoot)) {
       return {
-        tasksDir: join(mainRoot, ".tasks"),
+        ticketbookDir: join(mainRoot, ".ticketbook"),
         isWorktree: true,
       };
     }
@@ -81,13 +81,13 @@ export async function findTasksDirWithWorktree(
   let dir = resolve(startDir);
   const { dirname } = await import("node:path");
   while (true) {
-    if (await hasTasksDir(dir)) {
-      return { tasksDir: join(dir, ".tasks"), isWorktree: false };
+    if (await hasTicketbookDir(dir)) {
+      return { ticketbookDir: join(dir, ".ticketbook"), isWorktree: false };
     }
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
 
-  return { tasksDir: null, isWorktree: false };
+  return { ticketbookDir: null, isWorktree: false };
 }

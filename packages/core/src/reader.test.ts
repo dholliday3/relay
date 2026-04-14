@@ -43,9 +43,8 @@ describe("reader", () => {
     expect(tasks).toHaveLength(2);
   });
 
-  test("listTasks ignores .counter and .config.yaml", async () => {
+  test("listTasks ignores .counter", async () => {
     await createTask(dir, { title: "Test" });
-    await writeFile(join(dir, ".config.yaml"), "prefix: TKT\n", "utf-8");
 
     const tasks = await listTasks(dir);
     expect(tasks).toHaveLength(1);

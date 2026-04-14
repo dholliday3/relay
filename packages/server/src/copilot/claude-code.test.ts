@@ -199,13 +199,13 @@ describe("buildTicketbookMcpConfig", () => {
   it("produces an mcpServers entry pointing at bin/ticketbook.ts --mcp", () => {
     const config = buildTicketbookMcpConfig({
       binPath: "/abs/path/bin/ticketbook.ts",
-      tasksDir: "/abs/path/.tasks",
+      ticketbookDir: "/abs/path/.ticketbook",
     });
     expect(config).toEqual({
       mcpServers: {
         ticketbook: {
           command: "bun",
-          args: ["run", "/abs/path/bin/ticketbook.ts", "--mcp", "--dir", "/abs/path/.tasks"],
+          args: ["run", "/abs/path/bin/ticketbook.ts", "--mcp", "--dir", "/abs/path/.ticketbook"],
         },
       },
     });
@@ -214,7 +214,7 @@ describe("buildTicketbookMcpConfig", () => {
   it("respects a custom bun path", () => {
     const config = buildTicketbookMcpConfig({
       binPath: "/abs/bin.ts",
-      tasksDir: "/abs/.tasks",
+      ticketbookDir: "/abs/.ticketbook",
       bunPath: "/usr/local/bin/bun",
     });
     const server = (config.mcpServers as Record<string, { command: string }>).ticketbook;

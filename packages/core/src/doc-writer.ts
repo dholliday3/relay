@@ -66,7 +66,7 @@ function serializeDoc(
 }
 
 export async function createDoc(
-  tasksDir: string,
+  rootDir: string,
   docsDir: string,
   input: CreateDocInput,
 ): Promise<Doc> {
@@ -76,7 +76,7 @@ export async function createDoc(
   }
   const validated = CreateDocInputSchema.parse(rawInput);
 
-  const config = await getConfig(tasksDir);
+  const config = await getConfig(rootDir);
   const { id, filename } = await nextIdForDir(docsDir, config.docPrefix);
   const now = new Date();
 
@@ -173,14 +173,14 @@ export async function updateDoc(
 }
 
 export async function deleteDoc(
-  tasksDir: string,
+  rootDir: string,
   docsDir: string,
   id: string,
 ): Promise<void> {
   const filePath = await findDocFile(docsDir, id);
   if (!filePath) throw new Error(`Doc not found: ${id}`);
 
-  const config = await getConfig(tasksDir);
+  const config = await getConfig(rootDir);
   if (config.deleteMode === "archive") {
     const archiveDir = join(docsDir, ARCHIVE_DIR);
     await mkdir(archiveDir, { recursive: true });

@@ -1,6 +1,6 @@
 # Ticketbook
 
-A local-first project tracker that stores tasks in `.tasks/`, plans in `.plans/`, and durable reference docs in `.docs/`.
+A local-first project tracker that stores tasks, plans, and reference docs under `.ticketbook/` as markdown files with YAML frontmatter.
 
 ## Install
 
@@ -70,12 +70,12 @@ ticketbook --dir /path/to/project
 ticketbook [command] [options] [path]
 
 Commands:
-  init        Scaffold .tasks/, .plans/, .docs/, .mcp.json, and skill files
+  init        Scaffold .ticketbook/ directory, .mcp.json, and skill files
   onboard     Write/update the ticketbook agent instructions section in CLAUDE.md (or AGENTS.md)
   (default)   Start the server and open the UI
 
 Options:
-  --dir <path>   Path to .tasks/ directory (or directory containing it)
+  --dir <path>   Path to .ticketbook/ directory (or directory containing it)
   --port <num>   Server port (default: 4242, auto-increment on collision)
   --no-ui        Server only, no static UI serving
   --mcp          Start MCP server mode (stdio transport, no HTTP)
@@ -122,7 +122,7 @@ Add this to your Claude Code MCP config (`.claude/settings.json` or project-leve
 }
 ```
 
-Replace `/path/to/your/repo` with the absolute path to the directory containing your `.tasks/` folder.
+Replace `/path/to/your/repo` with the absolute path to the directory containing your `.ticketbook/` folder.
 
 ### Available MCP Tools
 

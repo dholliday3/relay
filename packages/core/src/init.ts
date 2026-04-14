@@ -10,7 +10,7 @@ import {
  * Options for scaffolding a ticketbook installation into a target project.
  */
 export interface InitTicketbookOptions {
-  /** Directory to initialize ticketbook in (will contain .tasks/, .plans/, etc.). */
+  /** Directory to initialize ticketbook in (will contain .ticketbook/). */
   baseDir: string;
   /**
    * Path to `skills/ticketbook/SKILL.md` inside the ticketbook package.
@@ -25,12 +25,11 @@ export interface InitTicketbookOptions {
  * vs. left alone (init is idempotent — it never overwrites user files).
  */
 export interface InitTicketbookResult {
+  ticketbookDir: string;
   tasksDir: string;
   plansDir: string;
   docsDir: string;
-  createdTasksDir: boolean;
-  createdPlansDir: boolean;
-  createdDocsDir: boolean;
+  createdTicketbookDir: boolean;
   wroteConfig: boolean;
   wroteSkill: boolean;
   wroteMcpConfig: boolean;
@@ -191,11 +190,13 @@ async function updateGitignore(
  * Scaffold a ticketbook installation into a target project.
  *
  * Creates (idempotently — existing files are never overwritten):
- *   - .tasks/, .plans/, and .docs/ directories with .config.yaml and .counter files
+ *   - .ticketbook/ root with tasks/, plans/, docs/ subdirectories
+ *   - config.yaml at .ticketbook/config.yaml
+ *   - .counter files in each subdirectory
  *   - .claude/skills/ticketbook/SKILL.md (Claude Code skill discovery)
  *   - .agents/skills/ticketbook/SKILL.md (Codex skill discovery)
  *   - .mcp.json (or merges a ticketbook entry into an existing one)
- *   - .gitignore entries for .tasks/.archive/, .plans/.archive/, and .docs/.archive/
+ *   - .gitignore entries for .ticketbook/{tasks,plans,docs}/.archive/
  *
  * Agent instructions are a separate concern — the new `runOnboard` in
  * ./onboard.ts writes a versioned, marker-wrapped section into CLAUDE.md or
@@ -206,33 +207,32 @@ export async function initTicketbook(
   options: InitTicketbookOptions,
 ): Promise<InitTicketbookResult> {
   const baseDir = resolve(options.baseDir);
-  const tasksDir = join(baseDir, ".tasks");
+  const ticketbookDir = join(baseDir, ".ticketbook");
+  const tasksDir = join(ticketbookDir, "tasks");
   const tasksArchiveDir = join(tasksDir, ".archive");
-  const plansDir = join(baseDir, ".plans");
+  const plansDir = join(ticketbookDir, "plans");
   const plansArchiveDir = join(plansDir, ".archive");
-  const docsDir = join(baseDir, ".docs");
+  const docsDir = join(ticketbookDir, "docs");
   const docsArchiveDir = join(docsDir, ".archive");
 
-  const createdTasksDir = !(await pathExists(tasksDir));
-  const createdPlansDir = !(await pathExists(plansDir));
-  const createdDocsDir = !(await pathExists(docsDir));
+  const createdTicketbookDir = !(await pathExists(ticketbookDir));
 
   await ensureDir(tasksArchiveDir);
   await ensureDir(plansArchiveDir);
   await ensureDir(docsArchiveDir);
 
-  // .config.yaml (tasks)
+  // config.yaml — lives at .ticketbook/config.yaml (governs all primitives).
   // On first init we auto-populate `name` with the basename of the target
   // directory. It's used by the MCP server to give each instance a per-project
   // identity (`ticketbook-<name>`) so multi-repo setups are distinguishable in
   // `claude mcp list` and error logs. Existing configs are left alone — the
   // MCP server tolerates a missing `name` field and falls back to `ticketbook`.
   let wroteConfig = false;
-  const configPath = join(tasksDir, ".config.yaml");
-  if (!(await pathExists(configPath))) {
+  const cfgPath = join(ticketbookDir, "config.yaml");
+  if (!(await pathExists(cfgPath))) {
     const projectName = basename(baseDir);
     await writeFile(
-      configPath,
+      cfgPath,
       `name: "${projectName}"\nprefix: TASK\nplanPrefix: PLAN\ndocPrefix: DOC\ndeleteMode: archive\n`,
       "utf-8",
     );
@@ -249,9 +249,9 @@ export async function initTicketbook(
 
   // .gitignore updates
   const updatedGitignore = await updateGitignore(baseDir, [
-    ".tasks/.archive/",
-    ".plans/.archive/",
-    ".docs/.archive/",
+    ".ticketbook/tasks/.archive/",
+    ".ticketbook/plans/.archive/",
+    ".ticketbook/docs/.archive/",
   ]);
 
   // Skill files — copied to both Claude and Codex discovery paths.
@@ -295,12 +295,11 @@ export async function initTicketbook(
   const mcpResult = await writeMcpConfig(join(baseDir, ".mcp.json"), mcpEntry);
 
   return {
+    ticketbookDir,
     tasksDir,
     plansDir,
     docsDir,
-    createdTasksDir,
-    createdPlansDir,
-    createdDocsDir,
+    createdTicketbookDir,
     wroteConfig,
     wroteSkill,
     wroteMcpConfig: mcpResult.wrote,

@@ -22,6 +22,8 @@ const dbgApi = createDebug("api");
 const dbgCop = createDebug("copilot");
 
 export interface ServerConfig {
+  /** The .ticketbook/ root directory — used for config, DB, and terminal cwd derivation. */
+  ticketbookDir: string;
   tasksDir: string;
   plansDir: string;
   docsDir: string;
@@ -79,11 +81,12 @@ function sendMsg(ws: { send(data: string): void }, msg: ServerMessage): void {
 }
 
 export function startServer(config: ServerConfig): ServerHandle {
-  const { tasksDir, plansDir, docsDir, port, staticDir, binPath } = config;
+  const { ticketbookDir, tasksDir, plansDir, docsDir, port, staticDir, binPath } = config;
   const autoIncrement = config.autoIncrement ?? false;
 
-  // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy)
-  const terminalBackend = new BunPtyHeadlessBackend(tasksDir);
+  // Terminal session backend (owns PTYs, grace timers, and DB cleanup on destroy).
+  // Uses ticketbookDir for the SQLite database (ticketbook.db lives at .ticketbook/).
+  const terminalBackend = new BunPtyHeadlessBackend(ticketbookDir);
 
   // Copilot session manager — wraps the Claude Code provider, owns per-session
   // MCP config files. Pass binPath through so the spawned CLI can call back
@@ -93,6 +96,7 @@ export function startServer(config: ServerConfig): ServerHandle {
   // no install requirement).
   const useStub = process.env.COPILOT_PROVIDER === "stub";
   const copilot = new CopilotManager({
+    ticketbookDir,
     tasksDir,
     plansDir,
     docsDir,
@@ -100,7 +104,7 @@ export function startServer(config: ServerConfig): ServerHandle {
     providers: useStub ? [new StubCopilotProvider()] : [new ClaudeCodeProvider(), new CodexProvider()],
   });
 
-  const routes = createRoutes(tasksDir, plansDir, docsDir, copilot);
+  const routes = createRoutes(ticketbookDir, tasksDir, plansDir, docsDir, copilot);
 
   // Track active WebSocket connections per session for graceful teardown.
   // Used by both terminal and copilot WS bridges.
@@ -109,10 +113,10 @@ export function startServer(config: ServerConfig): ServerHandle {
   // Track the per-WS listener dispose functions so close() can clean up cleanly
   const wsDisposers = new Map<string, Array<() => void>>();
 
-  /** Read terminalScrollback from .tasks/.config.yaml; falls back to schema default (5000). */
+  /** Read terminalScrollback from config.yaml; falls back to schema default (5000). */
   async function readScrollback(): Promise<number> {
     try {
-      const cfg = await getConfig(tasksDir);
+      const cfg = await getConfig(ticketbookDir);
       return cfg.terminalScrollback;
     } catch {
       return 5000;
@@ -171,7 +175,7 @@ export function startServer(config: ServerConfig): ServerHandle {
   }
 
   type WsData =
-    | { kind: "terminal"; sessionId: string; tasksDir: string }
+    | { kind: "terminal"; sessionId: string; ticketbookDir: string }
     | { kind: "copilot"; sessionId: string };
 
   // `tryServe` closes over the full options so type inference for ws.data
@@ -195,7 +199,7 @@ export function startServer(config: ServerConfig): ServerHandle {
       if (url.pathname === "/api/terminal/sessions") {
         if (req.method === "GET") {
           // Return persisted tabs with alive status from the backend
-          const tabs = listTerminalTabs(tasksDir);
+          const tabs = listTerminalTabs(ticketbookDir);
           const aliveSet = new Set(terminalBackend.list());
           const sessions = tabs.map((t) => ({ id: t.id, title: t.title, sortOrder: t.sort_order, tabNumber: t.tab_number, alive: aliveSet.has(t.id) }));
           return addCors(new Response(JSON.stringify({ sessions }), { headers: { "Content-Type": "application/json" } }), origin);
@@ -203,11 +207,11 @@ export function startServer(config: ServerConfig): ServerHandle {
         if (req.method === "POST") {
           // Server assigns id, title, and tab number
           const body = await req.json() as { sortOrder?: number };
-          const tabNumber = getNextTabNumber(tasksDir);
+          const tabNumber = getNextTabNumber(ticketbookDir);
           const id = `term-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const title = `Terminal ${tabNumber}`;
           const sortOrder = body.sortOrder ?? 0;
-          upsertTerminalTab(tasksDir, id, title, sortOrder, tabNumber);
+          upsertTerminalTab(ticketbookDir, id, title, sortOrder, tabNumber);
           dbgApi("tabCreate", { id, title, tabNumber, sortOrder });
           return addCors(new Response(JSON.stringify({ id, title, tabNumber, sortOrder }), { headers: { "Content-Type": "application/json" } }), origin);
         }
@@ -231,7 +235,7 @@ export function startServer(config: ServerConfig): ServerHandle {
           if (session) {
             session.destroy();
           } else {
-            deleteTerminalTab(tasksDir, body.id);
+            deleteTerminalTab(ticketbookDir, body.id);
           }
           return addCors(new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } }), origin);
         }
@@ -242,7 +246,7 @@ export function startServer(config: ServerConfig): ServerHandle {
       if (termMatch && req.headers.get("upgrade")?.toLowerCase() === "websocket") {
         const sessionId = decodeURIComponent(termMatch[1]);
         const success = server.upgrade(req, {
-          data: { kind: "terminal", sessionId, tasksDir } satisfies WsData,
+          data: { kind: "terminal", sessionId, ticketbookDir } satisfies WsData,
         });
         if (success) return undefined as unknown as Response;
         return new Response("WebSocket upgrade failed", { status: 500 });
@@ -347,7 +351,7 @@ export function startServer(config: ServerConfig): ServerHandle {
           // Copilot WS is push-only — ignore inbound frames.
           return;
         }
-        const { sessionId, tasksDir: cwd } = ws.data;
+        const { sessionId, ticketbookDir: tbDir } = ws.data;
         try {
           const msg = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message));
 
@@ -370,7 +374,7 @@ export function startServer(config: ServerConfig): ServerHandle {
               const scrollback = await readScrollback();
               session = terminalBackend.create({
                 id: sessionId,
-                cwd: resolve(cwd, ".."),
+                cwd: resolve(tbDir, ".."),
                 cols: msg.cols,
                 rows: msg.rows,
                 scrollback,
@@ -479,17 +483,16 @@ export function startServer(config: ServerConfig): ServerHandle {
 
 // Direct execution
 if (import.meta.main) {
-  const tasksDir = resolve(process.env.TASKS_DIR ?? ".tasks");
-  const plansDir = resolve(process.env.PLANS_DIR ?? ".plans");
-  const docsDir = resolve(process.env.DOCS_DIR ?? ".docs");
+  const ticketbookDir = resolve(process.env.TICKETBOOK_DIR ?? ".ticketbook");
+  const tasksDir = join(ticketbookDir, "tasks");
+  const plansDir = join(ticketbookDir, "plans");
+  const docsDir = join(ticketbookDir, "docs");
   const port = parseInt(process.env.PORT ?? "4242", 10);
   const staticDir = resolve(
     process.env.STATIC_DIR ?? join(import.meta.dir, "../../ui/dist"),
   );
 
-  const handle = startServer({ tasksDir, plansDir, docsDir, port, staticDir });
+  const handle = startServer({ ticketbookDir, tasksDir, plansDir, docsDir, port, staticDir });
   console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
-  console.log(`Tasks directory: ${tasksDir}`);
-  console.log(`Plans directory: ${plansDir}`);
-  console.log(`Docs directory: ${docsDir}`);
+  console.log(`Ticketbook directory: ${ticketbookDir}`);
 }

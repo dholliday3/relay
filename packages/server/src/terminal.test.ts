@@ -100,6 +100,7 @@ function connect(base: string, sessionId: string, cols = 80, rows = 24): TestCli
 
 describe("terminal protocol", () => {
   let dir: string;
+  let ticketbookDir: string;
   let tasksDir: string;
   let plansDir: string;
   let docsDir: string;
@@ -108,15 +109,16 @@ describe("terminal protocol", () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-term-"));
-    tasksDir = join(dir, ".tasks");
-    plansDir = join(dir, ".plans");
-    docsDir = join(dir, ".docs");
+    ticketbookDir = join(dir, ".ticketbook");
+    tasksDir = join(ticketbookDir, "tasks");
+    plansDir = join(ticketbookDir, "plans");
+    docsDir = join(ticketbookDir, "docs");
     await mkdir(join(tasksDir, ".archive"), { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await mkdir(docsDir, { recursive: true });
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
-    await writeFile(join(tasksDir, ".config.yaml"), "prefix: TKT\ndeleteMode: archive\n", "utf-8");
-    handle = startServer({ tasksDir, plansDir, docsDir, port: 0 });
+    await writeFile(join(ticketbookDir, "config.yaml"), "prefix: TKT\ndeleteMode: archive\n", "utf-8");
+    handle = startServer({ ticketbookDir, tasksDir, plansDir, docsDir, port: 0 });
     base = `http://localhost:${handle.port}`;
   });
 
@@ -374,11 +376,11 @@ describe("terminal protocol", () => {
     _resetDbCacheForTests();
 
     await writeFile(
-      join(tasksDir, ".config.yaml"),
+      join(ticketbookDir, "config.yaml"),
       "prefix: TKT\ndeleteMode: archive\nterminalScrollback: 50\n",
       "utf-8",
     );
-    handle = startServer({ tasksDir, plansDir, docsDir, port: 0 });
+    handle = startServer({ ticketbookDir, tasksDir, plansDir, docsDir, port: 0 });
     base = `http://localhost:${handle.port}`;
 
     const { id } = await (await fetch(`${base}/api/terminal/sessions`, {

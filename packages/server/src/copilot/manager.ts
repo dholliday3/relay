@@ -1,3 +1,4 @@
+import { resolve, dirname } from "node:path";
 import { ClaudeCodeProvider } from "./claude-code.js";
 import { buildTicketbookMcpConfig, writeMcpConfigFile } from "./mcp-config.js";
 import { expandContextRefs } from "./context-refs.js";
@@ -22,6 +23,8 @@ import {
 } from "../db.js";
 
 export interface CopilotManagerConfig {
+  /** The .ticketbook/ root — used for DB, MCP config, and terminal cwd derivation. */
+  ticketbookDir: string;
   tasksDir: string;
   /**
    * Directory holding plan markdown files. Required for expanding
@@ -162,7 +165,7 @@ export class CopilotManager {
     let mcpConfig: Record<string, unknown> | undefined;
 
     if (opts.conversationId) {
-      const row = getCopilotConversation(this.config.tasksDir, opts.conversationId);
+      const row = getCopilotConversation(this.config.ticketbookDir, opts.conversationId);
       if (!row) {
         throw new Error(`Copilot conversation not found: ${opts.conversationId}`);
       }
@@ -178,7 +181,7 @@ export class CopilotManager {
     if (this.config.binPath) {
       mcpConfig = buildTicketbookMcpConfig({
         binPath: this.config.binPath,
-        tasksDir: this.config.tasksDir,
+        ticketbookDir: this.config.ticketbookDir,
       });
       const written = await writeMcpConfigFile(mcpConfig);
       mcpConfigPath = written.path;
@@ -302,15 +305,15 @@ export class CopilotManager {
   }
 
   listConversations(providerId?: CopilotProviderId): CopilotConversationRow[] {
-    return listCopilotConversations(this.config.tasksDir, providerId);
+    return listCopilotConversations(this.config.ticketbookDir, providerId);
   }
 
   deleteConversation(id: string): void {
-    deleteCopilotConversation(this.config.tasksDir, id);
+    deleteCopilotConversation(this.config.ticketbookDir, id);
   }
 
   async loadConversationMessages(id: string): Promise<StoredTranscriptMessage[]> {
-    return listCopilotMessages(this.config.tasksDir, id).map((row) => ({
+    return listCopilotMessages(this.config.ticketbookDir, id).map((row) => ({
       id: row.id,
       role: row.role,
       parts: row.parts,
@@ -359,7 +362,7 @@ export class CopilotManager {
     this.flushAssistantMessage(session);
 
     if (session.conversationId) {
-      bumpCopilotConversation(this.config.tasksDir, session.conversationId);
+      bumpCopilotConversation(this.config.ticketbookDir, session.conversationId);
     }
 
     for (const listener of this.listeners) {
@@ -371,13 +374,13 @@ export class CopilotManager {
     if (!session.providerConversationId) return;
     if (!session.conversationId) {
       const existing = getCopilotConversationByProviderConversationId(
-        this.config.tasksDir,
+        this.config.ticketbookDir,
         session.providerId,
         session.providerConversationId,
       );
       const row =
         existing ??
-        recordCopilotConversation(this.config.tasksDir, {
+        recordCopilotConversation(this.config.ticketbookDir, {
           providerId: session.providerId,
           providerConversationId: session.providerConversationId,
           title: session.pendingTitle ?? "Untitled",
@@ -389,7 +392,7 @@ export class CopilotManager {
     if (!session.conversationId) return;
     if (session.stagedMessages.length > 0) {
       for (const message of session.stagedMessages) {
-        appendCopilotMessage(this.config.tasksDir, {
+        appendCopilotMessage(this.config.ticketbookDir, {
           id: message.id,
           conversationId: session.conversationId,
           role: message.role,
@@ -414,7 +417,7 @@ export class CopilotManager {
     };
 
     if (session.conversationId) {
-      appendCopilotMessage(this.config.tasksDir, {
+      appendCopilotMessage(this.config.ticketbookDir, {
         id: message.id,
         conversationId: session.conversationId,
         role: message.role,
@@ -440,10 +443,6 @@ export class CopilotManager {
   }
 
   private defaultCwd(): string {
-    return (
-      this.config.tasksDir
-        .replace(/\/?\.tasks\/?$/, "")
-        .replace(/\/+$/, "") || process.cwd()
-    );
+    return resolve(this.config.ticketbookDir, "..");
   }
 }

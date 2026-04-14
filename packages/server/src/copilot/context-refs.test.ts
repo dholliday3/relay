@@ -7,23 +7,24 @@ import { expandContextRefs } from "./context-refs.js";
 
 describe("expandContextRefs", () => {
   let root: string;
+  let ticketbookDir: string;
   let tasksDir: string;
   let plansDir: string;
   let docsDir: string;
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "ticketbook-ctxrefs-"));
-    tasksDir = join(root, ".tasks");
-    plansDir = join(root, ".plans");
-    docsDir = join(root, ".docs");
+    ticketbookDir = join(root, ".ticketbook");
+    tasksDir = join(ticketbookDir, "tasks");
+    plansDir = join(ticketbookDir, "plans");
+    docsDir = join(ticketbookDir, "docs");
     await mkdir(tasksDir, { recursive: true });
     await mkdir(plansDir, { recursive: true });
     await mkdir(docsDir, { recursive: true });
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
     await writeFile(join(plansDir, ".counter"), "0", "utf-8");
     await writeFile(join(docsDir, ".counter"), "0", "utf-8");
-    await writeFile(join(tasksDir, ".config.yaml"), "prefix: TKT\n", "utf-8");
-    await writeFile(join(plansDir, ".config.yaml"), "prefix: PLAN\n", "utf-8");
+    await writeFile(join(ticketbookDir, "config.yaml"), "prefix: TKT\n", "utf-8");
   });
 
   afterEach(async () => {

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, readFile, writeFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdtemp, rm, readFile, writeFile, readdir, mkdir } from "node:fs/promises";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import matter from "gray-matter";
 import {
@@ -154,15 +154,18 @@ describe("updateTask", () => {
 });
 
 describe("deleteTask", () => {
+  let rootDir: string;
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "ticketbook-writer-"));
+    rootDir = await mkdtemp(join(tmpdir(), "ticketbook-writer-"));
+    dir = join(rootDir, "tasks");
+    await mkdir(dir, { recursive: true });
     await writeFile(join(dir, ".counter"), "0", "utf-8");
   });
 
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true });
   });
 
   test("archives task by default", async () => {
@@ -179,8 +182,9 @@ describe("deleteTask", () => {
   });
 
   test("hard-deletes when config says so", async () => {
+    // deleteTask reads config from dirname(dir) (the ticketbook root)
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(rootDir, "config.yaml"),
       "prefix: TKT\ndeleteMode: hard\n",
       "utf-8",
     );

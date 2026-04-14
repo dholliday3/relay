@@ -21,9 +21,9 @@ describe("getConfig", () => {
     expect(config.deleteMode).toBe("archive");
   });
 
-  test("reads config from .config.yaml", async () => {
+  test("reads config from config.yaml", async () => {
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(dir, "config.yaml"),
       "prefix: ART\ndeleteMode: hard\n",
       "utf-8",
     );
@@ -33,7 +33,7 @@ describe("getConfig", () => {
   });
 
   test("fills in defaults for partial config", async () => {
-    await writeFile(join(dir, ".config.yaml"), "prefix: BUG\n", "utf-8");
+    await writeFile(join(dir, "config.yaml"), "prefix: BUG\n", "utf-8");
     const config = await getConfig(dir);
     expect(config.prefix).toBe("BUG");
     expect(config.deleteMode).toBe("archive");
@@ -41,7 +41,7 @@ describe("getConfig", () => {
 
   test("reads optional name field when present", async () => {
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(dir, "config.yaml"),
       'name: "projA"\nprefix: TASK\n',
       "utf-8",
     );
@@ -50,7 +50,7 @@ describe("getConfig", () => {
   });
 
   test("name is undefined (not empty string) when absent", async () => {
-    await writeFile(join(dir, ".config.yaml"), "prefix: TASK\n", "utf-8");
+    await writeFile(join(dir, "config.yaml"), "prefix: TASK\n", "utf-8");
     const config = await getConfig(dir);
     expect(config.name).toBeUndefined();
   });
@@ -72,13 +72,13 @@ describe("updateConfig", () => {
     expect(config.prefix).toBe("NEW");
     expect(config.deleteMode).toBe("archive");
 
-    const raw = await readFile(join(dir, ".config.yaml"), "utf-8");
+    const raw = await readFile(join(dir, "config.yaml"), "utf-8");
     expect(raw).toContain("prefix: NEW");
   });
 
   test("merges with existing config", async () => {
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(dir, "config.yaml"),
       "prefix: OLD\ndeleteMode: archive\n",
       "utf-8",
     );

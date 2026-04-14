@@ -6,6 +6,6 @@
 
 # Ticketbook: counter files use 'ours' merge to avoid conflicts
 # After merging, run `ticketbook doctor --fix` to reconcile counters
-.tasks/.counter merge=ours
-.plans/.counter merge=ours
-.docs/.counter merge=ours
+.ticketbook/tasks/.counter merge=ours
+.ticketbook/plans/.counter merge=ours
+.ticketbook/docs/.counter merge=ours

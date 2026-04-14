@@ -17,8 +17,8 @@ import { writeFile, unlink, mkdtemp } from "node:fs/promises";
 export interface BuildTicketbookMcpConfigInput {
   /** Absolute path to the bin/ticketbook.ts entry script (the one that started the server). */
   binPath: string;
-  /** Absolute path to the .tasks directory the server is managing. */
-  tasksDir: string;
+  /** Absolute path to the .ticketbook directory the server is managing. */
+  ticketbookDir: string;
   /**
    * Bun executable to invoke the bin script with. Defaults to "bun" so it
    * resolves on PATH; pass `process.execPath` for a hermetic install.
@@ -34,7 +34,7 @@ export function buildTicketbookMcpConfig(
     mcpServers: {
       ticketbook: {
         command: bun,
-        args: ["run", input.binPath, "--mcp", "--dir", input.tasksDir],
+        args: ["run", input.binPath, "--mcp", "--dir", input.ticketbookDir],
       },
     },
   };

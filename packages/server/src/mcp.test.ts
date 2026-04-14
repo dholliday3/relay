@@ -17,7 +17,7 @@ describe("resolveMcpServerName", () => {
 
   test("returns ticketbook-<name> when config has a name field", async () => {
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(dir, "config.yaml"),
       'name: "projA"\nprefix: TASK\n',
       "utf-8",
     );
@@ -26,27 +26,27 @@ describe("resolveMcpServerName", () => {
   });
 
   test("returns plain ticketbook when config has no name field", async () => {
-    await writeFile(join(dir, ".config.yaml"), "prefix: TASK\n", "utf-8");
+    await writeFile(join(dir, "config.yaml"), "prefix: TASK\n", "utf-8");
     const name = await resolveMcpServerName(dir);
     expect(name).toBe("ticketbook");
   });
 
   test("returns plain ticketbook when config file is missing", async () => {
-    // dir exists but has no .config.yaml
+    // dir exists but has no config.yaml
     const name = await resolveMcpServerName(dir);
     expect(name).toBe("ticketbook");
   });
 
   test("returns plain ticketbook when config is malformed (does not throw)", async () => {
     // Invalid YAML that getConfig's parser will choke on.
-    await writeFile(join(dir, ".config.yaml"), "prefix: [unclosed\n", "utf-8");
+    await writeFile(join(dir, "config.yaml"), "prefix: [unclosed\n", "utf-8");
     const name = await resolveMcpServerName(dir);
     expect(name).toBe("ticketbook");
   });
 
   test("returns plain ticketbook when name is an empty string", async () => {
     await writeFile(
-      join(dir, ".config.yaml"),
+      join(dir, "config.yaml"),
       'name: ""\nprefix: TASK\n',
       "utf-8",
     );

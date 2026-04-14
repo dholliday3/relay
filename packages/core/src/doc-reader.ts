@@ -4,7 +4,7 @@ import matter from "gray-matter";
 import { DocFrontmatterSchema } from "./doc-schema.js";
 import type { Doc, DocFilters } from "./doc-types.js";
 
-const IGNORED_FILES = new Set([".counter", ".config.yaml"]);
+const IGNORED_FILES = new Set([".counter"]);
 const IGNORED_DIRS = new Set([".archive"]);
 
 async function parseDocFile(filePath: string): Promise<Doc | null> {

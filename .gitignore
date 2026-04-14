@@ -1,8 +1,8 @@
 .env.local
 node_modules/
 dist/
-.tasks/.archive/
-.docs/.archive/
+.ticketbook/tasks/.archive/
+.ticketbook/docs/.archive/
 *.log
 .DS_Store
 *.tsbuildinfo
@@ -15,7 +15,7 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/.playwright-cache/
 test-results/
-.plans/.archive/
+.ticketbook/plans/.archive/
 
 # Ticketbook advisory locks
 *.lock

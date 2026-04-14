@@ -25,8 +25,7 @@ export interface DoctorResult {
 // ---------------------------------------------------------------------------
 
 const COUNTER_FILE = ".counter";
-const CONFIG_FILE = ".config.yaml";
-const IGNORED = new Set([COUNTER_FILE, CONFIG_FILE]);
+const IGNORED = new Set([COUNTER_FILE]);
 const IGNORED_DIRS = new Set([".archive"]);
 
 function item(
@@ -287,9 +286,9 @@ async function checkGitattributes(
   }
 
   const requiredLines = [
-    ".tasks/.counter merge=ours",
-    ".plans/.counter merge=ours",
-    ".docs/.counter merge=ours",
+    ".ticketbook/tasks/.counter merge=ours",
+    ".ticketbook/plans/.counter merge=ours",
+    ".ticketbook/docs/.counter merge=ours",
   ];
 
   const missing: string[] = [];

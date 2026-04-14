@@ -1,5 +1,5 @@
 import { readFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { getConfig } from "./config.js";
 import { withLock } from "./lock.js";
 import { atomicWriteFile } from "./atomic.js";
@@ -72,6 +72,6 @@ export async function nextIdForDir(
 export async function nextId(
   dir: string,
 ): Promise<{ id: string; number: number; filename: (title: string) => string }> {
-  const config = await getConfig(dir);
+  const config = await getConfig(dirname(dir));
   return nextIdForDir(dir, config.prefix);
 }

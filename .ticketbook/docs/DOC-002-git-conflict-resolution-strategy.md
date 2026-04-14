@@ -22,9 +22,9 @@ The only conflict that is genuinely hard to resolve manually is a **counter coll
 This is prevented by a `.gitattributes` rule:
 
 ```
-.tasks/.counter merge=ours
-.plans/.counter merge=ours
-.docs/.counter merge=ours
+.ticketbook/tasks/.counter merge=ours
+.ticketbook/plans/.counter merge=ours
+.ticketbook/docs/.counter merge=ours
 ```
 
 `merge=ours` tells git to always keep the current branch's counter value on merge, discarding the incoming branch's value. This avoids a conflict marker, but leaves the counter potentially stale (lower than the highest ID actually on disk).
@@ -33,7 +33,7 @@ The `doctor` command handles reconciliation: it scans all artifact files, finds 
 
 ## What we leave to agents: task/plan/doc file conflicts
 
-Conflicts in `.tasks/*.md`, `.plans/*.md`, and `.docs/*.md` files are standard git text conflicts — git leaves conflict markers in the file and the merge stops. We deliberately do **not** install a custom git merge driver for these files.
+Conflicts in `.ticketbook/tasks/*.md`, `.ticketbook/plans/*.md`, and `.ticketbook/docs/*.md` files are standard git text conflicts — git leaves conflict markers in the file and the merge stops. We deliberately do **not** install a custom git merge driver for these files.
 
 **Why not a merge driver?**
 
@@ -51,12 +51,12 @@ Artifact file conflicts are structured and easy to reason about. The files have 
 ## Typical post-merge workflow
 
 1. Merge (or pull) as normal.
-2. If git reports conflicts in `.tasks/`, `.plans/`, or `.docs/` files, ask your agent to resolve them. The conflict markers make the two sides explicit.
+2. If git reports conflicts in `.ticketbook/tasks/`, `.ticketbook/plans/`, or `.ticketbook/docs/` files, ask your agent to resolve them. The conflict markers make the two sides explicit.
 3. After the merge is clean, run `ticketbook doctor --fix` (or call the MCP `doctor` tool) to reconcile counters if any were touched by both branches.
 
 ## Worktree awareness
 
-When running ticketbook from a git worktree, the CLI and MCP server resolve `.tasks/`, `.plans/`, and `.docs/` relative to the **main worktree**, not the linked worktree's directory. This means all worktrees share a single set of artifacts, which is intentional — tasks and plans belong to the project, not to a particular branch.
+When running ticketbook from a git worktree, the CLI and MCP server resolve `.ticketbook/` relative to the **main worktree**, not the linked worktree's directory. This means all worktrees share a single set of artifacts, which is intentional — tasks and plans belong to the project, not to a particular branch.
 
 If you create a task in one worktree and switch to another, the task is immediately visible. The same applies to agent sessions running in parallel worktrees: they read and write the same artifact store. Coordinate via task `status` and `assignee` fields to avoid stepping on each other.
 

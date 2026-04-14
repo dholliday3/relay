@@ -273,6 +273,6 @@ fi
 echo ""
 echo "Next steps:"
 echo "  cd <your-project>"
-echo "  ticketbook init       # scaffold .tasks/, .plans/, .docs/, .mcp.json"
+echo "  ticketbook init       # scaffold .ticketbook/, .mcp.json, skill files"
 echo "  ticketbook onboard    # add agent instructions to CLAUDE.md"
 echo "  ticketbook            # start the local UI at http://localhost:4242"

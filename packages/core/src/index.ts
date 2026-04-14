@@ -114,7 +114,7 @@ export { runDoctor, formatDoctorReport } from "./doctor.js";
 export type { DoctorOptions, DoctorResult, DiagnosticItem, Severity } from "./doctor.js";
 export { sync } from "./sync.js";
 export type { SyncOptions, SyncResult } from "./sync.js";
-export { resolveWorktreeRoot, findTasksDirWithWorktree } from "./worktree.js";
+export { resolveWorktreeRoot, findTicketbookDirWithWorktree } from "./worktree.js";
 export type { ClientMessage, ServerMessage } from "./terminal-protocol.js";
 
 export { initTicketbook, codexMcpInstructions } from "./init.js";

@@ -31,7 +31,7 @@ describe("sync", () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "ticketbook-sync-"));
-    tasksDir = join(dir, ".tasks");
+    tasksDir = join(dir, ".ticketbook", "tasks");
     await mkdir(tasksDir, { recursive: true });
   });
 
@@ -53,7 +53,7 @@ describe("sync", () => {
     await initGitRepo(dir);
     // Commit an initial state so .tasks/ is tracked
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
-    await exec("git", ["add", ".tasks/"], { cwd: dir });
+    await exec("git", ["add", ".ticketbook/"], { cwd: dir });
     await exec("git", ["commit", "-m", "init"], { cwd: dir });
 
     // Add a new task file (will show as untracked)
@@ -71,7 +71,7 @@ describe("sync", () => {
   test("dry run: commit message includes task IDs", async () => {
     await initGitRepo(dir);
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
-    await exec("git", ["add", ".tasks/"], { cwd: dir });
+    await exec("git", ["add", ".ticketbook/"], { cwd: dir });
     await exec("git", ["commit", "-m", "init"], { cwd: dir });
 
     await writeFile(join(tasksDir, "TKT-001-my-task.md"), taskContent("TKT-001"));
@@ -88,7 +88,7 @@ describe("sync", () => {
   test("dry run: does not create a commit", async () => {
     await initGitRepo(dir);
     await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
-    await exec("git", ["add", ".tasks/"], { cwd: dir });
+    await exec("git", ["add", ".ticketbook/"], { cwd: dir });
     await exec("git", ["commit", "-m", "init"], { cwd: dir });
 
     await writeFile(join(tasksDir, "TKT-001-foo.md"), taskContent("TKT-001"));

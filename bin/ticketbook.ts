@@ -7,7 +7,7 @@ import {
   initTicketbook,
   codexMcpInstructions,
 } from "../packages/core/src/init.ts";
-import { findTasksDirWithWorktree } from "../packages/core/src/worktree.ts";
+import { findTicketbookDirWithWorktree } from "../packages/core/src/worktree.ts";
 import { runOnboard } from "../packages/core/src/onboard.ts";
 import { runUpgrade } from "../packages/core/src/upgrade.ts";
 import { startMcpServer } from "../packages/server/src/mcp.ts";
@@ -88,13 +88,13 @@ function printUsage(): void {
   console.log(`Usage: ticketbook [command] [options] [path]
 
 Commands:
-  init        Scaffold .tasks/, .plans/, .docs/, .mcp.json, and skill files
+  init        Scaffold .ticketbook/ directory, .mcp.json, and skill files
   onboard     Write/update the ticketbook agent instructions section in CLAUDE.md (or AGENTS.md)
   upgrade     Upgrade ticketbook to the latest release from GitHub
   (default)   Start the server and open the UI
 
 Options:
-  --dir <path>   Path to .tasks/ directory (or directory containing it)
+  --dir <path>   Path to .ticketbook/ directory (or directory containing it)
   --port <num>   Server port (default: 4242, auto-increment on collision)
   --no-ui        Server only, no static UI serving
   --mcp          Start MCP server mode (stdio transport, no HTTP)
@@ -104,23 +104,23 @@ Options:
   -h, --help     Show this help message`);
 }
 
-/** Walk up from startDir to find a .tasks/ directory, with worktree awareness. */
-async function findTasksDir(startDir: string): Promise<string | null> {
-  const { tasksDir, isWorktree } = await findTasksDirWithWorktree(startDir);
-  if (tasksDir && isWorktree) {
+/** Walk up from startDir to find a .ticketbook/ directory, with worktree awareness. */
+async function findTicketbookDir(startDir: string): Promise<string | null> {
+  const { ticketbookDir, isWorktree } = await findTicketbookDirWithWorktree(startDir);
+  if (ticketbookDir && isWorktree) {
     console.error(
-      `Detected git worktree — using main repo artifacts at ${tasksDir}`,
+      `Detected git worktree — using main repo artifacts at ${ticketbookDir}`,
     );
   }
-  return tasksDir;
+  return ticketbookDir;
 }
 
-/** Resolve a user-provided path to a .tasks/ directory */
-async function resolveTasksDir(givenPath: string): Promise<string> {
+/** Resolve a user-provided path to a .ticketbook/ directory */
+async function resolveTicketbookDir(givenPath: string): Promise<string> {
   const resolved = resolve(givenPath);
 
-  // If the path itself is a .tasks directory, use it directly
-  if (basename(resolved) === ".tasks") {
+  // If the path itself is a .ticketbook directory, use it directly
+  if (basename(resolved) === ".ticketbook") {
     try {
       const s = await stat(resolved);
       if (s.isDirectory()) return resolved;
@@ -130,16 +130,16 @@ async function resolveTasksDir(givenPath: string): Promise<string> {
     return resolved;
   }
 
-  // Check if it contains a .tasks subdirectory
-  const withTasks = join(resolved, ".tasks");
+  // Check if it contains a .ticketbook subdirectory
+  const withTicketbook = join(resolved, ".ticketbook");
   try {
-    const s = await stat(withTasks);
-    if (s.isDirectory()) return withTasks;
+    const s = await stat(withTicketbook);
+    if (s.isDirectory()) return withTicketbook;
   } catch {
-    // No .tasks inside — assume the path IS the tasks dir
+    // No .ticketbook inside — assume the path IS the ticketbook dir
   }
 
-  return withTasks;
+  return withTicketbook;
 }
 
 /**
@@ -157,7 +157,7 @@ function printInitSummary(
   baseDir: string,
   result: Awaited<ReturnType<typeof initTicketbook>>,
 ): void {
-  console.log(`Initialized ticketbook at ${result.tasksDir}`);
+  console.log(`Initialized ticketbook at ${result.ticketbookDir}`);
 
   const created: string[] = [];
   if (result.wroteSkill) {
@@ -332,39 +332,42 @@ async function main(): Promise<void> {
     return;
   }
 
-  // --- Resolve .tasks/ directory ---
-  let tasksDir: string | null = null;
+  // --- Resolve .ticketbook/ directory ---
+  let ticketbookDir: string | null = null;
 
   if (args.dir) {
-    tasksDir = await resolveTasksDir(args.dir);
+    ticketbookDir = await resolveTicketbookDir(args.dir);
   } else {
-    tasksDir = await findTasksDir(process.cwd());
+    ticketbookDir = await findTicketbookDir(process.cwd());
   }
 
-  if (!tasksDir) {
-    console.log("No .tasks/ directory found.");
+  if (!ticketbookDir) {
+    console.log("No .ticketbook/ directory found.");
     const answer = prompt("Would you like to initialize one here? (y/N) ");
     if (answer?.toLowerCase() === "y") {
       const result = await initTicketbook({
         baseDir: process.cwd(),
         skillSourcePath: resolveSkillSourcePath(),
       });
-      tasksDir = result.tasksDir;
+      ticketbookDir = result.ticketbookDir;
       printInitSummary(process.cwd(), result);
     } else {
-      console.log("Run 'ticketbook init' to create a .tasks/ directory.");
+      console.log("Run 'ticketbook init' to create a .ticketbook/ directory.");
       process.exit(1);
     }
   }
 
+  // Derive subdirectories from the .ticketbook/ root
+  const tasksDir = join(ticketbookDir, "tasks");
+  const plansDir = join(ticketbookDir, "plans");
+  const docsDir = join(ticketbookDir, "docs");
+
   // --- MCP mode ---
   if (args.mcp) {
-    const mcpPlansDir = join(dirname(tasksDir), ".plans");
-    const mcpDocsDir = join(dirname(tasksDir), ".docs");
     console.error(
-      `Ticketbook MCP server (stdio) — tasks: ${tasksDir}, plans: ${mcpPlansDir}, docs: ${mcpDocsDir}`,
+      `Ticketbook MCP server (stdio) — tasks: ${tasksDir}, plans: ${plansDir}, docs: ${docsDir}`,
     );
-    await startMcpServer(tasksDir, mcpPlansDir, mcpDocsDir);
+    await startMcpServer(ticketbookDir, tasksDir, plansDir, docsDir);
     return;
   }
 
@@ -372,10 +375,6 @@ async function main(): Promise<void> {
   const uiDistDir = args.noUi
     ? undefined
     : resolve(join(import.meta.dir, "../packages/ui/dist"));
-
-  // Derive plans dir from tasks dir (sibling .plans/ directory)
-  const plansDir = join(dirname(tasksDir), ".plans");
-  const docsDir = join(dirname(tasksDir), ".docs");
 
   // Absolute path to this script — passed through so the copilot manager can
   // wire up an MCP config that re-invokes us in --mcp mode for tool access.
@@ -394,6 +393,7 @@ async function main(): Promise<void> {
   let handle: ReturnType<typeof startServer>;
   try {
     handle = startServer({
+      ticketbookDir,
       tasksDir,
       plansDir,
       docsDir,
@@ -419,9 +419,7 @@ async function main(): Promise<void> {
   } else {
     console.log(`Ticketbook server listening on http://localhost:${handle.port}`);
   }
-  console.log(`Tasks directory: ${tasksDir}`);
-  console.log(`Plans directory: ${plansDir}`);
-  console.log(`Docs directory: ${docsDir}`);
+  console.log(`Ticketbook directory: ${ticketbookDir}`);
   if (!args.noUi && uiDistDir) {
     console.log(`UI: http://localhost:${handle.port}`);
   }

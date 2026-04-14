@@ -12,7 +12,7 @@ export interface SyncOptions {
   tasksDir: string;
   plansDir?: string;
   docsDir?: string;
-  /** Project root (parent of .tasks/). Used as git cwd. */
+  /** Project root (parent of .ticketbook/). Used as git cwd. */
   projectRoot: string;
   /** If true, only report what would be committed. */
   dryRun?: boolean;

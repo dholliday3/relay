@@ -87,10 +87,15 @@ describe("nextId", () => {
   });
 
   test("uses prefix from config", async () => {
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, ".config.yaml"), "prefix: ART\ndeleteMode: archive\n", "utf-8");
-    const result = await nextId(dir);
+    // nextId reads config from dirname(dir), so create a ticketbook-style
+    // parent with config.yaml and pass the tasks subdir.
+    const ticketbookDir = await mkdtemp(join(tmpdir(), "ticketbook-cfg-"));
+    const tasksDir = join(ticketbookDir, "tasks");
+    await mkdir(tasksDir, { recursive: true });
+    await writeFile(join(ticketbookDir, "config.yaml"), "prefix: ART\ndeleteMode: archive\n", "utf-8");
+    const result = await nextId(tasksDir);
     expect(result.id).toBe("ART-001");
+    await rm(ticketbookDir, { recursive: true, force: true });
   });
 
   test("filename function produces correct output", async () => {

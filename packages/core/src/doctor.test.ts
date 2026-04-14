@@ -244,15 +244,15 @@ describe("doctor — .gitattributes", () => {
     await runDoctor({ tasksDir, projectRoot: dir, fix: true });
 
     const content = await readFile(join(dir, ".gitattributes"), "utf-8");
-    expect(content).toContain(".tasks/.counter merge=ours");
-    expect(content).toContain(".plans/.counter merge=ours");
-    expect(content).toContain(".docs/.counter merge=ours");
+    expect(content).toContain(".ticketbook/tasks/.counter merge=ours");
+    expect(content).toContain(".ticketbook/plans/.counter merge=ours");
+    expect(content).toContain(".ticketbook/docs/.counter merge=ours");
   });
 
   test("reports pass when all lines already present", async () => {
     await writeFile(
       join(dir, ".gitattributes"),
-      ".tasks/.counter merge=ours\n.plans/.counter merge=ours\n.docs/.counter merge=ours\n",
+      ".ticketbook/tasks/.counter merge=ours\n.ticketbook/plans/.counter merge=ours\n.ticketbook/docs/.counter merge=ours\n",
       "utf-8",
     );
 

@@ -5,7 +5,7 @@ import { TicketbookConfigSchema } from "./schema.js";
 import type { TicketbookConfig } from "./types.js";
 import { atomicWriteFile } from "./atomic.js";
 
-const CONFIG_FILENAME = ".config.yaml";
+const CONFIG_FILENAME = "config.yaml";
 
 function configPath(dir: string): string {
   return join(dir, CONFIG_FILENAME);

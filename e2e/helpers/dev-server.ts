@@ -2,7 +2,7 @@
 /**
  * E2E dev-server launcher.
  *
- * Creates a tmp directory with empty .tasks/.plans subdirs, then spawns
+ * Creates a tmp directory with a .ticketbook/ layout, then spawns
  * `bun bin/ticketbook.ts --dir <tmp> --port <E2E_PORT>` with the UI's built
  * static assets served from `packages/ui/dist`. Cleans up the tmp dir on exit.
  *
@@ -37,14 +37,15 @@ async function main(): Promise<void> {
   await assertUiBuilt();
 
   const tmpRoot = await mkdtemp(join(tmpdir(), "ticketbook-e2e-"));
-  const tasksDir = join(tmpRoot, ".tasks");
-  const plansDir = join(tmpRoot, ".plans");
+  const ticketbookDir = join(tmpRoot, ".ticketbook");
+  const tasksDir = join(ticketbookDir, "tasks");
+  const plansDir = join(ticketbookDir, "plans");
   await mkdir(join(tasksDir, ".archive"), { recursive: true });
   await mkdir(join(plansDir, ".archive"), { recursive: true });
   await writeFile(join(tasksDir, ".counter"), "0", "utf-8");
   await writeFile(join(plansDir, ".counter"), "0", "utf-8");
   await writeFile(
-    join(tasksDir, ".config.yaml"),
+    join(ticketbookDir, "config.yaml"),
     "prefix: TKT\nplanPrefix: PLAN\ndeleteMode: archive\n",
     "utf-8",
   );
@@ -55,7 +56,7 @@ async function main(): Promise<void> {
 
   const child: ChildProcess = spawn(
     "bun",
-    ["bin/ticketbook.ts", "--dir", tasksDir, "--port", port],
+    ["bin/ticketbook.ts", "--dir", ticketbookDir, "--port", port],
     {
       stdio: "inherit",
       cwd: REPO_ROOT,

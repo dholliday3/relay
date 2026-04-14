@@ -5,7 +5,7 @@ import {
   unlink,
   mkdir,
 } from "node:fs/promises";
-import { join, basename, extname } from "node:path";
+import { join, basename, extname, dirname } from "node:path";
 import matter from "gray-matter";
 import {
   CreateTaskInputSchema,
@@ -223,7 +223,7 @@ export async function deleteTask(dir: string, id: string): Promise<void> {
   const filePath = await findTicketFile(dir, id);
   if (!filePath) throw new Error(`Task not found: ${id}`);
 
-  const config = await getConfig(dir);
+  const config = await getConfig(dirname(dir));
 
   if (config.deleteMode === "archive") {
     const archiveDir = join(dir, ARCHIVE_DIR);
