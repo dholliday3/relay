@@ -1,10 +1,10 @@
 # Ticketbook
 
-Local-first tasks, plans, and reference docs for working alongside coding agents. Everything is stored as markdown with YAML frontmatter under `.ticketbook/` — editable by hand, queryable by agents over MCP, and browsable in a small web UI.
-
-<video src="./docs/demo.mp4" controls poster="./docs/demo.png" width="720">
-  <a href="./docs/demo.mp4">Watch the demo</a>
+<video src="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.mp4" controls poster="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.png" width="720">
+  <a href="https://github.com/dholliday3/ticketbook/raw/main/docs/demo.mp4">Watch the demo</a>
 </video>
+
+Local-first tasks, plans, and reference docs for working alongside coding agents. Everything is stored as markdown with YAML frontmatter under `.ticketbook/` — editable by hand, queryable by agents over MCP, and browsable in a small web UI.
 
 > **Status: early.** The core primitives (tasks, plans, docs) and MCP integration are working, and the built-in copilot streams Claude Code. Expect rough edges and breaking changes — this is being built in the open.
 
