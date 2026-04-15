@@ -2,6 +2,7 @@
 id: TKTB-041
 title: Command menu
 status: open
+priority: high
 tags:
   - ui
   - navigation
@@ -10,7 +11,7 @@ relatedTo:
   - TKTB-068
   - TKTB-065
 created: '2026-04-04T07:38:20.246Z'
-updated: '2026-04-15T06:26:10.326Z'
+updated: '2026-04-15T06:34:44.624Z'
 ---
 
 ## Context
