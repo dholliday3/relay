@@ -76,21 +76,34 @@ describe("install.sh — version resolution", () => {
 
   test("fetches latest tag from the GitHub releases API", () => {
     expect(script).toContain('"https://api.github.com/repos/${REPO}/releases/latest"');
-    // Uses `grep -o '"tag_name":"[^"]*"'` — the `-o` is load-bearing.
-    // Without it, `grep '"tag_name"'` matches the entire single-line JSON
-    // response, and the follow-up `cut -d'"' -f4` grabs the first URL
-    // field instead of the tag. That bug shipped in v0.1.0 and v0.2.0.
-    expect(script).toContain(`grep -o '"tag_name":"[^"]*"'`);
+    // Uses `grep -o '"tag_name":[[:space:]]*"[^"]*"'` — the `-o` is
+    // load-bearing (without it, `grep '"tag_name"'` matches the whole
+    // line and the follow-up `cut -d'"' -f4` grabs the wrong field), and
+    // the `[[:space:]]*` matters because GitHub's API returns pretty-
+    // printed JSON with a space between `:` and the value. A prior
+    // version of this regex assumed single-line JSON and broke against
+    // real responses.
+    expect(script).toContain(`grep -o '"tag_name":[[:space:]]*"[^"]*"'`);
   });
 
   test("tag_name parser extracts the tag from a realistic GitHub API response", () => {
     // Behavioral test — run the actual parse pipeline against a real-world
-    // single-line JSON response (GitHub doesn't pretty-print its API). The
-    // naive `grep '"tag_name"' | cut -f4` version returns the URL field
-    // instead of the tag. This is the regression guard for that bug.
-    const mockResponse = `{"url":"https://api.github.com/repos/dholliday3/relay/releases/308655336","assets_url":"https://api.github.com/repos/dholliday3/relay/releases/308655336/assets","html_url":"https://github.com/dholliday3/relay/releases/tag/v0.3.1","id":308655336,"tag_name":"v0.3.1","name":"v0.3.1","draft":false,"prerelease":false}`;
+    // pretty-printed JSON response from the GitHub releases API. The
+    // response has a space between `:` and the tag value, and the `url`
+    // field appears before `tag_name` — both have bitten earlier
+    // versions of this parser.
+    const mockResponse = `{
+  "url": "https://api.github.com/repos/dholliday3/relay/releases/308655336",
+  "assets_url": "https://api.github.com/repos/dholliday3/relay/releases/308655336/assets",
+  "html_url": "https://github.com/dholliday3/relay/releases/tag/v0.3.1",
+  "id": 308655336,
+  "tag_name": "v0.3.1",
+  "name": "v0.3.1",
+  "draft": false,
+  "prerelease": false
+}`;
     const proc = Bun.spawnSync(
-      ["sh", "-c", `echo '${mockResponse}' | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4`],
+      ["sh", "-c", `cat <<'EOF' | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4\n${mockResponse}\nEOF`],
       { stdout: "pipe", stderr: "pipe" },
     );
     const stdout = new TextDecoder().decode(proc.stdout).trim();
