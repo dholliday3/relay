@@ -48,13 +48,33 @@ async function findTicketFile(
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
   }
+  // Filename prefix is a *convention* — the authoritative ID lives in
+  // frontmatter. If a rename/renumber ever drifts them apart, matching by
+  // filename would write to the wrong file while the reader
+  // (which parses frontmatter) sees the "right" one. Parse the frontmatter
+  // and match on it, and fall back to the filename prefix only when the
+  // file has no parseable id — that preserves the old behavior for
+  // scratch/partial files written outside the normal helpers.
+  let fallback: string | null = null;
   for (const entry of entries) {
     if (extname(entry) !== ".md") continue;
-    if (entry.startsWith(id + "-") || entry === id + ".md") {
-      return join(dir, entry);
+    const full = join(dir, entry);
+    try {
+      const parsed = matter(await readFile(full, "utf8"));
+      const fmId = (parsed.data as { id?: unknown }).id;
+      if (typeof fmId === "string" && fmId === id) {
+        return full;
+      }
+      if (fmId == null && (entry.startsWith(id + "-") || entry === id + ".md")) {
+        fallback = full;
+      }
+    } catch {
+      if (entry.startsWith(id + "-") || entry === id + ".md") {
+        fallback = full;
+      }
     }
   }
-  return null;
+  return fallback;
 }
 
 function serializeTicket(

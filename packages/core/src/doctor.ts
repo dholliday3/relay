@@ -1,4 +1,4 @@
-import { readdir, readFile, unlink, stat } from "node:fs/promises";
+import { readdir, readFile, rename, unlink, stat } from "node:fs/promises";
 import { join, extname } from "node:path";
 import matter from "gray-matter";
 import { TaskFrontmatterSchema } from "./schema.js";
@@ -241,6 +241,105 @@ function checkDuplicateIds(
 }
 
 // ---------------------------------------------------------------------------
+// Filename / frontmatter-id drift
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect files whose leading ID prefix (`TASK-052-foo.md`) disagrees with
+ * the frontmatter `id:` field. This is the specific drift that caused the
+ * original `findTicketFile` bug — reads and writes resolved differently
+ * and silently landed on neighboring files.
+ *
+ * Fixable: renames the file so its prefix matches the frontmatter id. If
+ * the target filename is already taken (which means we have a duplicate
+ * waiting to surface), the rename is refused and the drift stays flagged
+ * so the operator can resolve the collision by hand first.
+ */
+async function checkFilenameDrift(
+  dir: string,
+  artifacts: ParsedArtifact[],
+  label: string,
+  fix: boolean,
+  items: DiagnosticItem[],
+): Promise<number> {
+  let fixed = 0;
+  const existingNames = new Set(artifacts.map((a) => a.file));
+  const drifted: ParsedArtifact[] = [];
+
+  for (const a of artifacts) {
+    const match = a.file.match(/^([A-Z]+-\d+)(?:-.*)?\.md$/);
+    if (!match) continue; // No id-prefix in filename — nothing to compare
+    const filenameId = match[1];
+    if (filenameId === a.id) continue;
+    drifted.push(a);
+    items.push(
+      item(
+        "fail",
+        `${label}-filename-drift`,
+        `${a.file} filename prefix ${filenameId} disagrees with frontmatter id ${a.id}`,
+        fix,
+      ),
+    );
+  }
+
+  if (fix && drifted.length > 0) {
+    // Rename lowest-id first, then highest, etc — direction does not matter
+    // here because we check existingNames before each rename. We do check the
+    // *current* filesystem, not the artifacts snapshot, so prior renames in
+    // this pass are visible.
+    for (const a of drifted) {
+      const suffixMatch = a.file.match(/^[A-Z]+-\d+(-.*\.md|\.md)$/);
+      const suffix = suffixMatch ? suffixMatch[1] : ".md";
+      const newName = `${a.id}${suffix}`;
+      const oldPath = join(dir, a.file);
+      const newPath = join(dir, newName);
+      if (existingNames.has(newName)) {
+        items.push(
+          item(
+            "warn",
+            `${label}-filename-drift`,
+            `Cannot auto-rename ${a.file} → ${newName}: target already exists (resolve the collision first)`,
+            false,
+          ),
+        );
+        continue;
+      }
+      try {
+        await rename(oldPath, newPath);
+        existingNames.delete(a.file);
+        existingNames.add(newName);
+        items.push(
+          item("pass", `${label}-filename-drift`, `Fixed: renamed ${a.file} → ${newName}`, false),
+        );
+        fixed++;
+      } catch (err) {
+        items.push(
+          item(
+            "fail",
+            `${label}-filename-drift`,
+            `Rename failed for ${a.file} → ${newName}: ${(err as Error).message}`,
+            false,
+          ),
+        );
+      }
+    }
+  }
+
+  if (drifted.length === 0 && artifacts.length > 0) {
+    items.push(
+      item(
+        "pass",
+        `${label}-filename-drift`,
+        `Filenames match frontmatter ids (${artifacts.length} artifacts)`,
+        false,
+      ),
+    );
+  }
+
+  return fixed;
+}
+
+// ---------------------------------------------------------------------------
 // Reference integrity (blockedBy, relatedTo, plan.tasks)
 // ---------------------------------------------------------------------------
 
@@ -339,6 +438,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
   );
   const maxTaskId = Math.max(0, ...tasks.map((a) => a.idNumber ?? 0));
   checkDuplicateIds(tasks, "task", items);
+  totalFixed += await checkFilenameDrift(tasksDir, tasks, "task", fix, items);
 
   const allTaskIds = new Set(tasks.map((a) => a.id));
   checkReferences(tasks, allTaskIds, "task", ["blockedBy", "relatedTo"], items);
@@ -353,6 +453,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     );
     const maxPlanId = Math.max(0, ...plans.map((a) => a.idNumber ?? 0));
     checkDuplicateIds(plans, "plan", items);
+    totalFixed += await checkFilenameDrift(plansDir, plans, "plan", fix, items);
 
     // Plan tasks references should point to valid task IDs
     checkReferences(plans, allTaskIds, "plan", ["tasks"], items);
@@ -368,6 +469,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     );
     const maxDocId = Math.max(0, ...docs.map((a) => a.idNumber ?? 0));
     checkDuplicateIds(docs, "doc", items);
+    totalFixed += await checkFilenameDrift(docsDir, docs, "doc", fix, items);
 
     totalFixed += await checkCounter(docsDir, "doc", maxDocId, fix, items);
     totalFixed += await checkStaleLocks(docsDir, "doc", fix, items);
