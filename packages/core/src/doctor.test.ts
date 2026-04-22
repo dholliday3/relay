@@ -131,6 +131,88 @@ describe("doctor — duplicate IDs", () => {
 // Dangling reference detection
 // ---------------------------------------------------------------------------
 
+describe("doctor — filename drift", () => {
+  let dir: string;
+  let tasksDir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "relay-doctor-"));
+    tasksDir = await setupTasksDir(dir);
+    await writeFile(join(tasksDir, ".counter"), "3", "utf-8");
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("reports fail when filename prefix disagrees with frontmatter id", async () => {
+    // File named TKT-001 but frontmatter says TKT-002 — the exact drift
+    // that caused the original findTicketFile / link_ref bug.
+    await writeFile(join(tasksDir, "TKT-001-drift.md"), taskFile("TKT-002"));
+
+    const result = await runDoctor({ tasksDir });
+    const drift = result.items.find(
+      (i) => i.check === "task-filename-drift" && i.severity === "fail",
+    );
+    expect(drift).toBeDefined();
+    expect(drift!.message).toContain("TKT-001");
+    expect(drift!.message).toContain("TKT-002");
+    expect(drift!.fixable).toBe(false); // fixable reported as false when fix=false
+  });
+
+  test("reports pass when every filename matches its frontmatter id", async () => {
+    await writeFile(join(tasksDir, "TKT-001-foo.md"), taskFile("TKT-001"));
+    await writeFile(join(tasksDir, "TKT-002-bar.md"), taskFile("TKT-002"));
+
+    const result = await runDoctor({ tasksDir });
+    const drift = result.items.find((i) => i.check === "task-filename-drift");
+    expect(drift?.severity).toBe("pass");
+  });
+
+  test("fix: renames file to match frontmatter id", async () => {
+    await writeFile(join(tasksDir, "TKT-001-drift.md"), taskFile("TKT-002"));
+
+    const result = await runDoctor({ tasksDir, fix: true });
+    expect(result.fixed).toBeGreaterThanOrEqual(1);
+
+    // Old filename is gone, new filename exists with the frontmatter preserved
+    await expect(readFile(join(tasksDir, "TKT-001-drift.md"), "utf-8")).rejects.toThrow();
+    const renamed = await readFile(join(tasksDir, "TKT-002-drift.md"), "utf-8");
+    expect(renamed).toContain("id: TKT-002");
+  });
+
+  test("fix: refuses to rename when target filename is already taken", async () => {
+    // File A is drifted: filename TKT-001-foo.md, frontmatter TKT-002. The
+    // fix would rename it to TKT-002-foo.md — but File B already occupies
+    // that exact filename. Auto-rename must refuse so we don't clobber.
+    await writeFile(join(tasksDir, "TKT-001-foo.md"), taskFile("TKT-002"));
+    await writeFile(join(tasksDir, "TKT-002-foo.md"), taskFile("TKT-002"));
+
+    const result = await runDoctor({ tasksDir, fix: true });
+    // The drifted file stays where it was.
+    await readFile(join(tasksDir, "TKT-001-foo.md"), "utf-8");
+    const refusal = result.items.find(
+      (i) =>
+        i.check === "task-filename-drift" &&
+        i.severity === "warn" &&
+        i.message.includes("already exists"),
+    );
+    expect(refusal).toBeDefined();
+  });
+
+  test("ignores files without an ID-style prefix", async () => {
+    // Scratch files written outside the helpers have no `XXX-NNN-` prefix.
+    // Drift check should ignore them rather than flagging a non-issue.
+    await writeFile(join(tasksDir, "scratch.md"), taskFile("TKT-001"));
+
+    const result = await runDoctor({ tasksDir });
+    const drift = result.items.find(
+      (i) => i.check === "task-filename-drift" && i.severity === "fail",
+    );
+    expect(drift).toBeUndefined();
+  });
+});
+
 describe("doctor — dangling refs", () => {
   let dir: string;
   let tasksDir: string;
