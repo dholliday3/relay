@@ -151,6 +151,42 @@ describe("updateTask", () => {
       "Task not found",
     );
   });
+
+  test("resolves by frontmatter id when filename prefix disagrees", async () => {
+    // Simulates the drift where a file's name and its frontmatter id got out
+    // of sync (e.g. after a renumber without a file rename). The writer must
+    // trust the frontmatter — matching on the filename prefix would route the
+    // write to a neighboring task.
+    await createTask(dir, { title: "Task A" });
+    await createTask(dir, { title: "Task B" });
+
+    // Hand-forge a drift: file `TASK-001-task-a.md` now carries frontmatter id
+    // TASK-002 (the "real" TASK-002), and `TASK-002-task-b.md` carries
+    // frontmatter id TASK-001. An update keyed on TASK-002 must target the
+    // file that *claims* TASK-002 in its frontmatter, not the TASK-002-
+    // prefixed filename.
+    const aPath = join(dir, "TASK-001-task-a.md");
+    const bPath = join(dir, "TASK-002-task-b.md");
+    const aRaw = await readFile(aPath, "utf-8");
+    const bRaw = await readFile(bPath, "utf-8");
+    await writeFile(aPath, aRaw.replace("id: TASK-001", "id: TASK-002"), "utf-8");
+    await writeFile(bPath, bRaw.replace("id: TASK-002", "id: TASK-001"), "utf-8");
+
+    // Tag the "real" TASK-002 so we can assert by a stable attribute.
+    // (Title change would rename the file, obscuring which file was hit.)
+    await updateTask(dir, "TASK-002", { tags: ["hit"] });
+
+    // The file at aPath still exists (updateTask rewrites in place when the
+    // title does not change) and now has the tag.
+    const aAfter = matter(await readFile(aPath, "utf-8"));
+    expect(aAfter.data.id).toBe("TASK-002");
+    expect(aAfter.data.tags).toEqual(["hit"]);
+
+    // bPath (frontmatter TASK-001) is untouched.
+    const bAfter = matter(await readFile(bPath, "utf-8"));
+    expect(bAfter.data.id).toBe("TASK-001");
+    expect(bAfter.data.tags).toBeUndefined();
+  });
 });
 
 describe("deleteTask", () => {

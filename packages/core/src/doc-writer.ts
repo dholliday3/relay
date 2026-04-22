@@ -48,14 +48,28 @@ async function findDocFile(
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
   }
-
+  // Authoritative ID lives in frontmatter; see writer.ts:findTicketFile
+  // for the full rationale.
+  let fallback: string | null = null;
   for (const entry of entries) {
     if (extname(entry) !== ".md") continue;
-    if (entry.startsWith(id + "-") || entry === id + ".md") {
-      return join(dir, entry);
+    const full = join(dir, entry);
+    try {
+      const parsed = matter(await readFile(full, "utf8"));
+      const fmId = (parsed.data as { id?: unknown }).id;
+      if (typeof fmId === "string" && fmId === id) {
+        return full;
+      }
+      if (fmId == null && (entry.startsWith(id + "-") || entry === id + ".md")) {
+        fallback = full;
+      }
+    } catch {
+      if (entry.startsWith(id + "-") || entry === id + ".md") {
+        fallback = full;
+      }
     }
   }
-  return null;
+  return fallback;
 }
 
 function serializeDoc(
