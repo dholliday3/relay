@@ -104,6 +104,7 @@ export async function createDoc(
     title: validated.title,
     tags,
     project: validated.project,
+    createdBy: validated.createdBy,
     refs,
     created: now,
     updated: now,
@@ -120,6 +121,7 @@ export async function createDoc(
     title: validated.title,
     tags,
     project: validated.project,
+    createdBy: validated.createdBy,
     refs,
     created: now,
     updated: now,
@@ -156,6 +158,9 @@ export async function updateDoc(
     updated.project =
       validated.project === null ? undefined : validated.project;
   }
+  if (validated.createdBy !== undefined) {
+    updated.createdBy = validated.createdBy === null ? undefined : validated.createdBy;
+  }
   if (validated.refs !== undefined) {
     updated.refs = validated.refs.length > 0 ? validated.refs : undefined;
   }
@@ -168,6 +173,7 @@ export async function updateDoc(
     title: updated.title,
     tags: updated.tags,
     project: updated.project,
+    createdBy: updated.createdBy,
     refs: updated.refs,
     created: updated.created,
     updated: updated.updated,

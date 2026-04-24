@@ -110,6 +110,8 @@ export async function createPlan(
     tags,
     project: validated.project,
     tasks,
+    assignee: validated.assignee,
+    createdBy: validated.createdBy,
     refs,
     created: now,
     updated: now,
@@ -128,6 +130,8 @@ export async function createPlan(
     tags,
     project: validated.project,
     tasks,
+    assignee: validated.assignee,
+    createdBy: validated.createdBy,
     refs,
     created: now,
     updated: now,
@@ -168,6 +172,12 @@ export async function updatePlan(
   if (validated.tasks !== undefined) {
     updated.tasks = validated.tasks.length > 0 ? validated.tasks : undefined;
   }
+  if (validated.assignee !== undefined) {
+    updated.assignee = validated.assignee === null ? undefined : validated.assignee;
+  }
+  if (validated.createdBy !== undefined) {
+    updated.createdBy = validated.createdBy === null ? undefined : validated.createdBy;
+  }
   if (validated.refs !== undefined) {
     updated.refs = validated.refs.length > 0 ? validated.refs : undefined;
   }
@@ -182,6 +192,8 @@ export async function updatePlan(
     tags: updated.tags,
     project: updated.project,
     tasks: updated.tasks,
+    assignee: updated.assignee,
+    createdBy: updated.createdBy,
     refs: updated.refs,
     created: updated.created,
     updated: updated.updated,
@@ -310,6 +322,8 @@ export async function cutTasksFromPlan(
     tags: planData.tags,
     project: planData.project,
     tasks: newTaskIds.length > 0 ? newTaskIds : undefined,
+    assignee: planData.assignee,
+    createdBy: planData.createdBy,
     refs: planData.refs,
     created: planData.created,
     updated: now,

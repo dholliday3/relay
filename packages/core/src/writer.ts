@@ -118,6 +118,7 @@ export async function createTask(
     blockedBy,
     relatedTo,
     assignee: validated.assignee,
+    createdBy: validated.createdBy,
     refs: validated.refs && validated.refs.length > 0 ? validated.refs : undefined,
     created: now,
     updated: now,
@@ -142,6 +143,7 @@ export async function createTask(
     blockedBy,
     relatedTo,
     assignee: validated.assignee,
+    createdBy: validated.createdBy,
     refs: validated.refs && validated.refs.length > 0 ? validated.refs : undefined,
     created: now,
     updated: now,
@@ -201,6 +203,9 @@ export async function updateTask(
   if (validated.assignee !== undefined) {
     updated.assignee = validated.assignee === null ? undefined : validated.assignee;
   }
+  if (validated.createdBy !== undefined) {
+    updated.createdBy = validated.createdBy === null ? undefined : validated.createdBy;
+  }
   if (validated.refs !== undefined) {
     updated.refs = validated.refs.length > 0 ? validated.refs : undefined;
   }
@@ -221,6 +226,7 @@ export async function updateTask(
     blockedBy: updated.blockedBy,
     relatedTo: updated.relatedTo,
     assignee: updated.assignee,
+    createdBy: updated.createdBy,
     refs: updated.refs,
     created: updated.created,
     updated: updated.updated,
@@ -320,6 +326,7 @@ export async function toggleSubtask(
     blockedBy: data.blockedBy,
     relatedTo: data.relatedTo,
     assignee: data.assignee,
+    createdBy: data.createdBy,
     refs: data.refs,
     created: data.created,
     updated: now,
@@ -384,6 +391,7 @@ export async function addSubtask(
     blockedBy: data.blockedBy,
     relatedTo: data.relatedTo,
     assignee: data.assignee,
+    createdBy: data.createdBy,
     refs: data.refs,
     created: data.created,
     updated: now,

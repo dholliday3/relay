@@ -30,6 +30,7 @@ export const TaskFrontmatterSchema = z.object({
   blockedBy: z.array(z.string()).optional(),
   relatedTo: z.array(z.string()).optional(),
   assignee: z.string().optional(),
+  createdBy: z.string().optional(),
   refs: z.array(z.string()).optional(),
 });
 
@@ -46,6 +47,7 @@ export const CreateTaskInputSchema = z.object({
   blockedBy: z.array(z.string()).optional(),
   relatedTo: z.array(z.string()).optional(),
   assignee: z.string().optional(),
+  createdBy: z.string().optional(),
   refs: z.array(z.string()).optional(),
 });
 
@@ -62,6 +64,7 @@ export const TaskPatchSchema = z.object({
   blockedBy: z.array(z.string()).optional(),
   relatedTo: z.array(z.string()).optional(),
   assignee: z.string().nullish(),
+  createdBy: z.string().nullish(),
   refs: z.array(z.string()).optional(),
 });
 

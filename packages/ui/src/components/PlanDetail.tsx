@@ -11,8 +11,9 @@ import { patchPlan, patchPlanBody } from "../api";
 import type { Plan, PlanStatus, PlanMeta } from "../types";
 import { useAppContext } from "../context/AppContext";
 import { TiptapEditor } from "./TiptapEditor";
-import { SelectChip, ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -307,6 +308,30 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
           options={planMeta.projects}
           placeholder="Project"
           onChange={(v) => saveField({ project: v || null })}
+        />
+        <KebabMenu
+          items={[
+            {
+              label: "Assignee",
+              content: (
+                <Input
+                  value={plan.assignee ?? ""}
+                  onChange={(e) => saveField({ assignee: e.target.value || null })}
+                  placeholder="Unassigned"
+                />
+              ),
+            },
+            {
+              label: "Created by",
+              content: (
+                <Input
+                  value={plan.createdBy ?? ""}
+                  onChange={(e) => saveField({ createdBy: e.target.value || null })}
+                  placeholder="Unknown"
+                />
+              ),
+            },
+          ]}
         />
       </div>
 
