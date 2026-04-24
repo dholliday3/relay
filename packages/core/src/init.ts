@@ -34,6 +34,14 @@ export interface InitRelayResult {
   wroteSkill: boolean;
   wroteMcpConfig: boolean;
   mergedMcpConfig: boolean;
+  /**
+   * True if `.claude/settings.json` was newly created for the SessionStart
+   * install hook. Always false in dev mode (relay source repo doesn't need
+   * the hook — it runs `bun bin/relay.ts` directly, no binary required).
+   */
+  wroteSessionStartHook: boolean;
+  /** True if an existing `.claude/settings.json` had the hook merged in. */
+  mergedSessionStartHook: boolean;
   updatedGitignore: boolean;
   /**
    * True when init detected it was running against the relay source
@@ -67,6 +75,23 @@ const DEV_MCP_ENTRY = {
   command: "bun",
   args: ["bin/relay.ts", "--mcp"],
 } as const;
+
+/**
+ * URL of the install script used by the SessionStart hook to self-install
+ * relay in a fresh environment (e.g. Claude Code cloud sandboxes). The
+ * script is idempotent and SHA-verifies the downloaded binary.
+ */
+export const INSTALL_SCRIPT_URL =
+  "https://raw.githubusercontent.com/dholliday3/relay/main/scripts/install.sh";
+
+/**
+ * Shell snippet wired into Claude Code's SessionStart hook. Fast no-op when
+ * `relay` is already on PATH; otherwise pipes install.sh to bash. Trailing
+ * `|| true` prevents a failed install (e.g. sandbox with no network egress)
+ * from aborting the session — the agent will still boot and can fall back
+ * to the manual install instructions in CLAUDE.md / AGENTS.md.
+ */
+export const SESSION_START_HOOK_COMMAND = `command -v relay >/dev/null 2>&1 || curl -fsSL ${INSTALL_SCRIPT_URL} | bash || true`;
 
 /**
  * Detect whether `baseDir` is the relay source repo itself. Returns
@@ -141,6 +166,74 @@ async function writeMcpConfig(
 
   parsed.mcpServers.relay = entry;
   await writeFile(mcpPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
+  return { wrote: false, merged: true };
+}
+
+/**
+ * Merge a SessionStart hook entry into `.claude/settings.json`. The hook
+ * installs the `relay` binary on first session start if it's not already
+ * on PATH — makes the repo self-bootstrapping when cloned into a fresh
+ * environment like Claude Code cloud. Returns { wrote, merged }:
+ *   - wrote=true if `.claude/settings.json` was newly created
+ *   - merged=true if the file existed and we added the hook
+ *   - both false if the exact command is already present, or the file is
+ *     malformed (we never clobber user files)
+ */
+async function writeSessionStartHook(
+  settingsPath: string,
+  command: string,
+): Promise<{ wrote: boolean; merged: boolean }> {
+  const hookEntry = {
+    hooks: [{ type: "command", command }],
+  };
+
+  if (!(await pathExists(settingsPath))) {
+    const content = { hooks: { SessionStart: [hookEntry] } };
+    await mkdir(dirname(settingsPath), { recursive: true });
+    await writeFile(
+      settingsPath,
+      JSON.stringify(content, null, 2) + "\n",
+      "utf-8",
+    );
+    return { wrote: true, merged: false };
+  }
+
+  const raw = await readFile(settingsPath, "utf-8");
+  let parsed: { hooks?: { SessionStart?: unknown[] } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Malformed settings.json — leave it alone.
+    return { wrote: false, merged: false };
+  }
+
+  if (!parsed.hooks) parsed.hooks = {};
+  if (!Array.isArray(parsed.hooks.SessionStart)) {
+    parsed.hooks.SessionStart = [];
+  }
+
+  // If the exact command is already present anywhere in SessionStart, bail.
+  // Users may have customized the entry (different matcher, different flags);
+  // we only care that the install line itself isn't duplicated.
+  const alreadyPresent = parsed.hooks.SessionStart.some((group) => {
+    if (!group || typeof group !== "object") return false;
+    const hooks = (group as { hooks?: unknown }).hooks;
+    if (!Array.isArray(hooks)) return false;
+    return hooks.some(
+      (h) =>
+        h &&
+        typeof h === "object" &&
+        (h as { command?: unknown }).command === command,
+    );
+  });
+  if (alreadyPresent) return { wrote: false, merged: false };
+
+  parsed.hooks.SessionStart.push(hookEntry);
+  await writeFile(
+    settingsPath,
+    JSON.stringify(parsed, null, 2) + "\n",
+    "utf-8",
+  );
   return { wrote: false, merged: true };
 }
 
@@ -294,6 +387,17 @@ export async function initRelay(
   // .mcp.json — project-level MCP config Claude Code auto-loads.
   const mcpResult = await writeMcpConfig(join(baseDir, ".mcp.json"), mcpEntry);
 
+  // .claude/settings.json SessionStart hook — self-installs the `relay`
+  // binary when the repo is cloned into a fresh environment (Claude Code
+  // cloud, a new laptop, etc). Skipped in dev mode because the relay
+  // source repo runs via `bun bin/relay.ts` and doesn't need the binary.
+  const hookResult = devMode
+    ? { wrote: false, merged: false }
+    : await writeSessionStartHook(
+        join(baseDir, ".claude", "settings.json"),
+        SESSION_START_HOOK_COMMAND,
+      );
+
   return {
     relayDir,
     tasksDir,
@@ -304,6 +408,8 @@ export async function initRelay(
     wroteSkill,
     wroteMcpConfig: mcpResult.wrote,
     mergedMcpConfig: mcpResult.merged,
+    wroteSessionStartHook: hookResult.wrote,
+    mergedSessionStartHook: hookResult.merged,
     updatedGitignore,
     devMode,
   };

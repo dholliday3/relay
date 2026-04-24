@@ -281,6 +281,14 @@ describe("runOnboard", () => {
       expect(snippet).toContain("MCP server");
     });
 
+    test("onboardSnippet includes the cloud-sandbox install fallback", () => {
+      const snippet = onboardSnippet();
+      expect(snippet).toContain("Cloud sandbox bootstrap");
+      expect(snippet).toContain(
+        "https://raw.githubusercontent.com/dholliday3/relay/main/scripts/install.sh",
+      );
+    });
+
     test("detectStatus classifies all three cases", () => {
       expect(detectStatus("no markers here")).toBe("missing");
       expect(

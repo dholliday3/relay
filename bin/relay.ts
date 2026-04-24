@@ -169,6 +169,11 @@ function printInitSummary(
   } else if (result.mergedMcpConfig) {
     created.push("  .mcp.json (merged relay entry)");
   }
+  if (result.wroteSessionStartHook) {
+    created.push("  .claude/settings.json (SessionStart install hook)");
+  } else if (result.mergedSessionStartHook) {
+    created.push("  .claude/settings.json (merged SessionStart hook)");
+  }
 
   if (created.length > 0) {
     console.log("\nAgent integration files:");

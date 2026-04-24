@@ -18,7 +18,7 @@ import {
  * hand-bumping forces a deliberate "is this actually user-facing?"
  * decision at each bump.
  */
-export const ONBOARD_VERSION = 3;
+export const ONBOARD_VERSION = 4;
 
 const VERSION_MARKER = `<!-- relay-onboard-v:${ONBOARD_VERSION} -->`;
 
@@ -43,6 +43,16 @@ const CANDIDATE_FILES = [
  * (`AGENTS_MD_CONTENT` in `./init.ts`) once this module ships.
  */
 const ONBOARD_SECTION_BODY = `This project uses **relay** for task and plan tracking. Tasks live in \`.relay/tasks/\`, plans live in \`.relay/plans/\`, and reference docs live in \`.relay/docs/\` as markdown files with YAML frontmatter.
+
+### Cloud sandbox bootstrap
+
+If \`relay\` is not on \`PATH\` (fresh Claude Code cloud sandbox, Codex cloud, or a brand-new machine), install it first:
+
+\`\`\`
+curl -fsSL https://raw.githubusercontent.com/dholliday3/relay/main/scripts/install.sh | bash
+\`\`\`
+
+Claude Code sessions started from this repo run the same install automatically via the SessionStart hook in \`.claude/settings.json\` — this manual step is the fallback for Codex cloud and any environment where the hook didn't fire.
 
 ### If your agent supports Skills
 

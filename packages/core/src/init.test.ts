@@ -9,7 +9,11 @@ import {
 } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { tmpdir } from "node:os";
-import { initRelay, codexMcpInstructions } from "./init.js";
+import {
+  initRelay,
+  codexMcpInstructions,
+  SESSION_START_HOOK_COMMAND,
+} from "./init.js";
 
 const FIXTURE_SKILL = `---
 name: relay
@@ -328,5 +332,136 @@ describe("initRelay", () => {
     expect(toml).toContain("[mcp_servers.relay]");
     expect(toml).toContain('command = "relay"');
     expect(toml).toContain('args = ["--mcp"]');
+  });
+
+  describe("SessionStart install hook", () => {
+    test("creates .claude/settings.json with the install hook in fresh projects", async () => {
+      const result = await initRelay({ baseDir: dir, skillSourcePath });
+
+      expect(result.wroteSessionStartHook).toBe(true);
+      expect(result.mergedSessionStartHook).toBe(false);
+
+      const settings = JSON.parse(
+        await readFile(join(dir, ".claude", "settings.json"), "utf-8"),
+      );
+      expect(settings.hooks.SessionStart).toEqual([
+        {
+          hooks: [
+            { type: "command", command: SESSION_START_HOOK_COMMAND },
+          ],
+        },
+      ]);
+    });
+
+    test("merges the install hook into an existing settings.json without clobbering user hooks", async () => {
+      const existing = {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [{ type: "command", command: "echo user-hook" }],
+            },
+          ],
+          Stop: [{ hooks: [{ type: "command", command: "echo stop" }] }],
+        },
+        permissions: { allow: ["Bash(ls:*)"] },
+      };
+      await mkdir(join(dir, ".claude"), { recursive: true });
+      await writeFile(
+        join(dir, ".claude", "settings.json"),
+        JSON.stringify(existing, null, 2),
+        "utf-8",
+      );
+
+      const result = await initRelay({ baseDir: dir, skillSourcePath });
+
+      expect(result.wroteSessionStartHook).toBe(false);
+      expect(result.mergedSessionStartHook).toBe(true);
+
+      const settings = JSON.parse(
+        await readFile(join(dir, ".claude", "settings.json"), "utf-8"),
+      );
+      // Existing user hook preserved.
+      expect(settings.hooks.SessionStart[0]).toEqual({
+        hooks: [{ type: "command", command: "echo user-hook" }],
+      });
+      // Relay install hook appended.
+      expect(settings.hooks.SessionStart[1]).toEqual({
+        hooks: [
+          { type: "command", command: SESSION_START_HOOK_COMMAND },
+        ],
+      });
+      // Unrelated fields untouched.
+      expect(settings.hooks.Stop).toEqual([
+        { hooks: [{ type: "command", command: "echo stop" }] },
+      ]);
+      expect(settings.permissions).toEqual({ allow: ["Bash(ls:*)"] });
+    });
+
+    test("leaves settings.json alone when the install hook is already present", async () => {
+      const existing = {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: "command", command: SESSION_START_HOOK_COMMAND },
+              ],
+            },
+          ],
+        },
+      };
+      await mkdir(join(dir, ".claude"), { recursive: true });
+      const original = JSON.stringify(existing, null, 2);
+      await writeFile(join(dir, ".claude", "settings.json"), original, "utf-8");
+
+      const result = await initRelay({ baseDir: dir, skillSourcePath });
+
+      expect(result.wroteSessionStartHook).toBe(false);
+      expect(result.mergedSessionStartHook).toBe(false);
+
+      const after = await readFile(
+        join(dir, ".claude", "settings.json"),
+        "utf-8",
+      );
+      expect(after).toBe(original);
+    });
+
+    test("does not clobber a malformed settings.json", async () => {
+      await mkdir(join(dir, ".claude"), { recursive: true });
+      await writeFile(
+        join(dir, ".claude", "settings.json"),
+        "{ not valid json",
+        "utf-8",
+      );
+
+      const result = await initRelay({ baseDir: dir, skillSourcePath });
+
+      expect(result.wroteSessionStartHook).toBe(false);
+      expect(result.mergedSessionStartHook).toBe(false);
+
+      const after = await readFile(
+        join(dir, ".claude", "settings.json"),
+        "utf-8",
+      );
+      expect(after).toBe("{ not valid json");
+    });
+
+    test("skips the hook in dev mode (relay source repo)", async () => {
+      await writeFile(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "relay" }),
+        "utf-8",
+      );
+      await mkdir(join(dir, "bin"), { recursive: true });
+      await writeFile(join(dir, "bin", "relay.ts"), "// stub\n", "utf-8");
+
+      const result = await initRelay({ baseDir: dir, skillSourcePath });
+
+      expect(result.devMode).toBe(true);
+      expect(result.wroteSessionStartHook).toBe(false);
+      expect(result.mergedSessionStartHook).toBe(false);
+      expect(await fileExists(join(dir, ".claude", "settings.json"))).toBe(
+        false,
+      );
+    });
   });
 });
