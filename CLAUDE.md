@@ -10,6 +10,21 @@ The goal is to build an app that has the right level of customizability and opin
 - **Anti-pattern: `packages/ui/src/App.css` and the components that depend on it.** That file is ~2,800 lines of legacy hand-rolled CSS (`.ticket-row`, `.kanban-card`, `.dashboard`, `.dialog`, `.combobox`, `.meta-dropdown`, `.tab-bar`, `.terminal-*`, etc.) built against a parallel `--bg` / `--bg-panel` / `--text` palette. The legacy vars are aliased to shadcn tokens via a compatibility shim so the app stays visually unified, but **do not write new selectors there, do not add new components that consume those classes, and prefer migrating a surface to shadcn + Tailwind when you're already touching it for another reason.** The long-term goal is to delete `App.css` entirely.
 - When building net-new UI (e.g., PLAN-004 work), start from shadcn primitives. If a primitive doesn't exist, add it via `bunx shadcn add <component>` rather than hand-rolling one. **This project uses Bun** — always use `bun`/`bunx` (e.g., `bun install`, `bun run dev`, `bun test`, `bunx shadcn add button`), never `npm`/`pnpm`/`yarn`/`npx`.
 
+# Release versioning
+
+**Any user-facing change that will ship must bump the version.** If a PR touches `packages/core`, `packages/server`, `packages/ui`, `bin/`, `scripts/install.sh`, or the release workflow, bump the version in the same PR — don't leave it for "release time," because the tag is what triggers the release and by then the PR is already merged.
+
+Two files must move in lockstep (an `upgrade.test.ts` guard fires if they drift):
+- `packages/core/src/version.ts` → `VERSION = "x.y.z"`
+- `packages/core/package.json` → `"version": "x.y.z"`
+
+**Patch vs minor vs major:**
+- **Patch** (`0.4.0` → `0.4.1`) — bug fixes, additive optional fields, internal refactors, doc/skill updates, CI/install.sh tweaks. Anything that existing `.relay/` directories and existing agents keep working with unchanged. **This is the default.**
+- **Minor** (`0.4.0` → `0.5.0`) — new user-facing features, new MCP tools, new CLI commands, new UI surfaces. Still backwards-compatible, but meaningful enough that a user reading the release notes would care.
+- **Major** (`0.4.0` → `1.0.0`) — **never bump without Daniel explicitly saying it's time.** Reserved for breaking schema changes, removed MCP tools, renamed CLI flags, or the 1.0 milestone itself. If you think a change warrants a major bump, flag it and ask — don't just do it.
+
+Release flow: bump both files in the PR → merge → `git tag vX.Y.Z && git push --tags` → the `Release` workflow builds + publishes. Release notes are auto-generated from merged PR titles, so write PR titles with that in mind.
+
 # Principles 
 - Be extremely open-minded and self-critical. 
 - Focus on moving the needle on productivity and quality, not enforcing rigid patterns. 
