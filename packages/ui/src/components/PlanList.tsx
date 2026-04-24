@@ -72,6 +72,14 @@ function PlanRowContent({ plan, hideBadges }: { plan: Plan; hideBadges: boolean 
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{plan.id}</span>
+        {!hideBadges && plan.assignee && (
+          <span
+            className="max-w-[80px] truncate rounded-full bg-accent px-1.5 py-px text-[10px] text-muted-foreground"
+            title={plan.assignee}
+          >
+            {plan.assignee}
+          </span>
+        )}
         {!hideBadges && plan.tasks && plan.tasks.length > 0 && (
           <Badge variant="secondary">
             {plan.tasks.length} task{plan.tasks.length !== 1 ? "s" : ""}

@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
 import type { CreateDocInput, DocMeta } from "../types";
-import { ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ export function CreateDocModal({
 }) {
   const [title, setTitle] = useState("");
   const [project, setProject] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -31,6 +33,7 @@ export function CreateDocModal({
     const trimmed = title.trim();
     const input: CreateDocInput = { title: trimmed || "Untitled" };
     if (project) input.project = project;
+    if (createdBy.trim()) input.createdBy = createdBy.trim();
     if (tags.length > 0) input.tags = tags;
     if (body.trim()) input.body = body.trim();
     return input;
@@ -121,6 +124,11 @@ export function CreateDocModal({
             options={docMeta.projects}
             placeholder="Project"
             onChange={setProject}
+          />
+          <KebabMenu
+            items={[
+              { label: "Created by", content: <Input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="Unknown" /> },
+            ]}
           />
         </div>
 

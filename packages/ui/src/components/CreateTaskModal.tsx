@@ -4,6 +4,7 @@ import { ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
 import type { Meta, Status, Priority, CreateTaskInput } from "../types";
 import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,8 @@ export function CreateTaskModal({
   const [project, setProject] = useState("");
   const [epic, setEpic] = useState("");
   const [sprint, setSprint] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -41,6 +44,8 @@ export function CreateTaskModal({
     if (project) input.project = project;
     if (epic) input.epic = epic;
     if (sprint) input.sprint = sprint;
+    if (assignee.trim()) input.assignee = assignee.trim();
+    if (createdBy.trim()) input.createdBy = createdBy.trim();
     if (tags.length > 0) input.tags = tags;
     if (body.trim()) input.body = body.trim();
     return input;
@@ -139,6 +144,8 @@ export function CreateTaskModal({
               { label: "Project", content: <ComboboxChip value={project} options={meta.projects} placeholder="None" onChange={setProject} /> },
               { label: "Epic", content: <ComboboxChip value={epic} options={meta.epics} placeholder="None" onChange={setEpic} /> },
               { label: "Cycle", content: <ComboboxChip value={sprint} options={meta.sprints} placeholder="None" onChange={setSprint} /> },
+              { label: "Assignee", content: <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" /> },
+              { label: "Created by", content: <Input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="Unknown" /> },
             ]}
           />
         </div>

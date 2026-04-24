@@ -2,8 +2,9 @@ import { useState, useRef } from "react";
 import { ArrowsInIcon, ArrowsOutIcon } from "@phosphor-icons/react";
 
 import type { PlanStatus, CreatePlanInput, PlanMeta } from "../types";
-import { SelectChip, ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { SelectChip, ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,8 @@ export function CreatePlanModal({
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<PlanStatus>("draft");
   const [project, setProject] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -33,6 +36,8 @@ export function CreatePlanModal({
     const trimmed = title.trim();
     const input: CreatePlanInput = { title: trimmed || "Untitled", status };
     if (project) input.project = project;
+    if (assignee.trim()) input.assignee = assignee.trim();
+    if (createdBy.trim()) input.createdBy = createdBy.trim();
     if (tags.length > 0) input.tags = tags;
     if (body.trim()) input.body = body.trim();
     return input;
@@ -120,6 +125,12 @@ export function CreatePlanModal({
           <SelectChip value={status} options={statusOptions} onChange={(v) => setStatus(v as PlanStatus)} />
           <MultiComboboxChip values={tags} options={planMeta.tags} placeholder="Tags" onChange={setTags} />
           <ComboboxChip value={project} options={planMeta.projects} placeholder="Project" onChange={setProject} />
+          <KebabMenu
+            items={[
+              { label: "Assignee", content: <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" /> },
+              { label: "Created by", content: <Input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="Unknown" /> },
+            ]}
+          />
         </div>
 
         <DialogFooter className="items-center sm:justify-between">
