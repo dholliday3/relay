@@ -5,8 +5,9 @@ import { patchDoc, patchDocBody } from "../api";
 import { useAppContext } from "../context/AppContext";
 import type { Doc, DocMeta } from "../types";
 import { TiptapEditor } from "./TiptapEditor";
-import { ComboboxChip, MultiComboboxChip } from "./MetaFields";
+import { ComboboxChip, MultiComboboxChip, KebabMenu } from "./MetaFields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -197,6 +198,20 @@ export function DocDetail({
           options={docMeta.projects}
           placeholder="Project"
           onChange={(value) => saveField({ project: value || null })}
+        />
+        <KebabMenu
+          items={[
+            {
+              label: "Created by",
+              content: (
+                <Input
+                  value={doc.createdBy ?? ""}
+                  onChange={(e) => saveField({ createdBy: e.target.value || null })}
+                  placeholder="Unknown"
+                />
+              ),
+            },
+          ]}
         />
       </div>
     </div>

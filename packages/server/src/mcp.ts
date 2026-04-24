@@ -79,6 +79,7 @@ function formatTaskFull(t: {
   if (t.tags && t.tags.length > 0)
     lines.push(`- Tags: ${t.tags.join(", ")}`);
   if ((t as any).assignee) lines.push(`- Assignee: ${(t as any).assignee}`);
+  if ((t as any).createdBy) lines.push(`- Created by: ${(t as any).createdBy}`);
   if ((t as any).blockedBy?.length) lines.push(`- Blocked by: ${(t as any).blockedBy.join(", ")}`);
   if ((t as any).relatedTo?.length) lines.push(`- Related to: ${(t as any).relatedTo.join(", ")}`);
   if ((t as any).refs?.length) lines.push(`- Refs: ${(t as any).refs.join(", ")}`);
@@ -106,6 +107,8 @@ function formatPlanFull(p: Plan): string {
     `- Status: ${p.status}`,
   ];
   if (p.project) lines.push(`- Project: ${p.project}`);
+  if (p.assignee) lines.push(`- Assignee: ${p.assignee}`);
+  if (p.createdBy) lines.push(`- Created by: ${p.createdBy}`);
   if (p.tags && p.tags.length > 0) lines.push(`- Tags: ${p.tags.join(", ")}`);
   if (p.tasks && p.tasks.length > 0) lines.push(`- Linked tasks: ${p.tasks.join(", ")}`);
   if (p.refs && p.refs.length > 0) lines.push(`- Refs: ${p.refs.join(", ")}`);
@@ -127,6 +130,7 @@ function docSummary(doc: Doc): string {
 function formatDocFull(doc: Doc): string {
   const lines = [`# ${doc.id}: ${doc.title}`, ""];
   if (doc.project) lines.push(`- Project: ${doc.project}`);
+  if (doc.createdBy) lines.push(`- Created by: ${doc.createdBy}`);
   if (doc.tags && doc.tags.length > 0) lines.push(`- Tags: ${doc.tags.join(", ")}`);
   if (doc.refs && doc.refs.length > 0) lines.push(`- Refs: ${doc.refs.join(", ")}`);
   lines.push(`- Created: ${doc.created.toISOString()}`);
@@ -268,6 +272,7 @@ export async function startMcpServer(
       blockedBy: z.array(z.string()).optional().describe("Task IDs that block this task"),
       relatedTo: z.array(z.string()).optional().describe("Related task IDs"),
       assignee: z.string().optional().describe("Assignee name (use your agent name when picking up a task)"),
+      createdBy: z.string().optional().describe("Creator name (human or agent who created this task)"),
     },
     async (args) => {
       const task = await createTask(tasksDir, args);
@@ -321,6 +326,7 @@ export async function startMcpServer(
       blockedBy: z.array(z.string()).optional().describe("Task IDs that block this task"),
       relatedTo: z.array(z.string()).optional().describe("Related task IDs"),
       assignee: z.string().nullable().optional().describe("Assignee (null to clear). Set to your agent name when starting work."),
+      createdBy: z.string().nullable().optional().describe("Creator name (null to clear)."),
     },
     async (args) => {
       const { id, ...patch } = args;
@@ -712,6 +718,8 @@ export async function startMcpServer(
         tags: z.array(z.string()).optional().describe("Tags (lowercase)"),
         project: z.string().optional().describe("Project name"),
         tasks: z.array(z.string()).optional().describe("Linked task IDs"),
+        assignee: z.string().optional().describe("Assignee name (who owns executing this plan)"),
+        createdBy: z.string().optional().describe("Creator name (human or agent who created this plan)"),
         body: z.string().optional().describe("Markdown body content"),
       },
       async (args) => {
@@ -751,6 +759,16 @@ export async function startMcpServer(
           .array(z.string())
           .optional()
           .describe("Linked task IDs (replaces existing)"),
+        assignee: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("Assignee (null to clear)"),
+        createdBy: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("Creator name (null to clear)"),
         body: z.string().optional().describe("New markdown body content"),
       },
       async (args) => {
@@ -961,6 +979,7 @@ export async function startMcpServer(
         title: z.string().min(1).describe("Doc title (required)"),
         tags: z.array(z.string()).optional().describe("Tags (lowercase)"),
         project: z.string().optional().describe("Project name"),
+        createdBy: z.string().optional().describe("Creator name (human or agent who created this doc)"),
         refs: z.array(z.string()).optional().describe("Linked refs or URLs"),
         body: z.string().optional().describe("Markdown body content"),
       },
@@ -985,6 +1004,7 @@ export async function startMcpServer(
         title: z.string().min(1).optional().describe("New title"),
         tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
         project: z.string().nullable().optional().describe("New project (null to clear)"),
+        createdBy: z.string().nullable().optional().describe("Creator name (null to clear)"),
         refs: z.array(z.string()).optional().describe("Refs (replaces existing)"),
         body: z.string().optional().describe("New markdown body content"),
       },

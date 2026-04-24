@@ -142,6 +142,14 @@ function TaskCardBody({ task, hideBadges }: { task: Task; hideBadges: boolean })
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{task.id}</span>
+        {!hideBadges && task.assignee && (
+          <span
+            className="max-w-[80px] truncate rounded-full bg-accent px-1.5 py-px text-[10px] text-muted-foreground"
+            title={task.assignee}
+          >
+            {task.assignee}
+          </span>
+        )}
         {!hideBadges && task.tags && task.tags.length > 0 && (
           <span className="flex flex-wrap gap-1">
             {task.tags.map((tag) => (

@@ -13,6 +13,7 @@ export interface Task {
   blockedBy?: string[];
   relatedTo?: string[];
   assignee?: string;
+  createdBy?: string;
   refs?: string[];
   body: string;
   filePath: string;
@@ -32,6 +33,7 @@ export interface TaskPatch {
   blockedBy?: string[];
   relatedTo?: string[];
   assignee?: string | null;
+  createdBy?: string | null;
 }
 
 export interface Meta {
@@ -59,6 +61,8 @@ export interface CreateTaskInput {
   epic?: string;
   sprint?: string;
   tags?: string[];
+  assignee?: string;
+  createdBy?: string;
   body?: string;
 }
 
@@ -73,6 +77,8 @@ export interface Plan {
   tags?: string[];
   project?: string;
   tasks?: string[];
+  assignee?: string;
+  createdBy?: string;
   refs?: string[];
   body: string;
   filePath: string;
@@ -86,6 +92,8 @@ export interface PlanPatch {
   tags?: string[];
   project?: string | null;
   tasks?: string[];
+  assignee?: string | null;
+  createdBy?: string | null;
   refs?: string[];
 }
 
@@ -94,6 +102,8 @@ export interface CreatePlanInput {
   status?: PlanStatus;
   tags?: string[];
   project?: string;
+  assignee?: string;
+  createdBy?: string;
   body?: string;
 }
 
@@ -109,6 +119,7 @@ export interface Doc {
   updated: string;
   tags?: string[];
   project?: string;
+  createdBy?: string;
   refs?: string[];
   body: string;
   filePath: string;
@@ -118,6 +129,7 @@ export interface DocPatch {
   title?: string;
   tags?: string[];
   project?: string | null;
+  createdBy?: string | null;
   refs?: string[];
 }
 
@@ -125,6 +137,7 @@ export interface CreateDocInput {
   title: string;
   tags?: string[];
   project?: string;
+  createdBy?: string;
   refs?: string[];
   body?: string;
 }

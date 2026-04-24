@@ -356,6 +356,16 @@ export function TaskDetail({ task, meta, onUpdated, onDelete, onRequestClose }: 
               ),
             },
             {
+              label: "Created by",
+              content: (
+                <Input
+                  value={task.createdBy ?? ""}
+                  onChange={(e) => saveField({ createdBy: e.target.value || null })}
+                  placeholder="Unknown"
+                />
+              ),
+            },
+            {
               label: "Blocked by",
               content: (
                 <TaskLinkChips
