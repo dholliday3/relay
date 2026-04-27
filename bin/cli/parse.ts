@@ -36,7 +36,14 @@ export type Command =
   | TaskLinkRefCommand
   | TaskAddSubtaskCommand
   | TaskCompleteSubtaskCommand
-  | TaskReorderCommand;
+  | TaskReorderCommand
+  | PlanListCommand
+  | PlanGetCommand
+  | PlanCreateCommand
+  | PlanUpdateCommand
+  | PlanDeleteCommand
+  | PlanLinkTaskCommand
+  | PlanCutTasksCommand;
 
 // --- Task command shapes -------------------------------------------
 
@@ -184,6 +191,94 @@ export interface TaskReorderCommand {
   beforeId?: string;
 }
 
+// --- Plan command shapes -------------------------------------------
+
+export type PlanStatus = "draft" | "active" | "completed" | "archived";
+
+const PLAN_STATUSES: readonly PlanStatus[] = [
+  "draft",
+  "active",
+  "completed",
+  "archived",
+];
+
+export interface PlanListCommand {
+  kind: "plan-list";
+  status?: PlanStatus;
+  project?: string;
+  tags: string[];
+  json: boolean;
+}
+
+export interface PlanGetCommand {
+  kind: "plan-get";
+  id: string;
+  json: boolean;
+}
+
+export interface PlanCreateCommand {
+  kind: "plan-create";
+  title: string;
+  status?: PlanStatus;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  tags: string[];
+  /** Task IDs to link at create-time. */
+  tasks: string[];
+  assignee?: string;
+  createdBy?: string;
+  json: boolean;
+}
+
+/**
+ * Same replace/add/remove/clear shape as TaskUpdateCommand, applied to
+ * tags and the linked-tasks list. Plans don't have priority/epic/sprint
+ * so the surface is smaller — but the ergonomics rule is consistent.
+ */
+export interface PlanUpdateCommand {
+  kind: "plan-update";
+  id: string;
+  title?: string;
+  status?: PlanStatus;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  clearProject: boolean;
+  replaceTags?: string[];
+  addTags: string[];
+  removeTags: string[];
+  clearTags: boolean;
+  replaceTasks?: string[];
+  addTasks: string[];
+  removeTasks: string[];
+  clearTasks: boolean;
+  assignee?: string;
+  clearAssignee: boolean;
+  createdBy?: string;
+  clearCreatedBy: boolean;
+  json: boolean;
+}
+
+export interface PlanDeleteCommand {
+  kind: "plan-delete";
+  id: string;
+}
+
+export interface PlanLinkTaskCommand {
+  kind: "plan-link-task";
+  planId: string;
+  taskId: string;
+}
+
+export interface PlanCutTasksCommand {
+  kind: "plan-cut-tasks";
+  planId: string;
+  json: boolean;
+}
+
 export interface ServeCommand {
   kind: "serve";
   dir?: string;
@@ -237,6 +332,7 @@ const KNOWN_COMMANDS = new Set([
   "where",
   "help",
   "task",
+  "plan",
 ]);
 
 /**
@@ -278,6 +374,8 @@ export function parseArgv(argv: string[]): Command {
       return parseWhere(rest);
     case "task":
       return parseTask(rest);
+    case "plan":
+      return parsePlan(rest);
     case "help":
       return { kind: "help", topic: rest[0] };
     default:
@@ -1086,6 +1184,459 @@ function parseTaskReorder(args: string[]): Command {
   return { kind: "task-reorder", id, afterId, beforeId };
 }
 
+// --- Plan command parsing ------------------------------------------
+
+const PLAN_VERBS = new Set([
+  "list",
+  "get",
+  "create",
+  "update",
+  "delete",
+  "link-task",
+  "cut-tasks",
+]);
+
+function parsePlan(args: string[]): Command {
+  if (args.length === 0) {
+    return {
+      kind: "error",
+      message:
+        "plan requires a verb (list, get, create, update, delete, link-task, cut-tasks)",
+      showHelp: true,
+    };
+  }
+
+  const verb = args[0];
+  const rest = args.slice(1);
+
+  if (!PLAN_VERBS.has(verb)) {
+    return {
+      kind: "error",
+      message: `Unknown plan verb: ${verb}. Run 'relay help plan' for usage.`,
+    };
+  }
+
+  switch (verb) {
+    case "list":
+      return parsePlanList(rest);
+    case "get":
+      return parsePlanGet(rest);
+    case "create":
+      return parsePlanCreate(rest);
+    case "update":
+      return parsePlanUpdate(rest);
+    case "delete":
+      return parsePlanDelete(rest);
+    case "link-task":
+      return parsePlanLinkTask(rest);
+    case "cut-tasks":
+      return parsePlanCutTasks(rest);
+    default:
+      return {
+        kind: "error",
+        message: `Unhandled plan verb: ${verb}`,
+      };
+  }
+}
+
+function asPlanStatus(s: string): PlanStatus | null {
+  return (PLAN_STATUSES as readonly string[]).includes(s)
+    ? (s as PlanStatus)
+    : null;
+}
+
+function parsePlanList(args: string[]): Command {
+  const result: PlanListCommand = {
+    kind: "plan-list",
+    tags: [],
+    json: false,
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asPlanStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${PLAN_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return { kind: "error", message: `Unknown flag for 'plan list': ${arg}` };
+    }
+    i++;
+  }
+
+  return result;
+}
+
+function parsePlanGet(args: string[]): Command {
+  let id: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--json") {
+      json = true;
+    } else if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'plan get': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'plan get' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'plan get' requires a plan ID. Usage: relay plan get <ID>",
+    };
+  }
+  return { kind: "plan-get", id, json };
+}
+
+function parsePlanCreate(args: string[]): Command {
+  const result: PlanCreateCommand = {
+    kind: "plan-create",
+    title: "",
+    bodyFromStdin: false,
+    tags: [],
+    tasks: [],
+    json: false,
+  };
+  let titleSet = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+      titleSet = true;
+    } else if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asPlanStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${PLAN_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--task" && i + 1 < args.length) {
+      result.tasks.push(args[++i]);
+    } else if (arg === "--assignee" && i + 1 < args.length) {
+      result.assignee = args[++i];
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'plan create': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!titleSet || result.title.length === 0) {
+    return {
+      kind: "error",
+      message:
+        "'plan create' requires --title. Usage: relay plan create --title \"…\" [flags]",
+    };
+  }
+
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  return result;
+}
+
+function parsePlanUpdate(args: string[]): Command {
+  let id: string | undefined;
+  const result: PlanUpdateCommand = {
+    kind: "plan-update",
+    id: "",
+    bodyFromStdin: false,
+    clearProject: false,
+    addTags: [],
+    removeTags: [],
+    clearTags: false,
+    addTasks: [],
+    removeTasks: [],
+    clearTasks: false,
+    clearAssignee: false,
+    clearCreatedBy: false,
+    json: false,
+  };
+  const initReplace = <K extends "replaceTags" | "replaceTasks">(
+    field: K,
+  ): void => {
+    if (result[field] === undefined) {
+      result[field] = [] as PlanUpdateCommand[K];
+    }
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (!arg.startsWith("-")) {
+      if (id === undefined) {
+        id = arg;
+      } else {
+        return {
+          kind: "error",
+          message: `'plan update' takes a single ID; got extra positional: ${arg}`,
+        };
+      }
+      i++;
+      continue;
+    }
+
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+    } else if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asPlanStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${PLAN_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--clear-project") {
+      result.clearProject = true;
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      initReplace("replaceTags");
+      result.replaceTags!.push(args[++i]);
+    } else if (arg === "--add-tag" && i + 1 < args.length) {
+      result.addTags.push(args[++i]);
+    } else if (arg === "--remove-tag" && i + 1 < args.length) {
+      result.removeTags.push(args[++i]);
+    } else if (arg === "--clear-tags") {
+      result.clearTags = true;
+    } else if (arg === "--task" && i + 1 < args.length) {
+      initReplace("replaceTasks");
+      result.replaceTasks!.push(args[++i]);
+    } else if (arg === "--add-task" && i + 1 < args.length) {
+      result.addTasks.push(args[++i]);
+    } else if (arg === "--remove-task" && i + 1 < args.length) {
+      result.removeTasks.push(args[++i]);
+    } else if (arg === "--clear-tasks") {
+      result.clearTasks = true;
+    } else if (arg === "--assignee" && i + 1 < args.length) {
+      result.assignee = args[++i];
+    } else if (arg === "--clear-assignee") {
+      result.clearAssignee = true;
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--clear-created-by") {
+      result.clearCreatedBy = true;
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'plan update': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message:
+        "'plan update' requires an ID. Usage: relay plan update <ID> [flags]",
+    };
+  }
+  result.id = id;
+
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  if (result.clearTags && (result.replaceTags || result.addTags.length > 0)) {
+    return {
+      kind: "error",
+      message: "--clear-tags is mutually exclusive with --tag / --add-tag",
+    };
+  }
+  if (result.clearTasks && (result.replaceTasks || result.addTasks.length > 0)) {
+    return {
+      kind: "error",
+      message: "--clear-tasks is mutually exclusive with --task / --add-task",
+    };
+  }
+  if (result.clearProject && result.project !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-project is mutually exclusive with --project",
+    };
+  }
+  if (result.clearAssignee && result.assignee !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-assignee is mutually exclusive with --assignee",
+    };
+  }
+  if (result.clearCreatedBy && result.createdBy !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-created-by is mutually exclusive with --created-by",
+    };
+  }
+
+  return result;
+}
+
+function parsePlanDelete(args: string[]): Command {
+  let id: string | undefined;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'plan delete': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'plan delete' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'plan delete' requires an ID. Usage: relay plan delete <ID>",
+    };
+  }
+  return { kind: "plan-delete", id };
+}
+
+function parsePlanLinkTask(args: string[]): Command {
+  const positionals: string[] = [];
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'plan link-task': ${arg}`,
+      };
+    } else {
+      positionals.push(arg);
+    }
+    i++;
+  }
+
+  if (positionals.length !== 2) {
+    return {
+      kind: "error",
+      message:
+        "'plan link-task' requires exactly two arguments. Usage: relay plan link-task <PLAN-ID> <TASK-ID>",
+    };
+  }
+  return {
+    kind: "plan-link-task",
+    planId: positionals[0],
+    taskId: positionals[1],
+  };
+}
+
+function parsePlanCutTasks(args: string[]): Command {
+  let planId: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--json") {
+      json = true;
+    } else if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'plan cut-tasks': ${arg}`,
+      };
+    } else if (planId === undefined) {
+      planId = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'plan cut-tasks' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!planId) {
+    return {
+      kind: "error",
+      message:
+        "'plan cut-tasks' requires a plan ID. Usage: relay plan cut-tasks <PLAN-ID>",
+    };
+  }
+  return { kind: "plan-cut-tasks", planId, json };
+}
+
 function parseWhere(args: string[]): Command {
   const result: WhereCommand = { kind: "where", json: false };
 
@@ -1162,6 +1713,31 @@ export function helpText(topic?: string): string {
       ].join("\n");
     case "help":
       return helpText(undefined);
+    case "plan":
+      return [
+        "Usage: relay plan <verb> [args] [flags]",
+        "",
+        "Verbs:",
+        "  list                       List plans (filter by --status, --project, --tag)",
+        "  get <ID>                   Print full plan body and metadata",
+        "  create --title \"…\" […]      Create a new plan (default status: draft)",
+        "  update <ID> […]            Update a plan. --tag/--task replace; --add-… / --remove-… are deltas; --clear-… removes",
+        "  delete <ID>                Archive (or hard-delete, per config)",
+        "  link-task <PLAN> <TASK>    Attach an existing task to a plan",
+        "  cut-tasks <PLAN>           Parse unchecked checkboxes in the plan body, create a task per item, link them, check the boxes",
+        "",
+        "Common flags (where applicable):",
+        "  --status <s>               One of: draft, active, completed, archived",
+        "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag for deltas)",
+        "  --task <ID>                Repeatable. On 'create' links existing tasks; on 'update' replaces (use --add-task / --remove-task)",
+        "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
+        "  --json                     Emit structured JSON instead of human-readable text",
+        "",
+        "Examples:",
+        "  relay plan list --status active --json",
+        "  relay plan create --title \"Q3 roadmap\" --tag roadmap --task TASK-001 --task TASK-002",
+        "  relay plan cut-tasks PLAN-005",
+      ].join("\n");
     case "task":
       return [
         "Usage: relay task <verb> [args] [flags]",
@@ -1200,6 +1776,7 @@ export function helpText(topic?: string): string {
         "  upgrade        Upgrade relay to the latest release",
         "  where          Print the resolved .relay/ directory (worktree-aware)",
         "  task           Manage tasks (list/get/create/update/delete/link-ref/subtasks/reorder)",
+        "  plan           Manage plans (list/get/create/update/delete/link-task/cut-tasks)",
         "  help [topic]   Show help for a topic",
         "  (default)      Start the server and open the UI",
         "",

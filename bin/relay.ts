@@ -33,6 +33,15 @@ import {
   runTaskReorder,
 } from "./cli/task.ts";
 import type { HandlerResult } from "./cli/task.ts";
+import {
+  runPlanList,
+  runPlanGet,
+  runPlanCreate,
+  runPlanUpdate,
+  runPlanDelete,
+  runPlanLinkTask,
+  runPlanCutTasks,
+} from "./cli/plan.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -385,7 +394,12 @@ async function runServe(cmd: {
  * can stay a pure function returning a HandlerResult.
  */
 async function runWithRelayDirs(
-  run: (dirs: { tasksDir: string }) => Promise<HandlerResult>,
+  run: (dirs: {
+    relayDir: string;
+    tasksDir: string;
+    plansDir: string;
+    docsDir: string;
+  }) => Promise<HandlerResult>,
 ): Promise<void> {
   const dirs = await resolveRelayDirs();
   if (isRelayDirsError(dirs)) {
@@ -456,6 +470,41 @@ async function main(): Promise<void> {
       return;
     case "task-reorder":
       await runWithRelayDirs((d) => runTaskReorder(cmd, d));
+      return;
+    case "plan-list":
+      await runWithRelayDirs((d) =>
+        runPlanList(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-get":
+      await runWithRelayDirs((d) =>
+        runPlanGet(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-create":
+      await runWithRelayDirs((d) =>
+        runPlanCreate(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-update":
+      await runWithRelayDirs((d) =>
+        runPlanUpdate(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-delete":
+      await runWithRelayDirs((d) =>
+        runPlanDelete(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-link-task":
+      await runWithRelayDirs((d) =>
+        runPlanLinkTask(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-cut-tasks":
+      await runWithRelayDirs((d) =>
+        runPlanCutTasks(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
       return;
   }
 }

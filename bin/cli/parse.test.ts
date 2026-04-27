@@ -473,6 +473,164 @@ describe("parseArgv — task <verb>", () => {
   });
 });
 
+describe("parseArgv — plan <verb>", () => {
+  test("`plan` with no verb errors", () => {
+    expect(parseArgv(argv("plan")).kind).toBe("error");
+  });
+
+  test("plan list — bare and filtered", () => {
+    expect(parseArgv(argv("plan", "list"))).toEqual({
+      kind: "plan-list",
+      tags: [],
+      json: false,
+    });
+    expect(
+      parseArgv(
+        argv(
+          "plan",
+          "list",
+          "--status",
+          "active",
+          "--project",
+          "p",
+          "--tag",
+          "x",
+          "--json",
+        ),
+      ),
+    ).toEqual({
+      kind: "plan-list",
+      status: "active",
+      project: "p",
+      tags: ["x"],
+      json: true,
+    });
+  });
+
+  test("plan list — invalid status errors", () => {
+    expect(parseArgv(argv("plan", "list", "--status", "open")).kind).toBe(
+      "error",
+    );
+  });
+
+  test("plan get — requires ID", () => {
+    expect(parseArgv(argv("plan", "get")).kind).toBe("error");
+    expect(parseArgv(argv("plan", "get", "PLAN-001"))).toEqual({
+      kind: "plan-get",
+      id: "PLAN-001",
+      json: false,
+    });
+  });
+
+  test("plan create — requires --title", () => {
+    expect(parseArgv(argv("plan", "create")).kind).toBe("error");
+  });
+
+  test("plan create — happy path", () => {
+    const cmd = parseArgv(
+      argv(
+        "plan",
+        "create",
+        "--title",
+        "Q3",
+        "--status",
+        "draft",
+        "--project",
+        "p",
+        "--tag",
+        "x",
+        "--task",
+        "TASK-001",
+        "--task",
+        "TASK-002",
+        "--assignee",
+        "claude",
+        "--json",
+      ),
+    );
+    expect(cmd).toMatchObject({
+      kind: "plan-create",
+      title: "Q3",
+      status: "draft",
+      project: "p",
+      tags: ["x"],
+      tasks: ["TASK-001", "TASK-002"],
+      assignee: "claude",
+      json: true,
+    });
+  });
+
+  test("plan update — replace tasks via --task", () => {
+    const cmd = parseArgv(
+      argv("plan", "update", "PLAN-001", "--task", "TASK-1", "--task", "TASK-2"),
+    );
+    expect(cmd).toMatchObject({
+      kind: "plan-update",
+      id: "PLAN-001",
+      replaceTasks: ["TASK-1", "TASK-2"],
+    });
+  });
+
+  test("plan update — --add-task / --remove-task as deltas", () => {
+    const cmd = parseArgv(
+      argv(
+        "plan",
+        "update",
+        "PLAN-001",
+        "--add-task",
+        "TASK-3",
+        "--remove-task",
+        "TASK-9",
+      ),
+    );
+    expect(cmd).toMatchObject({
+      addTasks: ["TASK-3"],
+      removeTasks: ["TASK-9"],
+    });
+  });
+
+  test("plan update — --clear-tasks + --task is mutually exclusive", () => {
+    expect(
+      parseArgv(
+        argv(
+          "plan",
+          "update",
+          "PLAN-001",
+          "--clear-tasks",
+          "--task",
+          "TASK-1",
+        ),
+      ).kind,
+    ).toBe("error");
+  });
+
+  test("plan delete — requires ID", () => {
+    expect(parseArgv(argv("plan", "delete")).kind).toBe("error");
+  });
+
+  test("plan link-task — needs both IDs", () => {
+    expect(parseArgv(argv("plan", "link-task", "PLAN-001")).kind).toBe(
+      "error",
+    );
+    expect(
+      parseArgv(argv("plan", "link-task", "PLAN-001", "TASK-001")),
+    ).toEqual({
+      kind: "plan-link-task",
+      planId: "PLAN-001",
+      taskId: "TASK-001",
+    });
+  });
+
+  test("plan cut-tasks — requires plan ID", () => {
+    expect(parseArgv(argv("plan", "cut-tasks")).kind).toBe("error");
+    expect(parseArgv(argv("plan", "cut-tasks", "PLAN-001"))).toEqual({
+      kind: "plan-cut-tasks",
+      planId: "PLAN-001",
+      json: false,
+    });
+  });
+});
+
 describe("helpText", () => {
   test("top-level help mentions every known command", () => {
     const text = helpText();
@@ -489,6 +647,7 @@ describe("helpText", () => {
     expect(helpText("onboard")).toContain("relay onboard");
     expect(helpText("upgrade")).toContain("relay upgrade");
     expect(helpText("task")).toContain("relay task");
+    expect(helpText("plan")).toContain("relay plan");
   });
 
   test("unknown topic falls back to top-level help", () => {
