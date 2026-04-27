@@ -20,7 +20,7 @@ Launch Claude Code or Codex CLI straight from a plan or task, with the relevant 
 
 All three are plain markdown files with YAML frontmatter. Nothing is locked inside a database — `git log` is your history, `git blame` is your audit trail, and branches carry their own in-flight context.
 
-In linked git worktrees, Relay uses the current checkout's `.relay/` by default so artifacts stay on the branch you're editing. If you intentionally want shared artifacts instead, set `worktreeMode: shared` in `.relay/config.yaml`.
+In linked git worktrees, Relay uses the current checkout's `.relay/` by default so artifacts stay on the branch you're editing. Every CLI invocation walks up from the directory you run it in to find `.relay/`, so it Just Works inside worktrees without any session state — run `relay where` to confirm which `.relay/` the CLI would resolve. If you intentionally want shared artifacts instead, set `worktreeMode: shared` in `.relay/config.yaml`.
 
 ## Install
 
@@ -55,39 +55,79 @@ Prefer not to run a shell script? Grab the binary and `.sha256` from the [latest
 ## Quick start
 
 ```bash
-relay init       # scaffold .relay/, .mcp.json, and skill files
-relay onboard    # add agent instructions to CLAUDE.md (or AGENTS.md)
-relay            # start the UI (default port 4242, auto-increments on collision)
+relay init                                # scaffold .relay/, .mcp.json, and skill files
+relay onboard                             # add agent instructions to CLAUDE.md (or AGENTS.md)
+relay task list --status open             # see what's ready to work on
+relay task create --title "Fix login"     # create a task
+relay                                     # start the UI (port 4242)
 ```
+
+`relay --help` or `relay help <topic>` (e.g. `relay help task`) prints the full surface for any subcommand.
 
 <details>
-<summary>CLI reference</summary>
+<summary>CLI reference — tasks, plans, docs, and maintenance</summary>
 
+The CLI is the recommended way for agents and humans to interact with relay. Every command resolves `.relay/` from the directory you run it in, so it's worktree-correct without any session state.
+
+**Tasks**
+
+```bash
+relay task list [--status S] [--priority P] [--project P] [--epic E] [--sprint S] [--tag T...] [--json]
+relay task get <ID> [--json]
+relay task create --title "…" [--status S] [--priority P] [--body "…" | --body-from-file <path> | --body-from-stdin] [--project P] [--tag T...] [--blocked-by ID...] [--related-to ID...] [--assignee NAME] [--created-by NAME] [--json]
+relay task update <ID> [<flags>]              # same flags as create + --clear-* + --add-tag/--remove-tag deltas
+relay task delete <ID>
+relay task link-ref <ID> <commit-or-url>
+relay task add-subtask <ID> "<text>"
+relay task complete-subtask <ID> --index N | --text "<match>"
+relay task reorder <ID> [--after ID] [--before ID]
 ```
-relay [command] [options] [path]
 
-Commands:
-  init        Scaffold .relay/ directory, .mcp.json, and skill files
-  onboard     Write/update the agent instructions section in CLAUDE.md (or AGENTS.md)
-  (default)   Start the server and open the UI
+**Plans**
 
-Options:
-  --dir <path>   Path to .relay/ directory (or directory containing it)
-  --port <num>   Server port (default: 4242, auto-increment on collision)
-  --no-ui        Server only, no static UI serving
-  --mcp          Start MCP server mode (stdio transport, no HTTP)
-  --check        (onboard only) Report status without modifying files; exits 1 if stale
-  --stdout       (onboard only) Print the onboarding section to stdout, touching no files
-  --json         Emit structured JSON output (onboard mode)
-  -h, --help     Show this help message
+```bash
+relay plan list [--status S] [--project P] [--tag T...] [--json]
+relay plan get <ID> [--json]
+relay plan create --title "…" [--status S] [--task ID...] [--tag T...] [--body "…" | --body-from-file | --body-from-stdin] [--json]
+relay plan update <ID> [<flags>]              # same flags as create + --clear-* + delta variants
+relay plan delete <ID>
+relay plan link-task <PLAN-ID> <TASK-ID>
+relay plan cut-tasks <PLAN-ID> [--json]       # parses unchecked checkboxes into linked tasks
 ```
+
+**Docs**
+
+```bash
+relay doc list [--project P] [--tag T...] [--json]
+relay doc get <ID> [--json]
+relay doc create --title "…" [--tag T...] [--ref URL...] [--body "…" | --body-from-file | --body-from-stdin] [--json]
+relay doc update <ID> [<flags>]
+relay doc delete <ID>
+```
+
+**Top-level**
+
+```bash
+relay [path]                                  # start the UI (default behavior)
+relay --mcp                                   # start the MCP server (stdio)
+relay init [--allowlist | --no-allowlist]     # scaffold a project; offers Bash(relay *) allowlist
+relay onboard [--check] [--stdout] [--json]   # write CLAUDE.md / AGENTS.md
+relay upgrade [--check] [--json]              # upgrade to latest release
+relay where [--json]                          # which .relay/ would the CLI resolve to from here?
+relay doctor [--fix] [--json]                 # validate artifact integrity (CI-safe; exits 1 on failures)
+relay sync [--dry-run] [--push] [--json]      # commit pending artifact changes with a structured message
+```
+
+Every read/write command supports `--json` for parseable output. Always-present fields (`id`, `title`, `created`, `updated`, `body`) are guaranteed; optional fields are omitted when undefined per `JSON.stringify` convention.
 
 </details>
 
 <details>
-<summary>MCP integration</summary>
+<summary>MCP integration (legacy)</summary>
 
-Relay exposes an MCP server so Claude Code (and any MCP-aware agent) can read and manage your plans, tasks, and docs directly.
+The CLI is the recommended path going forward — see the CLI reference above. The MCP server still works for back-compat with existing `.mcp.json` setups, but it resolves `.relay/` once at startup from the launching cwd, which makes it brittle in worktree-heavy workflows. The CLI walks up from the agent's actual cwd on every call, so it's worktree-correct by construction.
+
+Relay still exposes an MCP server so Claude Code (and any MCP-aware agent) can read and manage your plans, tasks, and docs directly.
 
 Add this to your Claude Code MCP config (`.claude/settings.json` or project-level `.mcp.json`):
 
