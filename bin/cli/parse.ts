@@ -48,7 +48,9 @@ export type Command =
   | DocGetCommand
   | DocCreateCommand
   | DocUpdateCommand
-  | DocDeleteCommand;
+  | DocDeleteCommand
+  | DoctorCommand
+  | SyncCommand;
 
 // --- Task command shapes -------------------------------------------
 
@@ -339,6 +341,21 @@ export interface DocDeleteCommand {
   id: string;
 }
 
+// --- Maintenance commands ------------------------------------------
+
+export interface DoctorCommand {
+  kind: "doctor";
+  fix: boolean;
+  json: boolean;
+}
+
+export interface SyncCommand {
+  kind: "sync";
+  dryRun: boolean;
+  push: boolean;
+  json: boolean;
+}
+
 export interface ServeCommand {
   kind: "serve";
   dir?: string;
@@ -394,6 +411,8 @@ const KNOWN_COMMANDS = new Set([
   "task",
   "plan",
   "doc",
+  "doctor",
+  "sync",
 ]);
 
 /**
@@ -439,6 +458,10 @@ export function parseArgv(argv: string[]): Command {
       return parsePlan(rest);
     case "doc":
       return parseDoc(rest);
+    case "doctor":
+      return parseDoctor(rest);
+    case "sync":
+      return parseSync(rest);
     case "help":
       return { kind: "help", topic: rest[0] };
     default:
@@ -2012,6 +2035,49 @@ function parseDocDelete(args: string[]): Command {
   return { kind: "doc-delete", id };
 }
 
+// --- Maintenance command parsing -----------------------------------
+
+function parseDoctor(args: string[]): Command {
+  const result: DoctorCommand = { kind: "doctor", fix: false, json: false };
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--fix") {
+      result.fix = true;
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return { kind: "error", message: `Unknown flag for 'doctor': ${arg}` };
+    }
+    i++;
+  }
+  return result;
+}
+
+function parseSync(args: string[]): Command {
+  const result: SyncCommand = {
+    kind: "sync",
+    dryRun: false,
+    push: false,
+    json: false,
+  };
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--dry-run") {
+      result.dryRun = true;
+    } else if (arg === "--push") {
+      result.push = true;
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return { kind: "error", message: `Unknown flag for 'sync': ${arg}` };
+    }
+    i++;
+  }
+  return result;
+}
+
 function parseWhere(args: string[]): Command {
   const result: WhereCommand = { kind: "where", json: false };
 
@@ -2088,6 +2154,31 @@ export function helpText(topic?: string): string {
       ].join("\n");
     case "help":
       return helpText(undefined);
+    case "doctor":
+      return [
+        "Usage: relay doctor [--fix] [--json]",
+        "",
+        "Validate artifact integrity. Checks counter consistency, duplicate IDs,",
+        "filename drift, dangling references, stale locks, and .gitattributes.",
+        "",
+        "Options:",
+        "  --fix          Auto-repair fixable issues",
+        "  --json         Emit structured JSON instead of human-readable text",
+        "",
+        "Exit codes: 0 if no failures, 1 if any FAIL diagnostics remain.",
+      ].join("\n");
+    case "sync":
+      return [
+        "Usage: relay sync [--dry-run] [--push] [--json]",
+        "",
+        "Stage and commit pending artifact changes (.relay/{tasks,plans,docs}/*.md)",
+        "with a structured commit message.",
+        "",
+        "Options:",
+        "  --dry-run      Preview the commit without making it",
+        "  --push         Push to the current branch's upstream after committing",
+        "  --json         Emit structured JSON instead of human-readable text",
+      ].join("\n");
     case "doc":
       return [
         "Usage: relay doc <verb> [args] [flags]",
@@ -2174,6 +2265,8 @@ export function helpText(topic?: string): string {
         "  task           Manage tasks (list/get/create/update/delete/link-ref/subtasks/reorder)",
         "  plan           Manage plans (list/get/create/update/delete/link-task/cut-tasks)",
         "  doc            Manage reference docs (list/get/create/update/delete)",
+        "  doctor         Validate artifact integrity (--fix to auto-repair)",
+        "  sync           Stage and commit pending artifact changes",
         "  help [topic]   Show help for a topic",
         "  (default)      Start the server and open the UI",
         "",

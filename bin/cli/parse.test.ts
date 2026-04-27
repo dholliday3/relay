@@ -731,6 +731,46 @@ describe("parseArgv — doc <verb>", () => {
   });
 });
 
+describe("parseArgv — doctor + sync", () => {
+  test("doctor — defaults", () => {
+    expect(parseArgv(argv("doctor"))).toEqual({
+      kind: "doctor",
+      fix: false,
+      json: false,
+    });
+  });
+
+  test("doctor — --fix --json", () => {
+    expect(parseArgv(argv("doctor", "--fix", "--json"))).toEqual({
+      kind: "doctor",
+      fix: true,
+      json: true,
+    });
+  });
+
+  test("doctor — unknown flag errors", () => {
+    expect(parseArgv(argv("doctor", "--bogus")).kind).toBe("error");
+  });
+
+  test("sync — defaults", () => {
+    expect(parseArgv(argv("sync"))).toEqual({
+      kind: "sync",
+      dryRun: false,
+      push: false,
+      json: false,
+    });
+  });
+
+  test("sync — --dry-run --push --json", () => {
+    expect(parseArgv(argv("sync", "--dry-run", "--push", "--json"))).toEqual({
+      kind: "sync",
+      dryRun: true,
+      push: true,
+      json: true,
+    });
+  });
+});
+
 describe("helpText", () => {
   test("top-level help mentions every known command", () => {
     const text = helpText();
@@ -749,6 +789,8 @@ describe("helpText", () => {
     expect(helpText("task")).toContain("relay task");
     expect(helpText("plan")).toContain("relay plan");
     expect(helpText("doc")).toContain("relay doc");
+    expect(helpText("doctor")).toContain("relay doctor");
+    expect(helpText("sync")).toContain("relay sync");
   });
 
   test("unknown topic falls back to top-level help", () => {

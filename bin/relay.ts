@@ -49,6 +49,7 @@ import {
   runDocUpdate,
   runDocDelete,
 } from "./cli/doc.ts";
+import { runDoctorCmd, runSyncCmd } from "./cli/maintenance.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -537,6 +538,12 @@ async function main(): Promise<void> {
       await runWithRelayDirs((d) =>
         runDocDelete(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
       );
+      return;
+    case "doctor":
+      await runWithRelayDirs((d) => runDoctorCmd(cmd, d));
+      return;
+    case "sync":
+      await runWithRelayDirs((d) => runSyncCmd(cmd, d));
       return;
   }
 }
