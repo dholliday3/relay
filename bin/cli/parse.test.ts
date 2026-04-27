@@ -631,6 +631,106 @@ describe("parseArgv — plan <verb>", () => {
   });
 });
 
+describe("parseArgv — doc <verb>", () => {
+  test("`doc` with no verb errors", () => {
+    expect(parseArgv(argv("doc")).kind).toBe("error");
+  });
+
+  test("doc list with filters", () => {
+    expect(
+      parseArgv(argv("doc", "list", "--project", "p", "--tag", "x", "--json")),
+    ).toEqual({
+      kind: "doc-list",
+      project: "p",
+      tags: ["x"],
+      json: true,
+    });
+  });
+
+  test("doc get — requires ID", () => {
+    expect(parseArgv(argv("doc", "get")).kind).toBe("error");
+    expect(parseArgv(argv("doc", "get", "DOC-001"))).toEqual({
+      kind: "doc-get",
+      id: "DOC-001",
+      json: false,
+    });
+  });
+
+  test("doc create — requires --title", () => {
+    expect(parseArgv(argv("doc", "create")).kind).toBe("error");
+  });
+
+  test("doc create — happy path", () => {
+    const cmd = parseArgv(
+      argv(
+        "doc",
+        "create",
+        "--title",
+        "Arch",
+        "--project",
+        "p",
+        "--tag",
+        "architecture",
+        "--ref",
+        "https://x.y/z",
+        "--created-by",
+        "claude",
+        "--json",
+      ),
+    );
+    expect(cmd).toMatchObject({
+      kind: "doc-create",
+      title: "Arch",
+      project: "p",
+      tags: ["architecture"],
+      refs: ["https://x.y/z"],
+      createdBy: "claude",
+      json: true,
+    });
+  });
+
+  test("doc update — replace refs via --ref", () => {
+    expect(
+      parseArgv(argv("doc", "update", "DOC-001", "--ref", "a", "--ref", "b")),
+    ).toMatchObject({
+      kind: "doc-update",
+      id: "DOC-001",
+      replaceRefs: ["a", "b"],
+    });
+  });
+
+  test("doc update — --add-ref / --remove-ref deltas", () => {
+    expect(
+      parseArgv(
+        argv(
+          "doc",
+          "update",
+          "DOC-001",
+          "--add-ref",
+          "new",
+          "--remove-ref",
+          "old",
+        ),
+      ),
+    ).toMatchObject({
+      addRefs: ["new"],
+      removeRefs: ["old"],
+    });
+  });
+
+  test("doc update — --clear-refs is mutually exclusive with --ref", () => {
+    expect(
+      parseArgv(
+        argv("doc", "update", "DOC-001", "--clear-refs", "--ref", "x"),
+      ).kind,
+    ).toBe("error");
+  });
+
+  test("doc delete — requires ID", () => {
+    expect(parseArgv(argv("doc", "delete")).kind).toBe("error");
+  });
+});
+
 describe("helpText", () => {
   test("top-level help mentions every known command", () => {
     const text = helpText();
@@ -648,6 +748,7 @@ describe("helpText", () => {
     expect(helpText("upgrade")).toContain("relay upgrade");
     expect(helpText("task")).toContain("relay task");
     expect(helpText("plan")).toContain("relay plan");
+    expect(helpText("doc")).toContain("relay doc");
   });
 
   test("unknown topic falls back to top-level help", () => {

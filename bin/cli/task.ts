@@ -24,6 +24,7 @@ import {
   sortTasks,
 } from "../../packages/core/src/index.ts";
 import type { Task, TaskFilters } from "../../packages/core/src/types.ts";
+import { applyListOps } from "./list-ops.ts";
 import type {
   TaskListCommand,
   TaskGetCommand,
@@ -222,45 +223,6 @@ export async function runTaskCreate(
     stdout: `Created ${task.id}: ${task.title}\n\n${formatTaskFull(task)}`,
     exitCode: 0,
   };
-}
-
-/**
- * Compose a final list from existing values plus the four CLI knobs:
- * replace (full set), add (delta), remove (delta), clear. Replace and
- * clear are both "destructive" forms; add/remove operate on whichever
- * came out of replace-vs-existing. `clear` short-circuits everything.
- */
-function applyListOps(
-  existing: string[] | undefined,
-  ops: {
-    replace?: string[];
-    add: string[];
-    remove: string[];
-    clear: boolean;
-  },
-): string[] | undefined {
-  if (ops.clear) return [];
-  let base: string[];
-  if (ops.replace !== undefined) {
-    base = [...ops.replace];
-  } else {
-    base = existing ? [...existing] : [];
-  }
-  for (const a of ops.add) {
-    if (!base.includes(a)) base.push(a);
-  }
-  if (ops.remove.length > 0) {
-    base = base.filter((v) => !ops.remove.includes(v));
-  }
-  // Return undefined when no ops were specified at all so we don't
-  // accidentally clobber the existing field with [].
-  const noOps =
-    ops.replace === undefined &&
-    ops.add.length === 0 &&
-    ops.remove.length === 0 &&
-    !ops.clear;
-  if (noOps) return undefined;
-  return base;
 }
 
 export async function runTaskUpdate(

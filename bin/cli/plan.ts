@@ -19,6 +19,7 @@ import {
   cutTasksFromPlan,
 } from "../../packages/core/src/index.ts";
 import type { Plan } from "../../packages/core/src/index.ts";
+import { applyListOps } from "./list-ops.ts";
 import type {
   PlanListCommand,
   PlanGetCommand,
@@ -104,42 +105,6 @@ async function resolveBody(
     return ctx.readStdin ? ctx.readStdin() : readStdinAll();
   }
   return undefined;
-}
-
-/**
- * Same shape as task.ts#applyListOps. Duplicated rather than shared so
- * the two callers stay independent — when doc handlers (Phase 4) need
- * the same pattern, all three callers will move to a shared module.
- */
-function applyListOps(
-  existing: string[] | undefined,
-  ops: {
-    replace?: string[];
-    add: string[];
-    remove: string[];
-    clear: boolean;
-  },
-): string[] | undefined {
-  if (ops.clear) return [];
-  let base: string[];
-  if (ops.replace !== undefined) {
-    base = [...ops.replace];
-  } else {
-    base = existing ? [...existing] : [];
-  }
-  for (const a of ops.add) {
-    if (!base.includes(a)) base.push(a);
-  }
-  if (ops.remove.length > 0) {
-    base = base.filter((v) => !ops.remove.includes(v));
-  }
-  const noOps =
-    ops.replace === undefined &&
-    ops.add.length === 0 &&
-    ops.remove.length === 0 &&
-    !ops.clear;
-  if (noOps) return undefined;
-  return base;
 }
 
 // --- Handlers ------------------------------------------------------

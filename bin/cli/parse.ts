@@ -43,7 +43,12 @@ export type Command =
   | PlanUpdateCommand
   | PlanDeleteCommand
   | PlanLinkTaskCommand
-  | PlanCutTasksCommand;
+  | PlanCutTasksCommand
+  | DocListCommand
+  | DocGetCommand
+  | DocCreateCommand
+  | DocUpdateCommand
+  | DocDeleteCommand;
 
 // --- Task command shapes -------------------------------------------
 
@@ -279,6 +284,61 @@ export interface PlanCutTasksCommand {
   json: boolean;
 }
 
+// --- Doc command shapes --------------------------------------------
+
+export interface DocListCommand {
+  kind: "doc-list";
+  project?: string;
+  tags: string[];
+  json: boolean;
+}
+
+export interface DocGetCommand {
+  kind: "doc-get";
+  id: string;
+  json: boolean;
+}
+
+export interface DocCreateCommand {
+  kind: "doc-create";
+  title: string;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  tags: string[];
+  refs: string[];
+  createdBy?: string;
+  json: boolean;
+}
+
+export interface DocUpdateCommand {
+  kind: "doc-update";
+  id: string;
+  title?: string;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  clearProject: boolean;
+  replaceTags?: string[];
+  addTags: string[];
+  removeTags: string[];
+  clearTags: boolean;
+  replaceRefs?: string[];
+  addRefs: string[];
+  removeRefs: string[];
+  clearRefs: boolean;
+  createdBy?: string;
+  clearCreatedBy: boolean;
+  json: boolean;
+}
+
+export interface DocDeleteCommand {
+  kind: "doc-delete";
+  id: string;
+}
+
 export interface ServeCommand {
   kind: "serve";
   dir?: string;
@@ -333,6 +393,7 @@ const KNOWN_COMMANDS = new Set([
   "help",
   "task",
   "plan",
+  "doc",
 ]);
 
 /**
@@ -376,6 +437,8 @@ export function parseArgv(argv: string[]): Command {
       return parseTask(rest);
     case "plan":
       return parsePlan(rest);
+    case "doc":
+      return parseDoc(rest);
     case "help":
       return { kind: "help", topic: rest[0] };
     default:
@@ -1637,6 +1700,318 @@ function parsePlanCutTasks(args: string[]): Command {
   return { kind: "plan-cut-tasks", planId, json };
 }
 
+// --- Doc command parsing -------------------------------------------
+
+const DOC_VERBS = new Set(["list", "get", "create", "update", "delete"]);
+
+function parseDoc(args: string[]): Command {
+  if (args.length === 0) {
+    return {
+      kind: "error",
+      message: "doc requires a verb (list, get, create, update, delete)",
+      showHelp: true,
+    };
+  }
+  const verb = args[0];
+  const rest = args.slice(1);
+
+  if (!DOC_VERBS.has(verb)) {
+    return {
+      kind: "error",
+      message: `Unknown doc verb: ${verb}. Run 'relay help doc' for usage.`,
+    };
+  }
+
+  switch (verb) {
+    case "list":
+      return parseDocList(rest);
+    case "get":
+      return parseDocGet(rest);
+    case "create":
+      return parseDocCreate(rest);
+    case "update":
+      return parseDocUpdate(rest);
+    case "delete":
+      return parseDocDelete(rest);
+    default:
+      return { kind: "error", message: `Unhandled doc verb: ${verb}` };
+  }
+}
+
+function parseDocList(args: string[]): Command {
+  const result: DocListCommand = { kind: "doc-list", tags: [], json: false };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return { kind: "error", message: `Unknown flag for 'doc list': ${arg}` };
+    }
+    i++;
+  }
+  return result;
+}
+
+function parseDocGet(args: string[]): Command {
+  let id: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--json") {
+      json = true;
+    } else if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'doc get': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'doc get' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'doc get' requires a doc ID. Usage: relay doc get <ID>",
+    };
+  }
+  return { kind: "doc-get", id, json };
+}
+
+function parseDocCreate(args: string[]): Command {
+  const result: DocCreateCommand = {
+    kind: "doc-create",
+    title: "",
+    bodyFromStdin: false,
+    tags: [],
+    refs: [],
+    json: false,
+  };
+  let titleSet = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+      titleSet = true;
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--ref" && i + 1 < args.length) {
+      result.refs.push(args[++i]);
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'doc create': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!titleSet || result.title.length === 0) {
+    return {
+      kind: "error",
+      message:
+        "'doc create' requires --title. Usage: relay doc create --title \"…\" [flags]",
+    };
+  }
+
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  return result;
+}
+
+function parseDocUpdate(args: string[]): Command {
+  let id: string | undefined;
+  const result: DocUpdateCommand = {
+    kind: "doc-update",
+    id: "",
+    bodyFromStdin: false,
+    clearProject: false,
+    addTags: [],
+    removeTags: [],
+    clearTags: false,
+    addRefs: [],
+    removeRefs: [],
+    clearRefs: false,
+    clearCreatedBy: false,
+    json: false,
+  };
+  const initReplace = <K extends "replaceTags" | "replaceRefs">(
+    field: K,
+  ): void => {
+    if (result[field] === undefined) {
+      result[field] = [] as DocUpdateCommand[K];
+    }
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (!arg.startsWith("-")) {
+      if (id === undefined) {
+        id = arg;
+      } else {
+        return {
+          kind: "error",
+          message: `'doc update' takes a single ID; got extra positional: ${arg}`,
+        };
+      }
+      i++;
+      continue;
+    }
+
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--clear-project") {
+      result.clearProject = true;
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      initReplace("replaceTags");
+      result.replaceTags!.push(args[++i]);
+    } else if (arg === "--add-tag" && i + 1 < args.length) {
+      result.addTags.push(args[++i]);
+    } else if (arg === "--remove-tag" && i + 1 < args.length) {
+      result.removeTags.push(args[++i]);
+    } else if (arg === "--clear-tags") {
+      result.clearTags = true;
+    } else if (arg === "--ref" && i + 1 < args.length) {
+      initReplace("replaceRefs");
+      result.replaceRefs!.push(args[++i]);
+    } else if (arg === "--add-ref" && i + 1 < args.length) {
+      result.addRefs.push(args[++i]);
+    } else if (arg === "--remove-ref" && i + 1 < args.length) {
+      result.removeRefs.push(args[++i]);
+    } else if (arg === "--clear-refs") {
+      result.clearRefs = true;
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--clear-created-by") {
+      result.clearCreatedBy = true;
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return { kind: "error", message: `Unknown flag for 'doc update': ${arg}` };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'doc update' requires an ID. Usage: relay doc update <ID> [flags]",
+    };
+  }
+  result.id = id;
+
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  if (result.clearTags && (result.replaceTags || result.addTags.length > 0)) {
+    return {
+      kind: "error",
+      message: "--clear-tags is mutually exclusive with --tag / --add-tag",
+    };
+  }
+  if (result.clearRefs && (result.replaceRefs || result.addRefs.length > 0)) {
+    return {
+      kind: "error",
+      message: "--clear-refs is mutually exclusive with --ref / --add-ref",
+    };
+  }
+  if (result.clearProject && result.project !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-project is mutually exclusive with --project",
+    };
+  }
+  if (result.clearCreatedBy && result.createdBy !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-created-by is mutually exclusive with --created-by",
+    };
+  }
+
+  return result;
+}
+
+function parseDocDelete(args: string[]): Command {
+  let id: string | undefined;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'doc delete': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'doc delete' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'doc delete' requires an ID. Usage: relay doc delete <ID>",
+    };
+  }
+  return { kind: "doc-delete", id };
+}
+
 function parseWhere(args: string[]): Command {
   const result: WhereCommand = { kind: "where", json: false };
 
@@ -1713,6 +2088,27 @@ export function helpText(topic?: string): string {
       ].join("\n");
     case "help":
       return helpText(undefined);
+    case "doc":
+      return [
+        "Usage: relay doc <verb> [args] [flags]",
+        "",
+        "Verbs:",
+        "  list                       List docs (filter by --project, --tag)",
+        "  get <ID>                   Print full doc body and metadata",
+        "  create --title \"…\" […]      Create a new reference doc",
+        "  update <ID> […]            Update a doc. --tag/--ref replace; --add-… / --remove-… are deltas; --clear-… removes",
+        "  delete <ID>                Archive (or hard-delete, per config)",
+        "",
+        "Common flags (where applicable):",
+        "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag)",
+        "  --ref <url-or-sha>         Repeatable. Same semantics as --tag",
+        "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
+        "  --json                     Emit structured JSON instead of human-readable text",
+        "",
+        "Examples:",
+        "  relay doc list --tag architecture --json",
+        "  cat ARCH.md | relay doc create --title \"Auth architecture\" --body-from-stdin --tag architecture",
+      ].join("\n");
     case "plan":
       return [
         "Usage: relay plan <verb> [args] [flags]",
@@ -1777,6 +2173,7 @@ export function helpText(topic?: string): string {
         "  where          Print the resolved .relay/ directory (worktree-aware)",
         "  task           Manage tasks (list/get/create/update/delete/link-ref/subtasks/reorder)",
         "  plan           Manage plans (list/get/create/update/delete/link-task/cut-tasks)",
+        "  doc            Manage reference docs (list/get/create/update/delete)",
         "  help [topic]   Show help for a topic",
         "  (default)      Start the server and open the UI",
         "",

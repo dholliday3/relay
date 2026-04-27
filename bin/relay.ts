@@ -42,6 +42,13 @@ import {
   runPlanLinkTask,
   runPlanCutTasks,
 } from "./cli/plan.ts";
+import {
+  runDocList,
+  runDocGet,
+  runDocCreate,
+  runDocUpdate,
+  runDocDelete,
+} from "./cli/doc.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -504,6 +511,31 @@ async function main(): Promise<void> {
     case "plan-cut-tasks":
       await runWithRelayDirs((d) =>
         runPlanCutTasks(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "doc-list":
+      await runWithRelayDirs((d) =>
+        runDocList(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-get":
+      await runWithRelayDirs((d) =>
+        runDocGet(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-create":
+      await runWithRelayDirs((d) =>
+        runDocCreate(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-update":
+      await runWithRelayDirs((d) =>
+        runDocUpdate(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-delete":
+      await runWithRelayDirs((d) =>
+        runDocDelete(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
       );
       return;
   }
