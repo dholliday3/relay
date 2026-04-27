@@ -114,6 +114,20 @@ describe("parseArgv — init", () => {
     });
   });
 
+  test("--allowlist sets the flag explicitly", () => {
+    expect(parseArgv(argv("init", "--allowlist"))).toEqual({
+      kind: "init",
+      allowlist: true,
+    });
+  });
+
+  test("--no-allowlist sets the flag to false", () => {
+    expect(parseArgv(argv("init", "--no-allowlist"))).toEqual({
+      kind: "init",
+      allowlist: false,
+    });
+  });
+
   test("unknown flag errors", () => {
     const cmd = parseArgv(argv("init", "--bogus"));
     expect(cmd.kind).toBe("error");

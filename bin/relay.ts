@@ -50,6 +50,7 @@ import {
   runDocDelete,
 } from "./cli/doc.ts";
 import { runDoctorCmd, runSyncCmd } from "./cli/maintenance.ts";
+import { addRelayAllowlist } from "./cli/init-allowlist.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -134,22 +135,86 @@ function printInitSummary(
     );
   }
 
-  console.log(`\nClaude Code: the .mcp.json will auto-load on next session.`);
-  console.log(`\nCodex: add this to ~/.codex/config.toml:\n`);
-  console.log(codexMcpInstructions());
-  console.log("");
+  console.log("\nGet started:");
+  console.log("  relay task list                       # see what's ready to work on");
+  console.log("  relay task create --title \"…\"          # create a task");
+  console.log("  relay where                           # confirm which .relay/ is active");
+  console.log("  relay --help                          # full surface");
   console.log(
-    `Next: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
+    "\nThe relay skill at .claude/skills/relay/SKILL.md walks Claude Code through the workflow.",
+  );
+  console.log(
+    "Existing .mcp.json setups still work; the CLI is the recommended path.",
+  );
+  console.log("\nFor non-Claude-Code agents (e.g. Codex), the MCP server is wired via:");
+  console.log(codexMcpInstructions());
+  console.log(
+    `\nNext: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
   );
 }
 
-async function runInit(cmd: { dir?: string }): Promise<void> {
+async function runInit(cmd: {
+  dir?: string;
+  allowlist?: boolean;
+}): Promise<void> {
   const baseDir = cmd.dir ? resolve(cmd.dir) : process.cwd();
   const result = await initRelay({
     baseDir,
     skillSourcePath: resolveSkillSourcePath(),
   });
   printInitSummary(baseDir, result);
+
+  // Decide whether to add the Bash(relay *) allowlist entry. The default
+  // is to prompt when stdin is a TTY (interactive run) and skip
+  // otherwise (agent or script invocation), unless the user passed an
+  // explicit --allowlist / --no-allowlist flag.
+  let writeAllowlist = cmd.allowlist;
+  if (writeAllowlist === undefined) {
+    if (process.stdin.isTTY) {
+      const answer = prompt(
+        "\nAdd 'Bash(relay *)' to .claude/settings.json so Claude Code skips per-call permission prompts? (Y/n) ",
+      );
+      writeAllowlist =
+        answer === null || answer === "" || /^y/i.test(answer);
+    } else {
+      writeAllowlist = false;
+    }
+  }
+
+  if (writeAllowlist) {
+    try {
+      const r = await addRelayAllowlist(baseDir);
+      switch (r.action) {
+        case "created":
+          console.log(`\nWrote ${r.file} with Bash(relay *) allowlist entry.`);
+          break;
+        case "added":
+          console.log(`\nAdded Bash(relay *) to ${r.file}.`);
+          break;
+        case "already-present":
+          console.log(`\nBash(relay *) already in ${r.file}.`);
+          break;
+      }
+    } catch (err) {
+      console.error(
+        `\nCouldn't update .claude/settings.json: ${(err as Error).message}`,
+      );
+      console.error(
+        "  Add this manually to skip per-call permission prompts:",
+      );
+      console.error('  { "permissions": { "allow": ["Bash(relay *)"] } }');
+    }
+  } else if (cmd.allowlist === undefined) {
+    // Non-interactive run with no explicit flag — point the user at
+    // the manual fix so they're not stuck on permission prompts.
+    console.log(
+      "\nTo skip Claude Code permission prompts on every relay call, add:",
+    );
+    console.log(
+      '  { "permissions": { "allow": ["Bash(relay *)"] } }  → .claude/settings.json',
+    );
+    console.log("Or re-run: relay init --allowlist");
+  }
 }
 
 async function runOnboardCmd(cmd: {

@@ -18,7 +18,7 @@ import {
  * hand-bumping forces a deliberate "is this actually user-facing?"
  * decision at each bump.
  */
-export const ONBOARD_VERSION = 3;
+export const ONBOARD_VERSION = 4;
 
 const VERSION_MARKER = `<!-- relay-onboard-v:${ONBOARD_VERSION} -->`;
 
@@ -44,32 +44,41 @@ const CANDIDATE_FILES = [
  */
 const ONBOARD_SECTION_BODY = `This project uses **relay** for task and plan tracking. Tasks live in \`.relay/tasks/\`, plans live in \`.relay/plans/\`, and reference docs live in \`.relay/docs/\` as markdown files with YAML frontmatter.
 
-### If your agent supports Skills
+### Use the relay CLI
 
-The \`relay\` skill at \`.claude/skills/relay/SKILL.md\` (Claude Code) and \`.agents/skills/relay/SKILL.md\` (Codex) covers the full workflow. Nothing to configure — just ask about tasks, plans, or docs and the skill will load on demand.
-
-### If your agent does not support Skills
-
-Use the \`relay\` MCP server for all task, plan, and doc operations. Start it with:
+Run \`relay <verb>\` from anywhere inside the project. Every invocation walks up from the current directory to find \`.relay/\`, so it Just Works inside git worktrees too — run \`relay where\` to confirm which checkout's \`.relay/\` is active.
 
 \`\`\`
-bunx relay --mcp
+relay task list --status open                  # what's ready to pick up
+relay task get TKT-001                         # full body, subtasks, refs, agent notes
+relay task create --title "…"                  # new task; defaults to backlog
+relay task update TKT-001 --status in-progress --assignee claude-code
+relay plan cut-tasks PLAN-005                  # checkboxes → linked tasks in one call
+relay where                                    # which .relay/ would this resolve to?
 \`\`\`
 
-Never hand-edit files in \`.relay/tasks/\`, \`.relay/plans/\`, or \`.relay/docs/\` — the MCP server owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
+Every command supports \`--json\` for parseable output. Run \`relay --help\` or \`relay help <topic>\` (e.g. \`relay help task\`) for the full surface.
+
+The \`relay\` skill at \`.claude/skills/relay/SKILL.md\` (Claude Code) and \`.agents/skills/relay/SKILL.md\` (Codex) covers the full workflow with intent-based recipes — load it on demand and don't reimplement what's there.
+
+Never hand-edit files in \`.relay/tasks/\`, \`.relay/plans/\`, or \`.relay/docs/\` — the CLI owns ID assignment, file naming, ordering, and watcher sync. Direct edits will desync state.
 
 ### Workflow basics
 
-- **Start work:** set task \`status: "in-progress"\` and \`assignee: "<your agent name>"\`.
-- **Finish work:** set \`status: "done"\`, append a debrief under a \`<!-- agent-notes -->\` marker in the body, and call \`link_ref\` with the commit SHA or PR URL.
-- **Plans → tasks:** call \`cut_tasks_from_plan\` to parse unchecked checkboxes in a plan body into linked tasks in one step.
+- **Start work:** \`relay task update <ID> --status in-progress --assignee <your agent name>\`.
+- **Finish work:** \`relay task update <ID> --status done\`, append a debrief under a \`<!-- agent-notes -->\` marker in the body, and run \`relay task link-ref <ID> <commit-or-PR-url>\`.
+- **Plans → tasks:** \`relay plan cut-tasks <PLAN-ID>\` parses unchecked checkboxes into linked tasks in one call.
 - **Commit convention:** include the task ID in the commit message (e.g. \`TKTB-015: fix kanban reorder bug\`).
 
 ### Enums
 
 - **Task status:** \`draft\`, \`backlog\`, \`open\`, \`in-progress\`, \`done\`, \`cancelled\`
 - **Task priority:** \`low\`, \`medium\`, \`high\`, \`urgent\`
-- **Plan status:** \`draft\`, \`active\`, \`completed\`, \`archived\``;
+- **Plan status:** \`draft\`, \`active\`, \`completed\`, \`archived\`
+
+### Legacy: relay MCP server
+
+\`relay --mcp\` still starts an MCP server with the same surface and existing \`.mcp.json\` configs keep working. The CLI is the supported path going forward — the MCP server resolves \`.relay/\` once at startup, which makes it brittle in worktree-heavy workflows.`;
 
 /**
  * Returns the full onboarding section: heading + version marker + body.

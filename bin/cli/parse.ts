@@ -367,6 +367,13 @@ export interface ServeCommand {
 export interface InitCommand {
   kind: "init";
   dir?: string;
+  /**
+   * Allowlist resolution for the `Bash(relay *)` permission entry in
+   * `.claude/settings.json`. `undefined` means "decide at runtime"
+   * (prompt if interactive, skip otherwise). Explicit true/false from
+   * `--allowlist` / `--no-allowlist` flags overrides that.
+   */
+  allowlist?: boolean;
 }
 
 export interface OnboardCommand {
@@ -519,6 +526,10 @@ function parseInit(args: string[]): Command {
     const arg = args[i];
     if (arg === "--dir" && i + 1 < args.length) {
       result.dir = args[++i];
+    } else if (arg === "--allowlist") {
+      result.allowlist = true;
+    } else if (arg === "--no-allowlist") {
+      result.allowlist = false;
     } else if (arg.startsWith("-")) {
       return {
         kind: "error",
@@ -2110,12 +2121,17 @@ export function helpText(topic?: string): string {
   switch (topic) {
     case "init":
       return [
-        "Usage: relay init [path]",
+        "Usage: relay init [options] [path]",
         "",
         "Scaffold .relay/, .mcp.json, and skill files in a project.",
         "",
         "Arguments:",
-        "  path           Project directory (default: cwd)",
+        "  path             Project directory (default: cwd)",
+        "",
+        "Options:",
+        "  --allowlist      Always add a Bash(relay *) permission entry to .claude/settings.json",
+        "  --no-allowlist   Never add the permission entry (default in non-interactive shells)",
+        "                   With neither flag, prompts when stdin is a TTY.",
       ].join("\n");
     case "onboard":
       return [
