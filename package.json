@@ -11,7 +11,7 @@
     "build:binary": "bash scripts/build-binary.sh",
     "typecheck": "bash scripts/typecheck.sh",
     "lint": "bunx eslint packages/core/src packages/server/src bin",
-    "test": "bun test packages/ bin/",
+    "test": "bun test --cwd packages && bun test --cwd bin",
     "test:install": "bun test ./scripts/install.test.ts",
     "pretest:e2e": "bun --filter \"@relay/ui\" build && bunx playwright install chromium",
     "test:e2e": "bunx playwright test --config e2e/playwright.config.ts",

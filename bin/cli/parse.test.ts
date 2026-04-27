@@ -197,6 +197,282 @@ describe("parseArgv — where (the worktree-debugging command)", () => {
   });
 });
 
+describe("parseArgv — task <verb>", () => {
+  test("`task` with no verb errors", () => {
+    const cmd = parseArgv(argv("task"));
+    expect(cmd.kind).toBe("error");
+  });
+
+  test("unknown verb errors with hint", () => {
+    const cmd = parseArgv(argv("task", "frobnicate"));
+    expect(cmd.kind).toBe("error");
+  });
+
+  test("task list — bare", () => {
+    expect(parseArgv(argv("task", "list"))).toEqual({
+      kind: "task-list",
+      tags: [],
+      json: false,
+    });
+  });
+
+  test("task list — every filter + repeatable --tag", () => {
+    expect(
+      parseArgv(
+        argv(
+          "task",
+          "list",
+          "--status",
+          "open",
+          "--priority",
+          "high",
+          "--project",
+          "p",
+          "--epic",
+          "e",
+          "--sprint",
+          "s",
+          "--tag",
+          "x",
+          "--tag",
+          "y",
+          "--json",
+        ),
+      ),
+    ).toEqual({
+      kind: "task-list",
+      status: "open",
+      priority: "high",
+      project: "p",
+      epic: "e",
+      sprint: "s",
+      tags: ["x", "y"],
+      json: true,
+    });
+  });
+
+  test("task list — invalid status enum errors", () => {
+    expect(parseArgv(argv("task", "list", "--status", "fizzbuzz")).kind).toBe(
+      "error",
+    );
+  });
+
+  test("task get — requires ID", () => {
+    expect(parseArgv(argv("task", "get")).kind).toBe("error");
+    expect(parseArgv(argv("task", "get", "TASK-001"))).toEqual({
+      kind: "task-get",
+      id: "TASK-001",
+      json: false,
+    });
+  });
+
+  test("task create — requires --title", () => {
+    expect(parseArgv(argv("task", "create")).kind).toBe("error");
+    expect(parseArgv(argv("task", "create", "--title", "")).kind).toBe(
+      "error",
+    );
+  });
+
+  test("task create — happy path with all flags", () => {
+    const cmd = parseArgv(
+      argv(
+        "task",
+        "create",
+        "--title",
+        "Hello",
+        "--status",
+        "in-progress",
+        "--priority",
+        "high",
+        "--body",
+        "body!",
+        "--project",
+        "p",
+        "--epic",
+        "e",
+        "--sprint",
+        "s",
+        "--tag",
+        "x",
+        "--tag",
+        "y",
+        "--blocked-by",
+        "T-1",
+        "--related-to",
+        "T-2",
+        "--assignee",
+        "claude",
+        "--created-by",
+        "human",
+        "--json",
+      ),
+    );
+    expect(cmd.kind).toBe("task-create");
+    expect(cmd).toMatchObject({
+      title: "Hello",
+      status: "in-progress",
+      priority: "high",
+      body: "body!",
+      project: "p",
+      tags: ["x", "y"],
+      blockedBy: ["T-1"],
+      relatedTo: ["T-2"],
+      assignee: "claude",
+      createdBy: "human",
+      json: true,
+    });
+  });
+
+  test("task create — body sources are mutually exclusive", () => {
+    expect(
+      parseArgv(
+        argv(
+          "task",
+          "create",
+          "--title",
+          "x",
+          "--body",
+          "a",
+          "--body-from-stdin",
+        ),
+      ).kind,
+    ).toBe("error");
+  });
+
+  test("task update — requires ID", () => {
+    expect(parseArgv(argv("task", "update")).kind).toBe("error");
+  });
+
+  test("task update — replace tags via --tag", () => {
+    const cmd = parseArgv(
+      argv("task", "update", "TASK-001", "--tag", "a", "--tag", "b"),
+    );
+    expect(cmd.kind).toBe("task-update");
+    expect(cmd).toMatchObject({
+      id: "TASK-001",
+      replaceTags: ["a", "b"],
+      addTags: [],
+      removeTags: [],
+    });
+  });
+
+  test("task update — --add-tag / --remove-tag accumulate as deltas", () => {
+    const cmd = parseArgv(
+      argv(
+        "task",
+        "update",
+        "TASK-001",
+        "--add-tag",
+        "x",
+        "--add-tag",
+        "y",
+        "--remove-tag",
+        "z",
+      ),
+    );
+    expect(cmd).toMatchObject({
+      addTags: ["x", "y"],
+      removeTags: ["z"],
+    });
+  });
+
+  test("task update — --clear-tags + --tag is mutually exclusive", () => {
+    expect(
+      parseArgv(argv("task", "update", "TASK-001", "--clear-tags", "--tag", "x"))
+        .kind,
+    ).toBe("error");
+  });
+
+  test("task update — --priority + --clear-priority is mutually exclusive", () => {
+    expect(
+      parseArgv(
+        argv(
+          "task",
+          "update",
+          "TASK-001",
+          "--priority",
+          "high",
+          "--clear-priority",
+        ),
+      ).kind,
+    ).toBe("error");
+  });
+
+  test("task delete — requires ID", () => {
+    expect(parseArgv(argv("task", "delete")).kind).toBe("error");
+    expect(parseArgv(argv("task", "delete", "TASK-001"))).toEqual({
+      kind: "task-delete",
+      id: "TASK-001",
+    });
+  });
+
+  test("task link-ref — requires ID + ref", () => {
+    expect(parseArgv(argv("task", "link-ref", "TASK-001")).kind).toBe(
+      "error",
+    );
+    expect(parseArgv(argv("task", "link-ref", "TASK-001", "abc123"))).toEqual({
+      kind: "task-link-ref",
+      id: "TASK-001",
+      ref: "abc123",
+    });
+  });
+
+  test("task add-subtask — requires ID + text", () => {
+    expect(parseArgv(argv("task", "add-subtask", "TASK-001")).kind).toBe(
+      "error",
+    );
+    expect(
+      parseArgv(argv("task", "add-subtask", "TASK-001", "do thing")),
+    ).toEqual({
+      kind: "task-add-subtask",
+      id: "TASK-001",
+      text: "do thing",
+    });
+  });
+
+  test("task complete-subtask — requires --index or --text", () => {
+    expect(parseArgv(argv("task", "complete-subtask", "TASK-001")).kind).toBe(
+      "error",
+    );
+    expect(
+      parseArgv(argv("task", "complete-subtask", "TASK-001", "--index", "0")),
+    ).toEqual({
+      kind: "task-complete-subtask",
+      id: "TASK-001",
+      index: 0,
+      text: undefined,
+    });
+  });
+
+  test("task complete-subtask — --index + --text is mutually exclusive", () => {
+    expect(
+      parseArgv(
+        argv(
+          "task",
+          "complete-subtask",
+          "TASK-001",
+          "--index",
+          "0",
+          "--text",
+          "match",
+        ),
+      ).kind,
+    ).toBe("error");
+  });
+
+  test("task reorder — requires --after or --before", () => {
+    expect(parseArgv(argv("task", "reorder", "TASK-001")).kind).toBe("error");
+    expect(
+      parseArgv(argv("task", "reorder", "TASK-001", "--after", "TASK-002")),
+    ).toEqual({
+      kind: "task-reorder",
+      id: "TASK-001",
+      afterId: "TASK-002",
+      beforeId: undefined,
+    });
+  });
+});
+
 describe("helpText", () => {
   test("top-level help mentions every known command", () => {
     const text = helpText();
@@ -212,6 +488,7 @@ describe("helpText", () => {
     expect(helpText("init")).toContain("relay init");
     expect(helpText("onboard")).toContain("relay onboard");
     expect(helpText("upgrade")).toContain("relay upgrade");
+    expect(helpText("task")).toContain("relay task");
   });
 
   test("unknown topic falls back to top-level help", () => {

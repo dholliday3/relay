@@ -20,6 +20,19 @@ import {
 import { parseArgv, helpText } from "./cli/parse.ts";
 import type { Command } from "./cli/parse.ts";
 import { runWhere } from "./cli/where.ts";
+import { resolveRelayDirs, isRelayDirsError } from "./cli/relay-dir.ts";
+import {
+  runTaskList,
+  runTaskGet,
+  runTaskCreate,
+  runTaskUpdate,
+  runTaskDelete,
+  runTaskLinkRef,
+  runTaskAddSubtask,
+  runTaskCompleteSubtask,
+  runTaskReorder,
+} from "./cli/task.ts";
+import type { HandlerResult } from "./cli/task.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -365,6 +378,26 @@ async function runServe(cmd: {
   }
 }
 
+/**
+ * Centralizes the "resolve .relay/, dispatch handler, write output" flow
+ * for every noun command (task / plan / doc / doctor / sync). Keeps the
+ * exit-code, stdout, and stderr handling in one place so each handler
+ * can stay a pure function returning a HandlerResult.
+ */
+async function runWithRelayDirs(
+  run: (dirs: { tasksDir: string }) => Promise<HandlerResult>,
+): Promise<void> {
+  const dirs = await resolveRelayDirs();
+  if (isRelayDirsError(dirs)) {
+    console.error(`relay: ${dirs.error}`);
+    process.exit(1);
+  }
+  const result = await run(dirs);
+  if (result.stdout) process.stdout.write(result.stdout + "\n");
+  if (result.stderr) process.stderr.write(result.stderr + "\n");
+  if (result.exitCode !== 0) process.exitCode = result.exitCode;
+}
+
 async function main(): Promise<void> {
   const cmd: Command = parseArgv(process.argv);
 
@@ -396,6 +429,33 @@ async function main(): Promise<void> {
     }
     case "serve":
       await runServe(cmd);
+      return;
+    case "task-list":
+      await runWithRelayDirs((d) => runTaskList(cmd, d));
+      return;
+    case "task-get":
+      await runWithRelayDirs((d) => runTaskGet(cmd, d));
+      return;
+    case "task-create":
+      await runWithRelayDirs((d) => runTaskCreate(cmd, d));
+      return;
+    case "task-update":
+      await runWithRelayDirs((d) => runTaskUpdate(cmd, d));
+      return;
+    case "task-delete":
+      await runWithRelayDirs((d) => runTaskDelete(cmd, d));
+      return;
+    case "task-link-ref":
+      await runWithRelayDirs((d) => runTaskLinkRef(cmd, d));
+      return;
+    case "task-add-subtask":
+      await runWithRelayDirs((d) => runTaskAddSubtask(cmd, d));
+      return;
+    case "task-complete-subtask":
+      await runWithRelayDirs((d) => runTaskCompleteSubtask(cmd, d));
+      return;
+    case "task-reorder":
+      await runWithRelayDirs((d) => runTaskReorder(cmd, d));
       return;
   }
 }

@@ -27,7 +27,162 @@ export type Command =
   | UpgradeCommand
   | WhereCommand
   | HelpCommand
-  | ErrorCommand;
+  | ErrorCommand
+  | TaskListCommand
+  | TaskGetCommand
+  | TaskCreateCommand
+  | TaskUpdateCommand
+  | TaskDeleteCommand
+  | TaskLinkRefCommand
+  | TaskAddSubtaskCommand
+  | TaskCompleteSubtaskCommand
+  | TaskReorderCommand;
+
+// --- Task command shapes -------------------------------------------
+
+export type TaskStatus =
+  | "draft"
+  | "backlog"
+  | "open"
+  | "in-progress"
+  | "done"
+  | "cancelled";
+
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+const TASK_STATUSES: readonly TaskStatus[] = [
+  "draft",
+  "backlog",
+  "open",
+  "in-progress",
+  "done",
+  "cancelled",
+];
+const TASK_PRIORITIES: readonly TaskPriority[] = [
+  "low",
+  "medium",
+  "high",
+  "urgent",
+];
+
+export interface TaskListCommand {
+  kind: "task-list";
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  project?: string;
+  epic?: string;
+  sprint?: string;
+  tags: string[];
+  json: boolean;
+}
+
+export interface TaskGetCommand {
+  kind: "task-get";
+  id: string;
+  json: boolean;
+}
+
+export interface TaskCreateCommand {
+  kind: "task-create";
+  title: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  epic?: string;
+  sprint?: string;
+  tags: string[];
+  blockedBy: string[];
+  relatedTo: string[];
+  assignee?: string;
+  createdBy?: string;
+  json: boolean;
+}
+
+/**
+ * Update is the most flag-dense command in the surface — it has to
+ * express both "replace this list" and "add/remove from this list" plus
+ * "clear this nullable field," which are three different operations on
+ * the same underlying field.
+ *
+ * Convention:
+ *   --tag T              — full replace; `tags = [T,...]` (last write wins)
+ *   --add-tag T          — additive delta on existing tags
+ *   --remove-tag T       — subtractive delta on existing tags
+ *   --clear-tags         — set tags to undefined
+ *
+ * `replaceTags` carries the result of `--tag` (or undefined when the
+ * user didn't pass any). The handler resolves the conflict between
+ * replace, add/remove, and clear: if any of those three operations were
+ * specified, applying them in that order produces the final tag set.
+ */
+export interface TaskUpdateCommand {
+  kind: "task-update";
+  id: string;
+  title?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  clearPriority: boolean;
+  body?: string;
+  bodyFromFile?: string;
+  bodyFromStdin: boolean;
+  project?: string;
+  clearProject: boolean;
+  epic?: string;
+  clearEpic: boolean;
+  sprint?: string;
+  clearSprint: boolean;
+  replaceTags?: string[];
+  addTags: string[];
+  removeTags: string[];
+  clearTags: boolean;
+  replaceBlockedBy?: string[];
+  addBlockedBy: string[];
+  removeBlockedBy: string[];
+  clearBlockedBy: boolean;
+  replaceRelatedTo?: string[];
+  addRelatedTo: string[];
+  removeRelatedTo: string[];
+  clearRelatedTo: boolean;
+  assignee?: string;
+  clearAssignee: boolean;
+  createdBy?: string;
+  clearCreatedBy: boolean;
+  json: boolean;
+}
+
+export interface TaskDeleteCommand {
+  kind: "task-delete";
+  id: string;
+}
+
+export interface TaskLinkRefCommand {
+  kind: "task-link-ref";
+  id: string;
+  ref: string;
+}
+
+export interface TaskAddSubtaskCommand {
+  kind: "task-add-subtask";
+  id: string;
+  text: string;
+}
+
+export interface TaskCompleteSubtaskCommand {
+  kind: "task-complete-subtask";
+  id: string;
+  index?: number;
+  text?: string;
+}
+
+export interface TaskReorderCommand {
+  kind: "task-reorder";
+  id: string;
+  afterId?: string;
+  beforeId?: string;
+}
 
 export interface ServeCommand {
   kind: "serve";
@@ -81,6 +236,7 @@ const KNOWN_COMMANDS = new Set([
   "upgrade",
   "where",
   "help",
+  "task",
 ]);
 
 /**
@@ -120,6 +276,8 @@ export function parseArgv(argv: string[]): Command {
       return parseUpgrade(rest);
     case "where":
       return parseWhere(rest);
+    case "task":
+      return parseTask(rest);
     case "help":
       return { kind: "help", topic: rest[0] };
     default:
@@ -259,6 +417,675 @@ function parseUpgrade(args: string[]): Command {
   return result;
 }
 
+// --- Task command parsing ------------------------------------------
+
+const TASK_VERBS = new Set([
+  "list",
+  "get",
+  "create",
+  "update",
+  "delete",
+  "link-ref",
+  "add-subtask",
+  "complete-subtask",
+  "reorder",
+]);
+
+function parseTask(args: string[]): Command {
+  if (args.length === 0) {
+    return {
+      kind: "error",
+      message: "task requires a verb (list, get, create, update, delete, link-ref, add-subtask, complete-subtask, reorder)",
+      showHelp: true,
+    };
+  }
+
+  const verb = args[0];
+  const rest = args.slice(1);
+
+  if (!TASK_VERBS.has(verb)) {
+    return {
+      kind: "error",
+      message: `Unknown task verb: ${verb}. Run 'relay help task' for usage.`,
+      showHelp: false,
+    };
+  }
+
+  switch (verb) {
+    case "list":
+      return parseTaskList(rest);
+    case "get":
+      return parseTaskGet(rest);
+    case "create":
+      return parseTaskCreate(rest);
+    case "update":
+      return parseTaskUpdate(rest);
+    case "delete":
+      return parseTaskDelete(rest);
+    case "link-ref":
+      return parseTaskLinkRef(rest);
+    case "add-subtask":
+      return parseTaskAddSubtask(rest);
+    case "complete-subtask":
+      return parseTaskCompleteSubtask(rest);
+    case "reorder":
+      return parseTaskReorder(rest);
+    default:
+      return {
+        kind: "error",
+        message: `Unhandled task verb: ${verb}`,
+      };
+  }
+}
+
+function asTaskStatus(s: string): TaskStatus | null {
+  return (TASK_STATUSES as readonly string[]).includes(s) ? (s as TaskStatus) : null;
+}
+function asTaskPriority(s: string): TaskPriority | null {
+  return (TASK_PRIORITIES as readonly string[]).includes(s)
+    ? (s as TaskPriority)
+    : null;
+}
+
+function parseTaskList(args: string[]): Command {
+  const result: TaskListCommand = {
+    kind: "task-list",
+    tags: [],
+    json: false,
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asTaskStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${TASK_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--priority" && i + 1 < args.length) {
+      const v = args[++i];
+      const p = asTaskPriority(v);
+      if (!p) {
+        return {
+          kind: "error",
+          message: `Invalid --priority: ${v}. Must be one of: ${TASK_PRIORITIES.join(", ")}`,
+        };
+      }
+      result.priority = p;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--epic" && i + 1 < args.length) {
+      result.epic = args[++i];
+    } else if (arg === "--sprint" && i + 1 < args.length) {
+      result.sprint = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task list': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  return result;
+}
+
+function parseTaskGet(args: string[]): Command {
+  let id: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--json") {
+      json = true;
+    } else if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'task get': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'task get' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'task get' requires a task ID. Usage: relay task get <ID>",
+    };
+  }
+  return { kind: "task-get", id, json };
+}
+
+function parseTaskCreate(args: string[]): Command {
+  const result: TaskCreateCommand = {
+    kind: "task-create",
+    title: "",
+    bodyFromStdin: false,
+    tags: [],
+    blockedBy: [],
+    relatedTo: [],
+    json: false,
+  };
+  let titleSet = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+      titleSet = true;
+    } else if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asTaskStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${TASK_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--priority" && i + 1 < args.length) {
+      const v = args[++i];
+      const p = asTaskPriority(v);
+      if (!p) {
+        return {
+          kind: "error",
+          message: `Invalid --priority: ${v}. Must be one of: ${TASK_PRIORITIES.join(", ")}`,
+        };
+      }
+      result.priority = p;
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--epic" && i + 1 < args.length) {
+      result.epic = args[++i];
+    } else if (arg === "--sprint" && i + 1 < args.length) {
+      result.sprint = args[++i];
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      result.tags.push(args[++i]);
+    } else if (arg === "--blocked-by" && i + 1 < args.length) {
+      result.blockedBy.push(args[++i]);
+    } else if (arg === "--related-to" && i + 1 < args.length) {
+      result.relatedTo.push(args[++i]);
+    } else if (arg === "--assignee" && i + 1 < args.length) {
+      result.assignee = args[++i];
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task create': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!titleSet || result.title.length === 0) {
+    return {
+      kind: "error",
+      message: "'task create' requires --title. Usage: relay task create --title \"…\" [flags]",
+    };
+  }
+
+  // --body / --body-from-file / --body-from-stdin are mutually exclusive.
+  // We surface this as a parse error rather than silently picking one
+  // because the user almost certainly has a stale flag in their command.
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  return result;
+}
+
+function parseTaskUpdate(args: string[]): Command {
+  let id: string | undefined;
+  const result: TaskUpdateCommand = {
+    kind: "task-update",
+    id: "", // filled below
+    bodyFromStdin: false,
+    clearPriority: false,
+    clearProject: false,
+    clearEpic: false,
+    clearSprint: false,
+    addTags: [],
+    removeTags: [],
+    clearTags: false,
+    addBlockedBy: [],
+    removeBlockedBy: [],
+    clearBlockedBy: false,
+    addRelatedTo: [],
+    removeRelatedTo: [],
+    clearRelatedTo: false,
+    clearAssignee: false,
+    clearCreatedBy: false,
+    json: false,
+  };
+  // Lazy-init the replace arrays only when --tag/--blocked-by/--related-to
+  // are seen, so the handler can distinguish "not specified" from "explicitly
+  // set to []."
+  const initReplace = <K extends "replaceTags" | "replaceBlockedBy" | "replaceRelatedTo">(
+    field: K,
+  ): void => {
+    if (result[field] === undefined) {
+      result[field] = [] as TaskUpdateCommand[K];
+    }
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    // Positional ID — first non-flag arg before any consumed flag value.
+    if (!arg.startsWith("-")) {
+      if (id === undefined) {
+        id = arg;
+      } else {
+        return {
+          kind: "error",
+          message: `'task update' takes a single ID; got extra positional: ${arg}`,
+        };
+      }
+      i++;
+      continue;
+    }
+
+    if (arg === "--title" && i + 1 < args.length) {
+      result.title = args[++i];
+    } else if (arg === "--status" && i + 1 < args.length) {
+      const v = args[++i];
+      const s = asTaskStatus(v);
+      if (!s) {
+        return {
+          kind: "error",
+          message: `Invalid --status: ${v}. Must be one of: ${TASK_STATUSES.join(", ")}`,
+        };
+      }
+      result.status = s;
+    } else if (arg === "--priority" && i + 1 < args.length) {
+      const v = args[++i];
+      const p = asTaskPriority(v);
+      if (!p) {
+        return {
+          kind: "error",
+          message: `Invalid --priority: ${v}. Must be one of: ${TASK_PRIORITIES.join(", ")}`,
+        };
+      }
+      result.priority = p;
+    } else if (arg === "--clear-priority") {
+      result.clearPriority = true;
+    } else if (arg === "--body" && i + 1 < args.length) {
+      result.body = args[++i];
+    } else if (arg === "--body-from-file" && i + 1 < args.length) {
+      result.bodyFromFile = args[++i];
+    } else if (arg === "--body-from-stdin") {
+      result.bodyFromStdin = true;
+    } else if (arg === "--project" && i + 1 < args.length) {
+      result.project = args[++i];
+    } else if (arg === "--clear-project") {
+      result.clearProject = true;
+    } else if (arg === "--epic" && i + 1 < args.length) {
+      result.epic = args[++i];
+    } else if (arg === "--clear-epic") {
+      result.clearEpic = true;
+    } else if (arg === "--sprint" && i + 1 < args.length) {
+      result.sprint = args[++i];
+    } else if (arg === "--clear-sprint") {
+      result.clearSprint = true;
+    } else if (arg === "--tag" && i + 1 < args.length) {
+      initReplace("replaceTags");
+      result.replaceTags!.push(args[++i]);
+    } else if (arg === "--add-tag" && i + 1 < args.length) {
+      result.addTags.push(args[++i]);
+    } else if (arg === "--remove-tag" && i + 1 < args.length) {
+      result.removeTags.push(args[++i]);
+    } else if (arg === "--clear-tags") {
+      result.clearTags = true;
+    } else if (arg === "--blocked-by" && i + 1 < args.length) {
+      initReplace("replaceBlockedBy");
+      result.replaceBlockedBy!.push(args[++i]);
+    } else if (arg === "--add-blocked-by" && i + 1 < args.length) {
+      result.addBlockedBy.push(args[++i]);
+    } else if (arg === "--remove-blocked-by" && i + 1 < args.length) {
+      result.removeBlockedBy.push(args[++i]);
+    } else if (arg === "--clear-blocked-by") {
+      result.clearBlockedBy = true;
+    } else if (arg === "--related-to" && i + 1 < args.length) {
+      initReplace("replaceRelatedTo");
+      result.replaceRelatedTo!.push(args[++i]);
+    } else if (arg === "--add-related-to" && i + 1 < args.length) {
+      result.addRelatedTo.push(args[++i]);
+    } else if (arg === "--remove-related-to" && i + 1 < args.length) {
+      result.removeRelatedTo.push(args[++i]);
+    } else if (arg === "--clear-related-to") {
+      result.clearRelatedTo = true;
+    } else if (arg === "--assignee" && i + 1 < args.length) {
+      result.assignee = args[++i];
+    } else if (arg === "--clear-assignee") {
+      result.clearAssignee = true;
+    } else if (arg === "--created-by" && i + 1 < args.length) {
+      result.createdBy = args[++i];
+    } else if (arg === "--clear-created-by") {
+      result.clearCreatedBy = true;
+    } else if (arg === "--json") {
+      result.json = true;
+    } else {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task update': ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'task update' requires an ID. Usage: relay task update <ID> [flags]",
+    };
+  }
+  result.id = id;
+
+  const bodySources = [
+    result.body !== undefined ? "--body" : null,
+    result.bodyFromFile !== undefined ? "--body-from-file" : null,
+    result.bodyFromStdin ? "--body-from-stdin" : null,
+  ].filter((s): s is string => s !== null);
+  if (bodySources.length > 1) {
+    return {
+      kind: "error",
+      message: `Body flags are mutually exclusive; got: ${bodySources.join(", ")}`,
+    };
+  }
+
+  // Replace and clear on the same field at the same time is incoherent.
+  // We pick "replace" wins because it's strictly more informative — but
+  // surfacing this as an error is friendlier than silently ignoring one.
+  if (result.clearTags && (result.replaceTags || result.addTags.length > 0)) {
+    return {
+      kind: "error",
+      message: "--clear-tags is mutually exclusive with --tag / --add-tag",
+    };
+  }
+  if (
+    result.clearBlockedBy &&
+    (result.replaceBlockedBy || result.addBlockedBy.length > 0)
+  ) {
+    return {
+      kind: "error",
+      message:
+        "--clear-blocked-by is mutually exclusive with --blocked-by / --add-blocked-by",
+    };
+  }
+  if (
+    result.clearRelatedTo &&
+    (result.replaceRelatedTo || result.addRelatedTo.length > 0)
+  ) {
+    return {
+      kind: "error",
+      message:
+        "--clear-related-to is mutually exclusive with --related-to / --add-related-to",
+    };
+  }
+  if (result.clearPriority && result.priority) {
+    return {
+      kind: "error",
+      message: "--clear-priority is mutually exclusive with --priority",
+    };
+  }
+  if (result.clearProject && result.project !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-project is mutually exclusive with --project",
+    };
+  }
+  if (result.clearEpic && result.epic !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-epic is mutually exclusive with --epic",
+    };
+  }
+  if (result.clearSprint && result.sprint !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-sprint is mutually exclusive with --sprint",
+    };
+  }
+  if (result.clearAssignee && result.assignee !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-assignee is mutually exclusive with --assignee",
+    };
+  }
+  if (result.clearCreatedBy && result.createdBy !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-created-by is mutually exclusive with --created-by",
+    };
+  }
+
+  return result;
+}
+
+function parseTaskDelete(args: string[]): Command {
+  let id: string | undefined;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return { kind: "error", message: `Unknown flag for 'task delete': ${arg}` };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'task delete' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message: "'task delete' requires an ID. Usage: relay task delete <ID>",
+    };
+  }
+  return { kind: "task-delete", id };
+}
+
+function parseTaskLinkRef(args: string[]): Command {
+  const positionals: string[] = [];
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task link-ref': ${arg}`,
+      };
+    } else {
+      positionals.push(arg);
+    }
+    i++;
+  }
+
+  if (positionals.length !== 2) {
+    return {
+      kind: "error",
+      message:
+        "'task link-ref' requires exactly two arguments. Usage: relay task link-ref <ID> <commit-or-url>",
+    };
+  }
+  return {
+    kind: "task-link-ref",
+    id: positionals[0],
+    ref: positionals[1],
+  };
+}
+
+function parseTaskAddSubtask(args: string[]): Command {
+  const positionals: string[] = [];
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task add-subtask': ${arg}`,
+      };
+    } else {
+      positionals.push(arg);
+    }
+    i++;
+  }
+
+  if (positionals.length !== 2) {
+    return {
+      kind: "error",
+      message:
+        "'task add-subtask' requires exactly two arguments. Usage: relay task add-subtask <ID> \"<text>\"",
+    };
+  }
+  return {
+    kind: "task-add-subtask",
+    id: positionals[0],
+    text: positionals[1],
+  };
+}
+
+function parseTaskCompleteSubtask(args: string[]): Command {
+  let id: string | undefined;
+  let index: number | undefined;
+  let text: string | undefined;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--index" && i + 1 < args.length) {
+      const v = args[++i];
+      const n = parseInt(v, 10);
+      if (Number.isNaN(n) || n < 0) {
+        return {
+          kind: "error",
+          message: `--index must be a non-negative integer; got: ${v}`,
+        };
+      }
+      index = n;
+    } else if (arg === "--text" && i + 1 < args.length) {
+      text = args[++i];
+    } else if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task complete-subtask': ${arg}`,
+      };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'task complete-subtask' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message:
+        "'task complete-subtask' requires an ID. Usage: relay task complete-subtask <ID> [--index N | --text \"…\"]",
+    };
+  }
+  if (index === undefined && text === undefined) {
+    return {
+      kind: "error",
+      message: "'task complete-subtask' requires either --index N or --text \"…\"",
+    };
+  }
+  if (index !== undefined && text !== undefined) {
+    return {
+      kind: "error",
+      message: "--index and --text are mutually exclusive; pick one",
+    };
+  }
+  return { kind: "task-complete-subtask", id, index, text };
+}
+
+function parseTaskReorder(args: string[]): Command {
+  let id: string | undefined;
+  let afterId: string | undefined;
+  let beforeId: string | undefined;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--after" && i + 1 < args.length) {
+      afterId = args[++i];
+    } else if (arg === "--before" && i + 1 < args.length) {
+      beforeId = args[++i];
+    } else if (arg.startsWith("-")) {
+      return {
+        kind: "error",
+        message: `Unknown flag for 'task reorder': ${arg}`,
+      };
+    } else if (id === undefined) {
+      id = arg;
+    } else {
+      return {
+        kind: "error",
+        message: `'task reorder' takes a single ID; got extra positional: ${arg}`,
+      };
+    }
+    i++;
+  }
+
+  if (!id) {
+    return {
+      kind: "error",
+      message:
+        "'task reorder' requires an ID. Usage: relay task reorder <ID> [--after ID] [--before ID]",
+    };
+  }
+  if (!afterId && !beforeId) {
+    return {
+      kind: "error",
+      message: "'task reorder' requires --after <ID> and/or --before <ID>",
+    };
+  }
+  return { kind: "task-reorder", id, afterId, beforeId };
+}
+
 function parseWhere(args: string[]): Command {
   const result: WhereCommand = { kind: "where", json: false };
 
@@ -335,6 +1162,34 @@ export function helpText(topic?: string): string {
       ].join("\n");
     case "help":
       return helpText(undefined);
+    case "task":
+      return [
+        "Usage: relay task <verb> [args] [flags]",
+        "",
+        "Verbs:",
+        "  list                       List tasks (filter by --status, --priority, --project, --epic, --sprint, --tag)",
+        "  get <ID>                   Print full task body and metadata",
+        "  create --title \"…\" […]      Create a new task (default status: open)",
+        "  update <ID> […]            Update a task. --tag/--blocked-by/--related-to replace; --add-… / --remove-… are deltas; --clear-… removes",
+        "  delete <ID>                Archive (or hard-delete, per config)",
+        "  link-ref <ID> <ref>        Attach a commit SHA or PR URL to a task",
+        "  add-subtask <ID> \"<text>\"   Append a checkbox to the task body",
+        "  complete-subtask <ID>      Check off a subtask. Requires --index N or --text \"<match>\"",
+        "  reorder <ID>               Move within its status column. Requires --after <ID> and/or --before <ID>",
+        "",
+        "Common flags (where applicable):",
+        "  --status <s>               One of: draft, backlog, open, in-progress, done, cancelled",
+        "  --priority <p>             One of: low, medium, high, urgent",
+        "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag for deltas)",
+        "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
+        "  --json                     Emit structured JSON instead of human-readable text",
+        "",
+        "Examples:",
+        "  relay task list --status open --json",
+        "  relay task create --title \"Fix login\" --priority high --tag bug --tag auth",
+        "  relay task update TKT-001 --status in-progress --assignee claude-code",
+        "  cat notes.md | relay task create --title \"Refactor parser\" --body-from-stdin",
+      ].join("\n");
     default:
       return [
         "Usage: relay [command] [options] [path]",
@@ -344,10 +1199,11 @@ export function helpText(topic?: string): string {
         "  onboard        Write/update agent instructions in CLAUDE.md / AGENTS.md",
         "  upgrade        Upgrade relay to the latest release",
         "  where          Print the resolved .relay/ directory (worktree-aware)",
+        "  task           Manage tasks (list/get/create/update/delete/link-ref/subtasks/reorder)",
         "  help [topic]   Show help for a topic",
         "  (default)      Start the server and open the UI",
         "",
-        "Options:",
+        "Options (default serve mode):",
         "  --dir <path>   Path to .relay/ directory (or directory containing it)",
         "  --port <num>   Server port (default: 4242, auto-increment on collision)",
         "  --no-ui        Server only, no static UI serving",
