@@ -374,6 +374,12 @@ export interface InitCommand {
    * `--allowlist` / `--no-allowlist` flags overrides that.
    */
   allowlist?: boolean;
+  /**
+   * Whether to run the onboard step (writing the relay section into
+   * CLAUDE.md / AGENTS.md) as part of init. Defaults to true; the user
+   * opts out with `--no-onboard`.
+   */
+  onboard?: boolean;
 }
 
 export interface OnboardCommand {
@@ -530,6 +536,10 @@ function parseInit(args: string[]): Command {
       result.allowlist = true;
     } else if (arg === "--no-allowlist") {
       result.allowlist = false;
+    } else if (arg === "--onboard") {
+      result.onboard = true;
+    } else if (arg === "--no-onboard") {
+      result.onboard = false;
     } else if (arg.startsWith("-")) {
       return {
         kind: "error",
@@ -2123,7 +2133,8 @@ export function helpText(topic?: string): string {
       return [
         "Usage: relay init [options] [path]",
         "",
-        "Scaffold .relay/, .mcp.json, and skill files in a project.",
+        "Scaffold .relay/, .mcp.json, and skill files in a project, then write",
+        "the relay agent instructions section into CLAUDE.md / AGENTS.md.",
         "",
         "Arguments:",
         "  path             Project directory (default: cwd)",
@@ -2132,6 +2143,8 @@ export function helpText(topic?: string): string {
         "  --allowlist      Always add a Bash(relay *) permission entry to .claude/settings.json",
         "  --no-allowlist   Never add the permission entry (default in non-interactive shells)",
         "                   With neither flag, prompts when stdin is a TTY.",
+        "  --no-onboard     Skip writing the relay section into CLAUDE.md / AGENTS.md.",
+        "                   You can run 'relay onboard' separately later.",
       ].join("\n");
     case "onboard":
       return [

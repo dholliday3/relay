@@ -1,5 +1,6 @@
-[post-create]
+[pre-start]
 # Copy selected gitignored files into new worktrees so they start warm.
-# Keeping this on post-create avoids re-copying large directories like
-# node_modules every time a worktree is started.
+# pre-start runs blocking on worktree creation (renamed from the
+# deprecated post-create hook in worktrunk 0.39); it doesn't fire on
+# every subsequent start, so node_modules etc. aren't re-copied.
 copy = "wt step copy-ignored"

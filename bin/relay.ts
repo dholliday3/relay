@@ -110,6 +110,7 @@ function resolveSkillSourcePath(): string {
 function printInitSummary(
   baseDir: string,
   result: Awaited<ReturnType<typeof initRelay>>,
+  options: { onboardWillRun: boolean } = { onboardWillRun: true },
 ): void {
   console.log(`Initialized relay at ${result.relayDir}`);
 
@@ -148,21 +149,25 @@ function printInitSummary(
   );
   console.log("\nFor non-Claude-Code agents (e.g. Codex), the MCP server is wired via:");
   console.log(codexMcpInstructions());
-  console.log(
-    `\nNext: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
-  );
+  if (!options.onboardWillRun) {
+    console.log(
+      `\nNext: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
+    );
+  }
 }
 
 async function runInit(cmd: {
   dir?: string;
   allowlist?: boolean;
+  onboard?: boolean;
 }): Promise<void> {
   const baseDir = cmd.dir ? resolve(cmd.dir) : process.cwd();
+  const onboardWillRun = cmd.onboard !== false;
   const result = await initRelay({
     baseDir,
     skillSourcePath: resolveSkillSourcePath(),
   });
-  printInitSummary(baseDir, result);
+  printInitSummary(baseDir, result, { onboardWillRun });
 
   // Decide whether to add the Bash(relay *) allowlist entry. The default
   // is to prompt when stdin is a TTY (interactive run) and skip
@@ -214,6 +219,31 @@ async function runInit(cmd: {
       '  { "permissions": { "allow": ["Bash(relay *)"] } }  → .claude/settings.json',
     );
     console.log("Or re-run: relay init --allowlist");
+  }
+
+  if (onboardWillRun) {
+    try {
+      const onboard = await runOnboard({ baseDir, check: false, stdout: false });
+      switch (onboard.action) {
+        case "created":
+          console.log(`\nCreated ${onboard.file} with relay section.`);
+          break;
+        case "appended":
+          console.log(`\nAdded relay section to ${onboard.file}.`);
+          break;
+        case "updated":
+          console.log(`\nUpdated relay section in ${onboard.file}.`);
+          break;
+        case "unchanged":
+          console.log(`\nRelay section already up to date in ${onboard.file}.`);
+          break;
+      }
+    } catch (err) {
+      console.error(
+        `\nCouldn't write CLAUDE.md / AGENTS.md: ${(err as Error).message}`,
+      );
+      console.error("  Run 'relay onboard' manually to retry.");
+    }
   }
 }
 

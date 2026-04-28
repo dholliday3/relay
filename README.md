@@ -55,8 +55,7 @@ Prefer not to run a shell script? Grab the binary and `.sha256` from the [latest
 ## Quick start
 
 ```bash
-relay init                                # scaffold .relay/, .mcp.json, and skill files
-relay onboard                             # add agent instructions to CLAUDE.md (or AGENTS.md)
+relay init                                # scaffold .relay/, .mcp.json, skill files, and CLAUDE.md
 relay task list --status open             # see what's ready to work on
 relay task create --title "Fix login"     # create a task
 relay                                     # start the UI (port 4242)
@@ -110,8 +109,8 @@ relay doc delete <ID>
 ```bash
 relay [path]                                  # start the UI (default behavior)
 relay --mcp                                   # start the MCP server (stdio)
-relay init [--allowlist | --no-allowlist]     # scaffold a project; offers Bash(relay *) allowlist
-relay onboard [--check] [--stdout] [--json]   # write CLAUDE.md / AGENTS.md
+relay init [--allowlist | --no-allowlist] [--no-onboard]   # scaffold a project (writes CLAUDE.md by default)
+relay onboard [--check] [--stdout] [--json]   # re-run / verify the CLAUDE.md / AGENTS.md section
 relay upgrade [--check] [--json]              # upgrade to latest release
 relay where [--json]                          # which .relay/ would the CLI resolve to from here?
 relay doctor [--fix] [--json]                 # validate artifact integrity (CI-safe; exits 1 on failures)
