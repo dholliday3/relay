@@ -128,6 +128,20 @@ describe("parseArgv — init", () => {
     });
   });
 
+  test("--no-onboard opts out of running onboard during init", () => {
+    expect(parseArgv(argv("init", "--no-onboard"))).toEqual({
+      kind: "init",
+      onboard: false,
+    });
+  });
+
+  test("--onboard explicitly opts in (matches default)", () => {
+    expect(parseArgv(argv("init", "--onboard"))).toEqual({
+      kind: "init",
+      onboard: true,
+    });
+  });
+
   test("unknown flag errors", () => {
     const cmd = parseArgv(argv("init", "--bogus"));
     expect(cmd.kind).toBe("error");

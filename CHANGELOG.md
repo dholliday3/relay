@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Changed
+
+- **`relay init` now runs the onboard step automatically.** The CLAUDE.md / AGENTS.md section is written as part of init by default — no more "ran init, agent still doesn't know about relay" footgun. Pass `--no-onboard` to keep init pure-scaffolding (e.g. when CLAUDE.md is hand-managed). `relay onboard` remains a standalone command for re-running, `--check`, `--stdout`, and `--json`.
+
 ## 0.5.0 — CLI as the primary agent surface
 
 The biggest user-visible change since 0.4: agents now drive relay via a full CLI surface instead of (only) the MCP server. The MCP server still works — existing `.mcp.json` configs are unchanged — but the CLI is the recommended path going forward.
