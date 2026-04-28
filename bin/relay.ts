@@ -223,16 +223,19 @@ async function runInit(cmd: {
     console.log("Or re-run: relay init --allowlist");
   }
 
-  // Decide whether to add the SessionStart bootstrap hook. Same TTY-vs-
-  // non-TTY default as the allowlist prompt above. The hook executes
-  // `curl … install.sh | bash` from main on every cold-start session in
-  // a fresh sandbox, so we surface that in the prompt — committing this
-  // is a real (if mild) trust delegation to the relay repo.
+  // Decide whether to add the SessionStart bootstrap hook. Useful for
+  // local devcontainers and other reusable sandboxes where the user
+  // approves the hook once and reuses the workspace. NOT useful for
+  // fresh Claude Cloud sessions — Claude Code's hook trust model
+  // requires per-project approval before committed hooks run, and a
+  // fresh cloud session is always pre-approval. The relay skill
+  // handles that case via instructions instead (no approval gate on
+  // skills).
   let writeBootstrap = cmd.cloudBootstrap;
   if (writeBootstrap === undefined) {
     if (process.stdin.isTTY) {
       const answer = prompt(
-        "\nAdd a SessionStart hook so cloud sandboxes (Claude Cloud, devcontainers, CI) auto-install the relay CLI when missing? (Y/n) ",
+        "\nAdd a SessionStart hook to auto-install relay in local devcontainers / reusable sandboxes? (Y/n)\n  (In fresh Claude Cloud sessions, the relay skill handles install instead — committed hooks require user approval before they run.) ",
       );
       writeBootstrap =
         answer === null || answer === "" || /^y/i.test(answer);

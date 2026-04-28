@@ -137,19 +137,32 @@ binary_name="relay-${platform}"
 # --- version resolution -------------------------------------------------
 
 if [ "$VERSION" = "latest" ]; then
-    echo "Fetching latest version from github.com/${REPO}..."
-    # Extract just the `"tag_name": "vX.Y.Z"` fragment first, then cut. GitHub's
-    # releases API returns pretty-printed JSON — the colon and value are
-    # separated by whitespace, so the regex must allow `[[:space:]]*`
-    # between them. `grep -o` pins the match to the fragment so the
-    # surrounding `url` field (which comes first in the response) doesn't
-    # get picked up by a naive `cut -d'"' -f4`.
-    latest_tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [ -z "$latest_tag" ]; then
-        echo "Failed to fetch latest version from GitHub API." >&2
-        echo "Pass --version <tag> explicitly if you're hitting rate limits." >&2
+    echo "Resolving latest version from github.com/${REPO}..."
+    # Use the redirect-based latest URL instead of the JSON API. Both
+    # endpoints resolve to the same tag, but they're served by
+    # different GitHub systems with different rate-limit policies:
+    #
+    #   api.github.com/repos/.../releases/latest  → 60 req/hr per IP
+    #                                                (anonymous)
+    #   github.com/.../releases/latest            → 302 redirect, no
+    #                                                meaningful rate
+    #                                                limit on this path
+    #
+    # Cloud sandboxes (Claude Cloud, GitHub Codespaces, ephemeral CI)
+    # share egress IPs across many users, so the JSON-API quota is
+    # exhausted basically all the time. The redirect path stays
+    # reliable. We HEAD the URL and parse the tag out of the
+    # `Location: …/releases/tag/vX.Y.Z` response header.
+    location=$(curl -fsSI "https://github.com/${REPO}/releases/latest" 2>/dev/null \
+        | grep -i '^location:' \
+        | tr -d '\r\n' \
+        | sed 's|.*/tag/||')
+    if [ -z "$location" ]; then
+        echo "Failed to resolve latest version from GitHub." >&2
+        echo "Pass --version <tag> explicitly, or check connectivity." >&2
         exit 1
     fi
+    latest_tag="$location"
 else
     # Normalize: auto-prefix `v` if missing. Users often paste just `0.1.0`.
     case "$VERSION" in
