@@ -207,22 +207,89 @@ chmod +x "$INSTALL_DIR/relay"
 echo ""
 echo "relay ${latest_tag} installed to ${INSTALL_DIR}/relay"
 
-# --- PATH warning -------------------------------------------------------
+# --- PATH setup ---------------------------------------------------------
+#
+# Idempotently add `$HOME/.local/bin` to PATH in the user's shell rc files.
+# Without this, the binary we just installed is unreachable in fresh
+# shells — a real footgun for non-interactive environments like Claude
+# Code's Bash tool, ephemeral cloud sandboxes, and CI containers, where
+# each tool call spawns a new shell that re-sources the profile.
+#
+# We append to whichever of ~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish
+# already exist OR match the user's current $SHELL. A marker comment lets
+# re-runs detect a previous install and skip — re-running install.sh is a
+# common pattern (upgrade, CI cache misses) and shouldn't keep stacking
+# duplicate exports.
+
+PATH_MARKER="# Added by relay installer — see https://github.com/${REPO}"
+
+# add_path_to_rc <rc-file> <export-line>
+# Appends the export line (preceded by the marker) to the rc file if the
+# marker isn't already present. Creates the parent directory and the
+# file itself when needed. Stays silent on success; only prints when it
+# actually wrote something.
+add_path_to_rc() {
+    rc_file="$1"
+    export_line="$2"
+    rc_dir=$(dirname "$rc_file")
+
+    # Only act if the file exists OR we should create it (caller decides
+    # by passing a path the user actually expects to use). If the marker
+    # is already there, this is a no-op — no second blank line, no
+    # duplicate export.
+    if [ -f "$rc_file" ] && grep -qF "$PATH_MARKER" "$rc_file"; then
+        return 0
+    fi
+
+    mkdir -p "$rc_dir"
+    {
+        echo ""
+        echo "$PATH_MARKER"
+        echo "$export_line"
+    } >> "$rc_file"
+    echo "  → updated $rc_file"
+}
 
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
     echo ""
-    echo "${INSTALL_DIR} is not in your PATH. Add it with:"
-    echo ""
+    echo "Adding ${INSTALL_DIR} to PATH in your shell rc files..."
+
+    posix_export='export PATH="$HOME/.local/bin:$PATH"'
+    fish_export='set -gx PATH $HOME/.local/bin $PATH'
+
+    # bash + zsh: write to whichever rc file already exists, plus the
+    # one matching $SHELL even if it doesn't yet exist. We want both
+    # because cloud sandboxes often default-shell bash even when the
+    # user's local laptop is zsh, and a project committed to git might
+    # be opened by collaborators on either.
+    [ -f "$HOME/.bashrc" ] && add_path_to_rc "$HOME/.bashrc" "$posix_export"
+    [ -f "$HOME/.zshrc" ]  && add_path_to_rc "$HOME/.zshrc" "$posix_export"
 
     case "$SHELL" in
-        */zsh)  shell_config="~/.zshrc" ;;
-        */bash) shell_config="~/.bashrc" ;;
-        */fish) shell_config="~/.config/fish/config.fish" ;;
-        *)      shell_config="your shell config" ;;
+        */bash)
+            [ ! -f "$HOME/.bashrc" ] && add_path_to_rc "$HOME/.bashrc" "$posix_export"
+            ;;
+        */zsh)
+            [ ! -f "$HOME/.zshrc" ] && add_path_to_rc "$HOME/.zshrc" "$posix_export"
+            ;;
+        */fish)
+            add_path_to_rc "$HOME/.config/fish/config.fish" "$fish_export"
+            ;;
     esac
 
-    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ${shell_config}"
-    echo "  source ${shell_config}"
+    # Also catch fish if the user's $SHELL is something else but they
+    # have a fish config — they may have it installed alongside another
+    # shell (common on macOS).
+    if [ -f "$HOME/.config/fish/config.fish" ]; then
+        case "$SHELL" in
+            */fish) ;; # already handled above
+            *) add_path_to_rc "$HOME/.config/fish/config.fish" "$fish_export" ;;
+        esac
+    fi
+
+    echo ""
+    echo "PATH updated. New shells will pick this up automatically."
+    echo "For the current shell, run:  export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
 # --- global skill install via git sparse-checkout ----------------------

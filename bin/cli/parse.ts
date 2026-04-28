@@ -380,6 +380,14 @@ export interface InitCommand {
    * opts out with `--no-onboard`.
    */
   onboard?: boolean;
+  /**
+   * Cloud-bootstrap resolution for the SessionStart hook in
+   * `.claude/settings.json` that auto-installs the relay binary in
+   * fresh sandboxes. `undefined` means "decide at runtime" (prompt if
+   * interactive, skip otherwise). Explicit true/false from
+   * `--cloud-bootstrap` / `--no-cloud-bootstrap` overrides that.
+   */
+  cloudBootstrap?: boolean;
 }
 
 export interface OnboardCommand {
@@ -540,6 +548,10 @@ function parseInit(args: string[]): Command {
       result.onboard = true;
     } else if (arg === "--no-onboard") {
       result.onboard = false;
+    } else if (arg === "--cloud-bootstrap") {
+      result.cloudBootstrap = true;
+    } else if (arg === "--no-cloud-bootstrap") {
+      result.cloudBootstrap = false;
     } else if (arg.startsWith("-")) {
       return {
         kind: "error",
@@ -2140,11 +2152,15 @@ export function helpText(topic?: string): string {
         "  path             Project directory (default: cwd)",
         "",
         "Options:",
-        "  --allowlist      Always add a Bash(relay *) permission entry to .claude/settings.json",
-        "  --no-allowlist   Never add the permission entry (default in non-interactive shells)",
-        "                   With neither flag, prompts when stdin is a TTY.",
-        "  --no-onboard     Skip writing the relay section into CLAUDE.md / AGENTS.md.",
-        "                   You can run 'relay onboard' separately later.",
+        "  --allowlist            Always add a Bash(relay *) permission entry to .claude/settings.json",
+        "  --no-allowlist         Never add the permission entry (default in non-interactive shells)",
+        "                         With neither flag, prompts when stdin is a TTY.",
+        "  --cloud-bootstrap      Always add a SessionStart hook that auto-installs relay if missing",
+        "                         (lets fresh cloud sandboxes pick up the CLI without manual install).",
+        "  --no-cloud-bootstrap   Never add the bootstrap hook (default in non-interactive shells).",
+        "                         With neither flag, prompts when stdin is a TTY.",
+        "  --no-onboard           Skip writing the relay section into CLAUDE.md / AGENTS.md.",
+        "                         You can run 'relay onboard' separately later.",
       ].join("\n");
     case "onboard":
       return [
