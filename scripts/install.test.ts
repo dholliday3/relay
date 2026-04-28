@@ -184,18 +184,170 @@ describe("install.sh — install step", () => {
   });
 });
 
-describe("install.sh — PATH warning", () => {
+describe("install.sh — PATH setup", () => {
   test("checks whether INSTALL_DIR is already on PATH", () => {
     expect(script).toContain("echo \"$PATH\" | tr ':' '\\n' | grep -qx \"$INSTALL_DIR\"");
   });
 
-  test("gives zsh, bash, and fish config hints", () => {
-    expect(script).toContain("*/zsh)");
+  test("uses a marker comment so re-runs are idempotent", () => {
+    // The marker has to mention the installer + repo so a human reading
+    // their rc file later can tell where the line came from.
+    expect(script).toContain("PATH_MARKER=");
+    expect(script).toContain("Added by relay installer");
+  });
+
+  test("checks for the marker before appending to avoid duplicate exports", () => {
+    expect(script).toContain('grep -qF "$PATH_MARKER" "$rc_file"');
+  });
+
+  test("touches both bash and zsh rc files when present", () => {
+    expect(script).toContain('[ -f "$HOME/.bashrc" ] && add_path_to_rc "$HOME/.bashrc"');
+    expect(script).toContain('[ -f "$HOME/.zshrc" ]  && add_path_to_rc "$HOME/.zshrc"');
+  });
+
+  test("creates the rc file matching $SHELL when it doesn't exist", () => {
+    // Cloud sandboxes often have no .bashrc at all — the case statement
+    // below the existence checks creates one for whichever shell is
+    // active so we don't silently no-op.
     expect(script).toContain("*/bash)");
+    expect(script).toContain("*/zsh)");
     expect(script).toContain("*/fish)");
-    expect(script).toContain("~/.zshrc");
-    expect(script).toContain("~/.bashrc");
-    expect(script).toContain("~/.config/fish/config.fish");
+  });
+
+  test("uses POSIX export syntax for bash/zsh and fish-native for fish", () => {
+    expect(script).toContain('export PATH="$HOME/.local/bin:$PATH"');
+    expect(script).toContain("set -gx PATH $HOME/.local/bin $PATH");
+  });
+
+  test("tells the user how to update their current shell since rc files only affect new shells", () => {
+    expect(script).toContain("New shells will pick this up automatically");
+    expect(script).toContain("export PATH=");
+  });
+});
+
+describe("install.sh — PATH setup (behavioral)", () => {
+  // Spawn a stripped harness that sources only the PATH-setup logic
+  // against a fake $HOME, so we can assert real file-system behavior
+  // without running the full installer (which requires network + a
+  // real release artifact).
+  async function runPathSetup(opts: {
+    home: string;
+    shell: string;
+    existingBashrc?: string;
+    existingZshrc?: string;
+    existingFishConfig?: string;
+  }): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const { home, shell } = opts;
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    if (opts.existingBashrc !== undefined) {
+      await writeFile(`${home}/.bashrc`, opts.existingBashrc);
+    }
+    if (opts.existingZshrc !== undefined) {
+      await writeFile(`${home}/.zshrc`, opts.existingZshrc);
+    }
+    if (opts.existingFishConfig !== undefined) {
+      await mkdir(`${home}/.config/fish`, { recursive: true });
+      await writeFile(`${home}/.config/fish/config.fish`, opts.existingFishConfig);
+    }
+
+    // Extract just the PATH-setup block from install.sh and run it
+    // standalone against a fake $HOME with PATH cleared so the
+    // "already on PATH" check fails and the block actually runs.
+    const startMarker = "# --- PATH setup";
+    const endMarker = "# --- global skill install";
+    const startIdx = script.indexOf(startMarker);
+    const endIdx = script.indexOf(endMarker);
+    if (startIdx < 0 || endIdx < 0) {
+      throw new Error("install.sh layout changed — update test markers");
+    }
+    const pathBlock = script.slice(startIdx, endIdx);
+    const harness = [
+      "#!/bin/bash",
+      "set -e",
+      `REPO="dholliday3/relay"`,
+      `INSTALL_DIR="$HOME/.local/bin"`,
+      // Clear PATH of INSTALL_DIR so the gate evaluates true.
+      `PATH="/usr/bin:/bin"`,
+      pathBlock,
+    ].join("\n");
+
+    const proc = Bun.spawnSync(["bash", "-c", harness], {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { HOME: home, SHELL: shell, PATH: "/usr/bin:/bin" },
+    });
+    return {
+      stdout: new TextDecoder().decode(proc.stdout),
+      stderr: new TextDecoder().decode(proc.stderr),
+      exitCode: proc.exitCode ?? -1,
+    };
+  }
+
+  test("appends export to existing .bashrc", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const home = await mkdtemp(`${tmpdir()}/relay-install-test-`);
+    const { rm, readFile } = await import("node:fs/promises");
+    try {
+      await runPathSetup({
+        home,
+        shell: "/bin/bash",
+        existingBashrc: "# my dotfiles\nalias ll='ls -la'\n",
+      });
+      const updated = await readFile(`${home}/.bashrc`, "utf-8");
+      expect(updated).toContain("# my dotfiles");
+      expect(updated).toContain("Added by relay installer");
+      expect(updated).toContain('export PATH="$HOME/.local/bin:$PATH"');
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  test("creates .bashrc when SHELL is bash and no rc exists", async () => {
+    const { mkdtemp, rm, readFile, access } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const home = await mkdtemp(`${tmpdir()}/relay-install-test-`);
+    try {
+      await runPathSetup({ home, shell: "/bin/bash" });
+      await access(`${home}/.bashrc`); // throws if missing
+      const created = await readFile(`${home}/.bashrc`, "utf-8");
+      expect(created).toContain('export PATH="$HOME/.local/bin:$PATH"');
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  test("is idempotent — re-running does not duplicate the export", async () => {
+    const { mkdtemp, rm, readFile, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const home = await mkdtemp(`${tmpdir()}/relay-install-test-`);
+    try {
+      await writeFile(`${home}/.bashrc`, "# initial\n");
+      await runPathSetup({ home, shell: "/bin/bash", existingBashrc: undefined });
+      const afterFirst = await readFile(`${home}/.bashrc`, "utf-8");
+      const firstCount = afterFirst.split("Added by relay installer").length - 1;
+      expect(firstCount).toBe(1);
+
+      await runPathSetup({ home, shell: "/bin/bash", existingBashrc: undefined });
+      const afterSecond = await readFile(`${home}/.bashrc`, "utf-8");
+      const secondCount = afterSecond.split("Added by relay installer").length - 1;
+      expect(secondCount).toBe(1); // still only one
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  test("writes fish-native syntax to fish config when shell is fish", async () => {
+    const { mkdtemp, rm, readFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const home = await mkdtemp(`${tmpdir()}/relay-install-test-`);
+    try {
+      await runPathSetup({ home, shell: "/usr/local/bin/fish" });
+      const fishConfig = await readFile(`${home}/.config/fish/config.fish`, "utf-8");
+      expect(fishConfig).toContain("set -gx PATH $HOME/.local/bin $PATH");
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });
 

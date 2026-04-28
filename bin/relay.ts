@@ -51,6 +51,7 @@ import {
 } from "./cli/doc.ts";
 import { runDoctorCmd, runSyncCmd } from "./cli/maintenance.ts";
 import { addRelayAllowlist } from "./cli/init-allowlist.ts";
+import { addRelayCloudBootstrap } from "./cli/init-cloud-bootstrap.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
@@ -160,6 +161,7 @@ async function runInit(cmd: {
   dir?: string;
   allowlist?: boolean;
   onboard?: boolean;
+  cloudBootstrap?: boolean;
 }): Promise<void> {
   const baseDir = cmd.dir ? resolve(cmd.dir) : process.cwd();
   const onboardWillRun = cmd.onboard !== false;
@@ -219,6 +221,52 @@ async function runInit(cmd: {
       '  { "permissions": { "allow": ["Bash(relay *)"] } }  → .claude/settings.json',
     );
     console.log("Or re-run: relay init --allowlist");
+  }
+
+  // Decide whether to add the SessionStart bootstrap hook. Same TTY-vs-
+  // non-TTY default as the allowlist prompt above. The hook executes
+  // `curl … install.sh | bash` from main on every cold-start session in
+  // a fresh sandbox, so we surface that in the prompt — committing this
+  // is a real (if mild) trust delegation to the relay repo.
+  let writeBootstrap = cmd.cloudBootstrap;
+  if (writeBootstrap === undefined) {
+    if (process.stdin.isTTY) {
+      const answer = prompt(
+        "\nAdd a SessionStart hook so cloud sandboxes (Claude Cloud, devcontainers, CI) auto-install the relay CLI when missing? (Y/n) ",
+      );
+      writeBootstrap =
+        answer === null || answer === "" || /^y/i.test(answer);
+    } else {
+      writeBootstrap = false;
+    }
+  }
+
+  if (writeBootstrap) {
+    try {
+      const r = await addRelayCloudBootstrap(baseDir);
+      switch (r.action) {
+        case "created":
+          console.log(`\nWrote ${r.file} with SessionStart bootstrap hook.`);
+          break;
+        case "added":
+          console.log(`\nAdded SessionStart bootstrap hook to ${r.file}.`);
+          break;
+        case "already-present":
+          console.log(`\nSessionStart bootstrap hook already in ${r.file}.`);
+          break;
+      }
+    } catch (err) {
+      console.error(
+        `\nCouldn't update .claude/settings.json with bootstrap hook: ${(err as Error).message}`,
+      );
+      console.error(
+        "  Re-run with --cloud-bootstrap once the file is fixed, or skip with --no-cloud-bootstrap.",
+      );
+    }
+  } else if (cmd.cloudBootstrap === undefined) {
+    console.log(
+      "\nTo auto-install relay in fresh cloud/CI sandboxes, re-run: relay init --cloud-bootstrap",
+    );
   }
 
   if (onboardWillRun) {
