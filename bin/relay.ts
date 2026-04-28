@@ -387,8 +387,22 @@ async function runServe(cmd: {
 
   // --- MCP mode ---
   if (cmd.mcp) {
+    // Soft deprecation: the MCP server is the legacy path now. Its
+    // long-lived process resolves .relay/ once at startup, which is
+    // brittle in worktree-heavy workflows — a worktree created mid-
+    // session writes to the wrong tree silently. The CLI walks up
+    // from cwd on every call. Emit one stderr line so anyone who
+    // wires this up notices, but don't fail-stop — this is the
+    // "still works for non-worktree workflows" path.
     console.error(
       `Relay MCP server (stdio) — tasks: ${tasksDir}, plans: ${plansDir}, docs: ${docsDir}`,
+    );
+    console.error(
+      `[relay] note: the MCP server is the legacy integration path. ` +
+        `It resolves .relay/ once from this cwd (${relayDir}); ` +
+        `agents that cd into a git worktree will still write here. ` +
+        `Prefer 'relay <task|plan|doc> …' over MCP tools — every CLI ` +
+        `call resolves .relay/ from the agent's actual cwd.`,
     );
     await startMcpServer(relayDir, tasksDir, plansDir, docsDir);
     return;
