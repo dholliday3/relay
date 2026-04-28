@@ -1,16 +1,33 @@
 /**
- * Adds a `SessionStart` hook to a project's `.claude/settings.json` that
- * auto-installs the relay CLI when it's missing. Without this, agents
- * running in fresh sandboxes (Claude Cloud, devcontainers, ephemeral CI)
- * hit `relay: command not found` on the first tool call and the user
- * has to install manually.
+ * Adds a `SessionStart` hook to a project's `.claude/settings.json`
+ * that auto-installs the relay CLI when it's missing.
+ *
+ * **Important caveat about cloud sessions.** Claude Code requires
+ * explicit user approval before running hooks defined in committed
+ * `.claude/settings.json` (the trust-on-first-use model that prevents
+ * a malicious repo from silently executing arbitrary shell on clone).
+ * That means in a *fresh* cloud sandbox where the user has never
+ * approved this project before, the hook will silently NOT run, and
+ * the agent will still hit `relay: command not found` on the first
+ * Bash call.
+ *
+ * The actual cloud bootstrap mechanism that doesn't require approval
+ * is in `skills/relay/SKILL.md` — the skill instructs the agent to
+ * `command -v relay || install` before any relay command. Skills are
+ * loaded into agent context without an approval gate, so the agent
+ * just follows the instruction.
+ *
+ * Where this hook IS useful: local devcontainers, persistent dev
+ * environments, and any setup where the user approves the hook once
+ * and reuses the same workspace — there it auto-runs forever.
  *
  * Idempotent. The hook command is identified by an exact-match string
- * (RELAY_BOOTSTRAP_COMMAND). Re-running won't duplicate the entry, and
- * if the user has edited the command we leave their version alone.
+ * (RELAY_BOOTSTRAP_COMMAND). Re-running won't duplicate the entry,
+ * and if the user has edited the command we leave their version alone.
  *
- * Used by `relay init --cloud-bootstrap`. Lives next to init-allowlist.ts
- * so the two related .claude/settings.json mutations stay co-located.
+ * Used by `relay init --cloud-bootstrap`. Lives next to
+ * init-allowlist.ts so the two related .claude/settings.json
+ * mutations stay co-located.
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";

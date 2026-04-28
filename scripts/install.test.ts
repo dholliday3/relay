@@ -74,40 +74,41 @@ describe("install.sh — version resolution", () => {
     expect(script).toContain('VERSION="latest"');
   });
 
-  test("fetches latest tag from the GitHub releases API", () => {
-    expect(script).toContain('"https://api.github.com/repos/${REPO}/releases/latest"');
-    // Uses `grep -o '"tag_name":[[:space:]]*"[^"]*"'` — the `-o` is
-    // load-bearing (without it, `grep '"tag_name"'` matches the whole
-    // line and the follow-up `cut -d'"' -f4` grabs the wrong field), and
-    // the `[[:space:]]*` matters because GitHub's API returns pretty-
-    // printed JSON with a space between `:` and the value. A prior
-    // version of this regex assumed single-line JSON and broke against
-    // real responses.
-    expect(script).toContain(`grep -o '"tag_name":[[:space:]]*"[^"]*"'`);
+  test("resolves latest tag via the redirect endpoint, not the JSON API", () => {
+    // The JSON API (api.github.com/.../releases/latest) is rate-limited
+    // per anonymous IP at 60/hr — which is fully consumed in shared
+    // cloud sandboxes (Claude Cloud, Codespaces, ephemeral CI). The
+    // redirect endpoint (github.com/.../releases/latest) has no
+    // meaningful rate limit and 302s straight to the tag URL.
+    expect(script).toContain('"https://github.com/${REPO}/releases/latest"');
+    expect(script).toContain("curl -fsSI");
+    // Make sure we did NOT regress to the JSON API.
+    expect(script).not.toContain("api.github.com/repos/${REPO}/releases/latest");
   });
 
-  test("tag_name parser extracts the tag from a realistic GitHub API response", () => {
-    // Behavioral test — run the actual parse pipeline against a real-world
-    // pretty-printed JSON response from the GitHub releases API. The
-    // response has a space between `:` and the tag value, and the `url`
-    // field appears before `tag_name` — both have bitten earlier
-    // versions of this parser.
-    const mockResponse = `{
-  "url": "https://api.github.com/repos/dholliday3/relay/releases/308655336",
-  "assets_url": "https://api.github.com/repos/dholliday3/relay/releases/308655336/assets",
-  "html_url": "https://github.com/dholliday3/relay/releases/tag/v0.3.1",
-  "id": 308655336,
-  "tag_name": "v0.3.1",
-  "name": "v0.3.1",
-  "draft": false,
-  "prerelease": false
-}`;
+  test("redirect parser extracts the tag from a realistic Location header", () => {
+    // Behavioral test — pipe a real-world HTTP response head through
+    // the install script's parse pipeline. GitHub returns CRLF line
+    // endings, mixed-case "Location:" header, and the tag at the end
+    // of the URL. The pipeline must handle all three without
+    // cleverness.
+    const mockHead = [
+      "HTTP/2 302",
+      "server: GitHub.com",
+      "Location: https://github.com/dholliday3/relay/releases/tag/v0.5.3",
+      "Content-Length: 0",
+      "",
+    ].join("\r\n");
     const proc = Bun.spawnSync(
-      ["sh", "-c", `cat <<'EOF' | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4\n${mockResponse}\nEOF`],
+      [
+        "sh",
+        "-c",
+        `cat <<'EOF' | grep -i '^location:' | tr -d '\\r\\n' | sed 's|.*/tag/||'\n${mockHead}\nEOF`,
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     const stdout = new TextDecoder().decode(proc.stdout).trim();
-    expect(stdout).toBe("v0.3.1");
+    expect(stdout).toBe("v0.5.3");
   });
 
   test("auto-prefixes v when version lacks it", () => {

@@ -7,6 +7,17 @@ description: Use whenever the user mentions tasks, plans, docs, TKT-*/TKTB-*/PLA
 
 Relay is a local-first task, plan, and reference-doc tracker. Everything lives under `.relay/` — tasks in `tasks/`, plans in `plans/`, and docs in `docs/` as markdown files with YAML frontmatter. The `relay` CLI is the supported integration: every command resolves `.relay/` from the directory you run it in, so it's worktree-correct by construction. **Always prefer the CLI over editing the markdown files directly** — direct edits skip ID assignment, file naming, ordering, and watcher sync.
 
+## Before your first relay command — install if missing
+
+Fresh sandboxes (Claude Cloud, devcontainers, ephemeral CI) often don't have the relay binary on PATH. **Before running any `relay` command, check that it exists, and install it if not:**
+
+```bash
+command -v relay >/dev/null 2>&1 || curl -fsSL https://raw.githubusercontent.com/dholliday3/relay/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+The installer drops the binary at `~/.local/bin/relay` and idempotently adds that to PATH in `~/.bashrc`/`~/.zshrc`, so subsequent shells pick it up. The `export PATH=...` line above is for the *current* shell, where the rc-file change hasn't taken effect yet. Skip this whole block when `command -v relay` already succeeds.
+
 ## Worktree behavior — read this first
 
 Every `relay <verb>` invocation walks up from `process.cwd()` to find `.relay/`. If you `cd` into a git worktree, the next CLI call operates on the worktree's `.relay/` (or, if `worktreeMode: shared` is set in `.relay/config.yaml`, the main checkout's). Run `relay where` from any directory to confirm what relay would resolve to — it prints the resolved path, whether you're in a worktree, and which mode applies. Use it whenever you're unsure which `.relay/` an agent is touching.
