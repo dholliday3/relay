@@ -1,11 +1,15 @@
 ---
 name: relay
-description: Use whenever the user mentions tasks, plans, docs, TKT-*/TKTB-*/PLAN-*/DOC-* IDs, the .relay/ directory, creating/updating/reviewing tasks, plans, or docs, picking up work, handing off tasks to an agent, reviewing what an agent did, breaking plans into actionable tasks, linking commits/PRs to tasks, or asking "what should I work on next". Covers the full relay workflow via the relay MCP server.
+description: Use whenever the user mentions tasks, plans, docs, TKT-*/TKTB-*/PLAN-*/DOC-* IDs, the .relay/ directory, creating/updating/reviewing tasks, plans, or docs, picking up work, handing off tasks to an agent, reviewing what an agent did, breaking plans into actionable tasks, linking commits/PRs to tasks, or asking "what should I work on next". Covers the full relay workflow via the relay CLI.
 ---
 
 # Relay
 
-Relay is a local-first task, plan, and reference-doc tracker. Everything lives under `.relay/` — tasks in `tasks/`, plans in `plans/`, and docs in `docs/` as markdown files with YAML frontmatter. The `relay` MCP server exposes tools for reading and writing them — **always prefer the MCP tools over editing the markdown files directly**. Direct edits skip ID assignment, file naming, ordering, and watcher sync.
+Relay is a local-first task, plan, and reference-doc tracker. Everything lives under `.relay/` — tasks in `tasks/`, plans in `plans/`, and docs in `docs/` as markdown files with YAML frontmatter. The `relay` CLI is the supported integration: every command resolves `.relay/` from the directory you run it in, so it's worktree-correct by construction. **Always prefer the CLI over editing the markdown files directly** — direct edits skip ID assignment, file naming, ordering, and watcher sync.
+
+## Worktree behavior — read this first
+
+Every `relay <verb>` invocation walks up from `process.cwd()` to find `.relay/`. If you `cd` into a git worktree, the next CLI call operates on the worktree's `.relay/` (or, if `worktreeMode: shared` is set in `.relay/config.yaml`, the main checkout's). Run `relay where` from any directory to confirm what relay would resolve to — it prints the resolved path, whether you're in a worktree, and which mode applies. Use it whenever you're unsure which `.relay/` an agent is touching.
 
 ## Primitives
 
@@ -44,91 +48,207 @@ Most tasks live in `backlog`. Only move a task to `open` when it's actually read
 
 The board is a shared coordination surface. Stale statuses erode trust in the system and make it harder for humans to know what's actually happening.
 
+## Output formats: text vs --json
+
+Every read command (`list`, `get`) and every mutating command (`create`, `update`, `delete`, …) supports `--json`. Use it whenever you need to parse the output programmatically — for example, capturing the new task's ID after `relay task create`, or filtering a list down to specific fields.
+
+```sh
+# Pull just the IDs of all open tasks:
+relay task list --status open --json | jq -r '.[].id'
+
+# Capture the new ID into a shell variable:
+ID=$(relay task create --title "Fix login" --json | jq -r '.id')
+```
+
+Default text output is for humans (and is allowed to evolve). The `--json` shape is the contract: id/title/status/created/updated/body are always present on tasks; optional fields are *omitted* (not nulled) when undefined, so check with `if (t.priority)` rather than expecting the key to always exist.
+
 ## When the user asks what to work on
 
-Call `list_tasks` with `status: "open"` (optionally add `priority: "high"` or a `project`/`epic`/`sprint` filter). Results come back sorted by priority and order — the top item is the recommendation. Don't open every task; the summary line is enough to propose what to pick up. If there are no open tasks, check `status: "backlog"` before telling the user there's nothing to do.
+```sh
+relay task list --status open
+```
+
+Add `--priority high` or `--project foo` to narrow further. Results come back sorted by priority and order — the top item is the recommendation. Don't open every task; the summary line is enough to propose what to pick up. If there are no open tasks, run `relay task list --status backlog` before telling the user there's nothing to do.
 
 ## When the user wants to start work on a task
 
-1. Call `get_task` to load the full body, subtasks, refs, and any prior agent notes.
-2. Call `update_task` to set `status: "in-progress"` and `assignee: "<your agent name>"` (e.g. `"claude-code"`, `"codex"`). This is how humans and other agents see who is working on what.
+1. Read the full body, subtasks, refs, and any prior agent notes:
+   ```sh
+   relay task get TKT-001
+   ```
+2. Claim the task — set status and assignee:
+   ```sh
+   relay task update TKT-001 --status in-progress --assignee claude-code
+   ```
+   Use whatever name identifies your agent (`claude-code`, `codex`, etc.). This is how humans and other agents see who is working on what.
 3. Read the body carefully before doing anything. Subtasks are markdown checkboxes (`- [ ]`), and any section after a `<!-- agent-notes -->` marker contains debriefs from prior agents — read these so you don't repeat their mistakes or redo their work.
 
 ## When the user wants to create a task
 
-Call `create_task` with at minimum a `title`. Defaults: `status: "backlog"`, no priority. Only set `status: "open"` if the user says it's ready to pick up now or the context makes that obvious. Only set a `priority` if the user specified one or the context clearly calls for it. If a `project`, `epic`, `sprint`, `blockedBy`, or `relatedTo` is obvious from context, include it — but don't interrogate the user for metadata they didn't ask to set. **Never invent projects, epics, or sprints that don't already exist** — call `list_tasks` first to see what's in use if you need to check.
+```sh
+relay task create --title "Fix login redirect"
+```
+
+That's the minimum. Defaults: `status: backlog`, no priority. Only set `--status open` if the user says it's ready to pick up now or the context makes that obvious. Only set `--priority` if the user specified one or the context clearly calls for it. If a `--project`, `--epic`, `--sprint`, `--blocked-by`, or `--related-to` is obvious from context, include it — but don't interrogate the user for metadata they didn't ask to set.
+
+For long bodies, pipe via stdin or read from a file:
+
+```sh
+cat notes.md | relay task create --title "Refactor parser" --body-from-stdin
+relay task create --title "…" --body-from-file ./details.md
+```
+
+**Never invent projects, epics, or sprints that don't already exist** — run `relay task list --json | jq -r '.[].project' | sort -u` first to see what's in use if you need to check.
 
 ## When the user wants to break a plan into tasks
 
-If the plan has a checklist of unchecked items in its body, call `cut_tasks_from_plan` with the plan ID. One tool call parses every unchecked checkbox, creates a task for each, links them back to the plan, and checks off the items. Preview the plan with `get_plan` first if you're unsure what will be cut, especially for plans with many items.
+If the plan has a checklist of unchecked items in its body:
 
-If the plan has prose instead of a checklist, ask whether to (a) add checklist items to the plan first (so the user can review and edit before cutting), or (b) create tasks directly with `create_task` and then link them via `link_task_to_plan`. Default to (a) unless the user wants to move fast.
+```sh
+relay plan cut-tasks PLAN-005
+```
+
+One command parses every unchecked checkbox, creates a task for each, links them back to the plan, and checks off the items. Preview the plan with `relay plan get PLAN-005` first if you're unsure what will be cut, especially for plans with many items. The `--json` form (`relay plan cut-tasks PLAN-005 --json`) returns `{ planId, createdTaskIds }` so you can chain into follow-up `relay task update` calls without parsing the bulleted output.
+
+If the plan has prose instead of a checklist, ask whether to (a) add checklist items to the plan first (so the user can review and edit before cutting), or (b) create tasks directly with `relay task create` and link them via `relay plan link-task <PLAN-ID> <TASK-ID>`. Default to (a) unless the user wants to move fast.
 
 ## When finishing work on a task
 
-1. Check off completed subtasks: `complete_subtask` with either `index` (0-based) or `text` (substring match).
-2. Add a debrief to the task body under a `<!-- agent-notes -->` marker. Use `update_task` with a new `body` that **preserves the original content** and appends `<!-- agent-notes -->` plus your notes (or appends underneath the existing marker if one is already there). Notes should cover: what changed, what you deliberately didn't do, what the user should verify, and any follow-up tasks that should be filed.
-3. Set `status: "done"` via `update_task`.
-4. If you created a commit or PR, call `link_ref` with the commit SHA or PR URL. Convention: include the task ID in the commit message itself (e.g. `"TKTB-015: fix kanban reorder bug"`) so the link is discoverable from git history too.
+1. Check off completed subtasks:
+   ```sh
+   relay task complete-subtask TKT-001 --index 0
+   # or by substring match:
+   relay task complete-subtask TKT-001 --text "wire up the handler"
+   ```
+2. Add a debrief to the task body under a `<!-- agent-notes -->` marker. Use `--body-from-stdin` so the existing body is preserved and you append cleanly:
+   ```sh
+   {
+     relay task get TKT-001 --json | jq -r '.body'
+     printf '\n<!-- agent-notes -->\n\n## Debrief\n\n…notes here…\n'
+   } | relay task update TKT-001 --body-from-stdin
+   ```
+   Notes should cover: what changed, what you deliberately didn't do, what the user should verify, and any follow-up tasks that should be filed.
+3. Mark the task done:
+   ```sh
+   relay task update TKT-001 --status done
+   ```
+4. Link the commit or PR:
+   ```sh
+   relay task link-ref TKT-001 abc123def
+   relay task link-ref TKT-001 https://github.com/org/repo/pull/42
+   ```
+   Convention: include the task ID in the commit message itself (e.g. `"TKT-001: fix kanban reorder bug"`) so the link is discoverable from git history too.
 
 ## When the user wants to review what an agent did on a task
 
-Call `get_task`. The `<!-- agent-notes -->` section, linked `refs`, and current `status` are the sources of truth. If refs point to commits or PR URLs, offer to read them for the user. Summarize: what was the goal, what actually landed, what's still open, and what follow-up tasks were filed (if any).
+```sh
+relay task get TKT-001
+```
+
+The `<!-- agent-notes -->` section, linked `refs`, and current `status` are the sources of truth. If refs point to commits or PR URLs, offer to read them for the user. Summarize: what was the goal, what actually landed, what's still open, and what follow-up tasks were filed (if any).
 
 ## When the user wants to create a plan
 
-Call `create_plan`. Plans default to `status: "draft"`. Put the brainstorm or spec content in `body`. If the user wants to kick off work immediately, finish writing the body first, then use `cut_tasks_from_plan` to break it into tasks — don't interleave plan writing with task creation.
+```sh
+relay plan create --title "Q3 roadmap"
+```
+
+Plans default to `status: draft`. Put the brainstorm or spec content in `--body`, `--body-from-file`, or pipe via stdin:
+
+```sh
+cat plan.md | relay plan create --title "Q3 roadmap" --body-from-stdin --tag roadmap
+```
+
+If the user wants to kick off work immediately, finish writing the body first, then use `relay plan cut-tasks <PLAN-ID>` to break it into tasks — don't interleave plan writing with task creation.
 
 ## When the user wants to create or update a doc
 
-Use docs for reference material that should stay true or useful beyond a single implementation cycle: architecture notes, UX principles, integration guides, and distilled research. Call `create_doc` with at minimum a `title`, and include `body`, `project`, `tags`, or `refs` when the context makes them obvious. Use `update_doc` when the user wants to refine the reference over time.
+Use docs for reference material that should stay true or useful beyond a single implementation cycle: architecture notes, UX principles, integration guides, and distilled research.
 
-## Reference: MCP tools
+```sh
+cat ARCH.md | relay doc create --title "Auth architecture" --body-from-stdin --tag architecture --ref https://example.com/spec
+```
+
+Use `relay doc update DOC-007 --add-tag <new>` to refine over time without overwriting existing tags.
+
+## Updating list-shaped fields (tags, refs, blocked-by, related-to, linked tasks)
+
+`update` commands distinguish three operations on every list field:
+
+- `--tag x --tag y` (or `--ref`, `--task`, `--blocked-by`, `--related-to`) — **replaces** the entire list
+- `--add-tag x` / `--remove-tag y` — additive / subtractive **delta** on the existing list
+- `--clear-tags` — sets the field to empty/undefined
+
+These three are mutually exclusive on the same field. Default to deltas (`--add-tag`/`--remove-tag`) when refining; use full replace only when you genuinely want to overwrite.
+
+## First-time setup in a project
+
+`relay init` scaffolds `.relay/` in a project. To avoid a permission prompt on every CLI call inside Claude Code, add an allowlist entry once:
+
+```jsonc
+// .claude/settings.json
+{
+  "permissions": {
+    "allow": ["Bash(relay *)"]
+  }
+}
+```
+
+`relay init` will offer to write this for you on first run.
+
+## Reference: CLI commands
 
 **Tasks**
-| Tool | Purpose |
+| Command | Purpose |
 |---|---|
-| `list_tasks` | List with filters (status, priority, project, epic, sprint, tags). Sorted. |
-| `get_task` | Full task including body, subtasks, refs, agent notes |
-| `create_task` | New task; `title` required |
-| `update_task` | Change any field; only provided fields update |
-| `delete_task` | Archive a task |
-| `link_ref` | Attach a commit SHA or PR URL to a task |
-| `complete_subtask` | Check off a subtask by `index` or `text` match |
-| `add_subtask` | Append a new checkbox to a task body |
-| `reorder_task` | Move a task within its status column |
+| `relay task list [--status S] [--priority P] [--project P] [--epic E] [--sprint S] [--tag T...]` | List tasks, sorted by priority/order |
+| `relay task get <ID>` | Print full task body and metadata |
+| `relay task create --title "…" […]` | Create a new task |
+| `relay task update <ID> […]` | Change any field; deltas + replace + clear on lists |
+| `relay task delete <ID>` | Archive a task |
+| `relay task link-ref <ID> <commit-or-url>` | Attach a commit SHA or PR URL |
+| `relay task add-subtask <ID> "<text>"` | Append a checkbox to the task body |
+| `relay task complete-subtask <ID> --index N \| --text "…"` | Check off a subtask |
+| `relay task reorder <ID> [--after ID] [--before ID]` | Move within its status column |
 
 **Plans**
-| Tool | Purpose |
+| Command | Purpose |
 |---|---|
-| `list_plans` | List with filters (status, project, tags) |
-| `get_plan` | Full plan including body and linked task IDs |
-| `create_plan` | New plan; `title` required |
-| `update_plan` | Change any field |
-| `delete_plan` | Archive a plan |
-| `link_task_to_plan` | Attach an existing task to a plan |
-| `cut_tasks_from_plan` | Parse unchecked checkboxes into tasks and link them |
+| `relay plan list [--status S] [--project P] [--tag T...]` | List plans |
+| `relay plan get <ID>` | Print full plan body and metadata |
+| `relay plan create --title "…" […]` | Create a new plan |
+| `relay plan update <ID> […]` | Change any field; deltas + replace + clear on lists |
+| `relay plan delete <ID>` | Archive a plan |
+| `relay plan link-task <PLAN-ID> <TASK-ID>` | Attach an existing task to a plan |
+| `relay plan cut-tasks <PLAN-ID>` | Parse unchecked checkboxes, create a task per item, link them |
 
 **Docs**
-| Tool | Purpose |
+| Command | Purpose |
 |---|---|
-| `list_docs` | List reference docs with filters (project, tags, search) |
-| `get_doc` | Full doc including body |
-| `create_doc` | New doc; `title` required |
-| `update_doc` | Change any doc field |
-| `delete_doc` | Archive a doc |
+| `relay doc list [--project P] [--tag T...]` | List reference docs |
+| `relay doc get <ID>` | Print full doc body and metadata |
+| `relay doc create --title "…" […]` | Create a new doc |
+| `relay doc update <ID> […]` | Change any field |
+| `relay doc delete <ID>` | Archive a doc |
 
-**Maintenance**
-| Tool | Purpose |
+**Maintenance + introspection**
+| Command | Purpose |
 |---|---|
-| `doctor` | Validate artifact integrity (counters, duplicates, dangling refs, stale locks, .gitattributes). Pass `fix: true` to auto-repair fixable issues. |
-| `sync` | Stage and commit all pending artifact changes with a structured message. `dry_run: true` to preview; `push: true` to push after committing. |
+| `relay where [--json]` | Print the resolved `.relay/` directory and worktree state |
+| `relay doctor [--fix] [--json]` | Validate artifact integrity (counters, duplicates, dangling refs, .gitattributes) |
+| `relay sync [--dry-run] [--push] [--json]` | Stage and commit pending artifact changes with a structured message |
+
+Every command above accepts `--help` (or `relay help <topic>`) for full flag listings and examples.
 
 ## Rules of thumb
 
-- **Never edit `.relay/tasks/*.md`, `.relay/plans/*.md`, or `.relay/docs/*.md` directly.** Use the MCP tools.
-- **Never invent task or plan IDs.** IDs are assigned by `create_task` / `create_plan`.
-- **Preserve prior agent notes when updating a body.** Append to the existing `<!-- agent-notes -->` section; don't overwrite it.
-- **Prefer `list_tasks` filters over loading everything.** The server already sorts and filters.
-- **Confirm before bulk operations.** For `cut_tasks_from_plan` on a plan with many items, show the user what will be created first unless they've told you to just go.
+- **Never edit `.relay/tasks/*.md`, `.relay/plans/*.md`, or `.relay/docs/*.md` directly.** Use the CLI.
+- **Never invent task or plan IDs.** IDs are assigned by `relay <noun> create`.
+- **Preserve prior agent notes when updating a body.** Pipe `relay <noun> get <ID> --json | jq -r '.body'` into the new body so you append rather than overwrite.
+- **Prefer filters over loading everything.** `relay task list --status open` is cheaper than reading every task.
+- **Confirm before bulk operations.** For `relay plan cut-tasks` on a plan with many items, show the user what will be created first unless they've told you to just go.
 - **Status changes are how work is coordinated.** Always flip to `in-progress` when starting and `done` when finishing — don't leave tasks in the wrong state because it looks cosmetic.
+
+## Legacy: the relay MCP server
+
+`relay --mcp` still starts an MCP server with the same tool surface as the CLI commands above, and existing `.mcp.json` configs keep working. **The CLI is the supported path going forward** — the MCP server resolves `.relay/` once at startup from `process.cwd()`, which makes it brittle in worktree-heavy workflows. Prefer the CLI.

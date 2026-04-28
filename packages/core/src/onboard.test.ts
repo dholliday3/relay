@@ -278,6 +278,14 @@ describe("runOnboard", () => {
       expect(snippet).toContain(".relay/tasks/");
       expect(snippet).toContain(".relay/plans/");
       expect(snippet).toContain(".relay/docs/");
+      // The CLI is the canonical surface — assert specific commands so a
+      // future rewrite that drops them gets caught.
+      expect(snippet).toContain("relay task list");
+      expect(snippet).toContain("relay task update");
+      expect(snippet).toContain("relay plan cut-tasks");
+      expect(snippet).toContain("relay where");
+      // MCP is mentioned in the legacy section; keep that anchor so the
+      // soft-deprecation language doesn't accidentally get deleted.
       expect(snippet).toContain("MCP server");
     });
 

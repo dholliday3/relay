@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { resolve, join, dirname, basename } from "node:path";
+import { resolve, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stat } from "node:fs/promises";
 import {
@@ -17,92 +17,46 @@ import {
   describePortSquatter,
   formatPortInUseMessage,
 } from "../packages/server/src/port-diagnose.ts";
+import { parseArgv, helpText } from "./cli/parse.ts";
+import type { Command } from "./cli/parse.ts";
+import { runWhere } from "./cli/where.ts";
+import { resolveRelayDirs, isRelayDirsError } from "./cli/relay-dir.ts";
+import {
+  runTaskList,
+  runTaskGet,
+  runTaskCreate,
+  runTaskUpdate,
+  runTaskDelete,
+  runTaskLinkRef,
+  runTaskAddSubtask,
+  runTaskCompleteSubtask,
+  runTaskReorder,
+} from "./cli/task.ts";
+import type { HandlerResult } from "./cli/task.ts";
+import {
+  runPlanList,
+  runPlanGet,
+  runPlanCreate,
+  runPlanUpdate,
+  runPlanDelete,
+  runPlanLinkTask,
+  runPlanCutTasks,
+} from "./cli/plan.ts";
+import {
+  runDocList,
+  runDocGet,
+  runDocCreate,
+  runDocUpdate,
+  runDocDelete,
+} from "./cli/doc.ts";
+import { runDoctorCmd, runSyncCmd } from "./cli/maintenance.ts";
+import { addRelayAllowlist } from "./cli/init-allowlist.ts";
 // Embed SKILL.md via Bun's `with { type: "file" }` import attribute.
 // In dev mode this returns the real filesystem path; inside a compiled
 // binary it returns a `$bunfs/` virtual path. Both forms are readable
 // via Bun.file() and node:fs's readFile(), which is how initRelay
 // copies the skill into a target project's .claude/skills/ directory.
 import SKILL_SOURCE from "../skills/relay/SKILL.md" with { type: "file" };
-
-interface CliArgs {
-  command: "serve" | "init" | "onboard" | "upgrade";
-  dir?: string;
-  port?: number;
-  noUi: boolean;
-  mcp: boolean;
-  /** --check — report state without side effects. Used by onboard + upgrade. */
-  check: boolean;
-  /** --stdout (onboard only) — print the wrapped section to stdout, touch no files. */
-  stdout: boolean;
-  /** --json — emit structured JSON instead of human-readable lines (onboard + upgrade). */
-  json: boolean;
-}
-
-function parseArgs(argv: string[]): CliArgs {
-  const args = argv.slice(2);
-  const result: CliArgs = {
-    command: "serve",
-    noUi: false,
-    mcp: false,
-    check: false,
-    stdout: false,
-    json: false,
-  };
-
-  let i = 0;
-  while (i < args.length) {
-    const arg = args[i];
-    if (arg === "init") {
-      result.command = "init";
-    } else if (arg === "onboard") {
-      result.command = "onboard";
-    } else if (arg === "upgrade") {
-      result.command = "upgrade";
-    } else if (arg === "--dir" && i + 1 < args.length) {
-      result.dir = args[++i];
-    } else if (arg === "--port" && i + 1 < args.length) {
-      result.port = parseInt(args[++i], 10);
-    } else if (arg === "--no-ui") {
-      result.noUi = true;
-    } else if (arg === "--mcp") {
-      result.mcp = true;
-    } else if (arg === "--check") {
-      result.check = true;
-    } else if (arg === "--stdout") {
-      result.stdout = true;
-    } else if (arg === "--json") {
-      result.json = true;
-    } else if (arg === "--help" || arg === "-h") {
-      printUsage();
-      process.exit(0);
-    } else if (!arg.startsWith("-")) {
-      result.dir = arg;
-    }
-    i++;
-  }
-
-  return result;
-}
-
-function printUsage(): void {
-  console.log(`Usage: relay [command] [options] [path]
-
-Commands:
-  init        Scaffold .relay/ directory, .mcp.json, and skill files
-  onboard     Write/update the relay agent instructions section in CLAUDE.md (or AGENTS.md)
-  upgrade     Upgrade relay to the latest release from GitHub
-  (default)   Start the server and open the UI
-
-Options:
-  --dir <path>   Path to .relay/ directory (or directory containing it)
-  --port <num>   Server port (default: 4242, auto-increment on collision)
-  --no-ui        Server only, no static UI serving
-  --mcp          Start MCP server mode (stdio transport, no HTTP)
-  --check        Report status without side effects (onboard + upgrade); exits 1 if stale
-  --stdout       (onboard only) Print the onboarding section to stdout, touching no files
-  --json         Emit structured JSON output (onboard + upgrade)
-  -h, --help     Show this help message`);
-}
 
 /** Walk up from startDir to find a .relay/ directory, with worktree awareness. */
 async function findRelayDir(startDir: string): Promise<string | null> {
@@ -181,162 +135,231 @@ function printInitSummary(
     );
   }
 
-  console.log(`\nClaude Code: the .mcp.json will auto-load on next session.`);
-  console.log(`\nCodex: add this to ~/.codex/config.toml:\n`);
-  console.log(codexMcpInstructions());
-  console.log("");
+  console.log("\nGet started:");
+  console.log("  relay task list                       # see what's ready to work on");
+  console.log("  relay task create --title \"…\"          # create a task");
+  console.log("  relay where                           # confirm which .relay/ is active");
+  console.log("  relay --help                          # full surface");
   console.log(
-    `Next: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
+    "\nThe relay skill at .claude/skills/relay/SKILL.md walks Claude Code through the workflow.",
+  );
+  console.log(
+    "Existing .mcp.json setups still work; the CLI is the recommended path.",
+  );
+  console.log("\nFor non-Claude-Code agents (e.g. Codex), the MCP server is wired via:");
+  console.log(codexMcpInstructions());
+  console.log(
+    `\nNext: run 'relay onboard' to add agent instructions to CLAUDE.md.`,
   );
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv);
+async function runInit(cmd: {
+  dir?: string;
+  allowlist?: boolean;
+}): Promise<void> {
+  const baseDir = cmd.dir ? resolve(cmd.dir) : process.cwd();
+  const result = await initRelay({
+    baseDir,
+    skillSourcePath: resolveSkillSourcePath(),
+  });
+  printInitSummary(baseDir, result);
 
-  // --- Init command ---
-  if (args.command === "init") {
-    const baseDir = args.dir ? resolve(args.dir) : process.cwd();
-    const result = await initRelay({
-      baseDir,
-      skillSourcePath: resolveSkillSourcePath(),
-    });
-    printInitSummary(baseDir, result);
-    return;
-  }
-
-  // --- Onboard command ---
-  if (args.command === "onboard") {
-    const baseDir = args.dir ? resolve(args.dir) : process.cwd();
-    const result = await runOnboard({
-      baseDir,
-      check: args.check,
-      stdout: args.stdout,
-    });
-
-    // --stdout already printed the wrapped snippet; nothing more to say.
-    if (result.action === "stdout") return;
-
-    if (args.json) {
-      // Mirror seeds' envelope shape: always success=true on the happy
-      // path, command name, plus whatever action-specific fields exist.
-      const envelope: Record<string, unknown> = {
-        success: true,
-        command: "onboard",
-        action: result.action,
-      };
-      if ("file" in result) envelope.file = result.file;
-      if ("status" in result) envelope.status = result.status;
-      console.log(JSON.stringify(envelope));
+  // Decide whether to add the Bash(relay *) allowlist entry. The default
+  // is to prompt when stdin is a TTY (interactive run) and skip
+  // otherwise (agent or script invocation), unless the user passed an
+  // explicit --allowlist / --no-allowlist flag.
+  let writeAllowlist = cmd.allowlist;
+  if (writeAllowlist === undefined) {
+    if (process.stdin.isTTY) {
+      const answer = prompt(
+        "\nAdd 'Bash(relay *)' to .claude/settings.json so Claude Code skips per-call permission prompts? (Y/n) ",
+      );
+      writeAllowlist =
+        answer === null || answer === "" || /^y/i.test(answer);
     } else {
-      switch (result.action) {
-        case "created":
-          console.log(`Created ${result.file} with relay section`);
-          break;
-        case "updated":
-          console.log(`Updated relay section in ${result.file}`);
-          break;
-        case "unchanged":
-          console.log(
-            `Relay section is already up to date (${result.file})`,
-          );
-          break;
-        case "appended":
-          console.log(`Added relay section to ${result.file}`);
-          break;
-        case "checked":
-          console.log(
-            `Status: ${result.status}${result.file ? ` (${result.file})` : " (no candidate file)"}`,
-          );
-          break;
-      }
+      writeAllowlist = false;
     }
-
-    // --check mode: exit 1 when the section is missing or outdated so CI
-    // can use it as a freshness gate (mirrors seeds' sd onboard --check).
-    if (result.action === "checked" && result.status !== "current") {
-      process.exitCode = 1;
-    }
-    return;
   }
 
-  // --- Upgrade command ---
-  if (args.command === "upgrade") {
-    // Catch network/spawn failures cleanly — the 404-before-first-release
-    // case and any other runUpgrade error should surface as a one-line
-    // message, not a stack trace. In --json mode we wrap the error in the
-    // envelope shape so scripts can parse it.
-    let result: Awaited<ReturnType<typeof runUpgrade>>;
+  if (writeAllowlist) {
     try {
-      result = await runUpgrade({ check: args.check });
+      const r = await addRelayAllowlist(baseDir);
+      switch (r.action) {
+        case "created":
+          console.log(`\nWrote ${r.file} with Bash(relay *) allowlist entry.`);
+          break;
+        case "added":
+          console.log(`\nAdded Bash(relay *) to ${r.file}.`);
+          break;
+        case "already-present":
+          console.log(`\nBash(relay *) already in ${r.file}.`);
+          break;
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (args.json) {
+      console.error(
+        `\nCouldn't update .claude/settings.json: ${(err as Error).message}`,
+      );
+      console.error(
+        "  Add this manually to skip per-call permission prompts:",
+      );
+      console.error('  { "permissions": { "allow": ["Bash(relay *)"] } }');
+    }
+  } else if (cmd.allowlist === undefined) {
+    // Non-interactive run with no explicit flag — point the user at
+    // the manual fix so they're not stuck on permission prompts.
+    console.log(
+      "\nTo skip Claude Code permission prompts on every relay call, add:",
+    );
+    console.log(
+      '  { "permissions": { "allow": ["Bash(relay *)"] } }  → .claude/settings.json',
+    );
+    console.log("Or re-run: relay init --allowlist");
+  }
+}
+
+async function runOnboardCmd(cmd: {
+  dir?: string;
+  check: boolean;
+  stdout: boolean;
+  json: boolean;
+}): Promise<void> {
+  const baseDir = cmd.dir ? resolve(cmd.dir) : process.cwd();
+  const result = await runOnboard({
+    baseDir,
+    check: cmd.check,
+    stdout: cmd.stdout,
+  });
+
+  // --stdout already printed the wrapped snippet; nothing more to say.
+  if (result.action === "stdout") return;
+
+  if (cmd.json) {
+    // Mirror seeds' envelope shape: always success=true on the happy
+    // path, command name, plus whatever action-specific fields exist.
+    const envelope: Record<string, unknown> = {
+      success: true,
+      command: "onboard",
+      action: result.action,
+    };
+    if ("file" in result) envelope.file = result.file;
+    if ("status" in result) envelope.status = result.status;
+    console.log(JSON.stringify(envelope));
+  } else {
+    switch (result.action) {
+      case "created":
+        console.log(`Created ${result.file} with relay section`);
+        break;
+      case "updated":
+        console.log(`Updated relay section in ${result.file}`);
+        break;
+      case "unchanged":
         console.log(
-          JSON.stringify({ success: false, command: "upgrade", error: msg }),
+          `Relay section is already up to date (${result.file})`,
         );
-      } else {
-        console.error(`relay upgrade failed: ${msg}`);
-      }
-      process.exit(1);
+        break;
+      case "appended":
+        console.log(`Added relay section to ${result.file}`);
+        break;
+      case "checked":
+        console.log(
+          `Status: ${result.status}${result.file ? ` (${result.file})` : " (no candidate file)"}`,
+        );
+        break;
     }
-
-    if (args.json) {
-      // Mirror seeds' envelope shape across all upgrade actions.
-      const envelope: Record<string, unknown> = {
-        success: true,
-        command: "upgrade",
-        action: result.action,
-      };
-      if (result.action === "checked") {
-        envelope.current = result.current;
-        envelope.latest = result.latest;
-        envelope.upToDate = result.upToDate;
-      } else if (result.action === "unchanged") {
-        envelope.current = result.current;
-        envelope.latest = result.latest;
-      } else if (result.action === "upgraded") {
-        envelope.previous = result.previous;
-        envelope.latest = result.latest;
-      }
-      console.log(JSON.stringify(envelope));
-    } else {
-      switch (result.action) {
-        case "checked":
-          if (result.upToDate) {
-            console.log(`Already up to date (${result.current})`);
-          } else {
-            console.log(
-              `Update available: ${result.current} → ${result.latest}`,
-            );
-            console.log(
-              `Run 'relay upgrade' to install the latest release.`,
-            );
-          }
-          break;
-        case "unchanged":
-          console.log(`Already up to date (${result.current})`);
-          break;
-        case "upgraded":
-          console.log(
-            `Upgraded relay from ${result.previous} to ${result.latest}`,
-          );
-          break;
-      }
-    }
-
-    // --check mode: exit 1 when we're behind the latest release so CI
-    // and shell prompt integrations can use it as a staleness gate.
-    if (result.action === "checked" && !result.upToDate) {
-      process.exitCode = 1;
-    }
-    return;
   }
 
+  // --check mode: exit 1 when the section is missing or outdated so CI
+  // can use it as a freshness gate (mirrors seeds' sd onboard --check).
+  if (result.action === "checked" && result.status !== "current") {
+    process.exitCode = 1;
+  }
+}
+
+async function runUpgradeCmd(cmd: {
+  check: boolean;
+  json: boolean;
+}): Promise<void> {
+  // Catch network/spawn failures cleanly — the 404-before-first-release
+  // case and any other runUpgrade error should surface as a one-line
+  // message, not a stack trace. In --json mode we wrap the error in the
+  // envelope shape so scripts can parse it.
+  let result: Awaited<ReturnType<typeof runUpgrade>>;
+  try {
+    result = await runUpgrade({ check: cmd.check });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (cmd.json) {
+      console.log(
+        JSON.stringify({ success: false, command: "upgrade", error: msg }),
+      );
+    } else {
+      console.error(`relay upgrade failed: ${msg}`);
+    }
+    process.exit(1);
+  }
+
+  if (cmd.json) {
+    // Mirror seeds' envelope shape across all upgrade actions.
+    const envelope: Record<string, unknown> = {
+      success: true,
+      command: "upgrade",
+      action: result.action,
+    };
+    if (result.action === "checked") {
+      envelope.current = result.current;
+      envelope.latest = result.latest;
+      envelope.upToDate = result.upToDate;
+    } else if (result.action === "unchanged") {
+      envelope.current = result.current;
+      envelope.latest = result.latest;
+    } else if (result.action === "upgraded") {
+      envelope.previous = result.previous;
+      envelope.latest = result.latest;
+    }
+    console.log(JSON.stringify(envelope));
+  } else {
+    switch (result.action) {
+      case "checked":
+        if (result.upToDate) {
+          console.log(`Already up to date (${result.current})`);
+        } else {
+          console.log(
+            `Update available: ${result.current} → ${result.latest}`,
+          );
+          console.log(
+            `Run 'relay upgrade' to install the latest release.`,
+          );
+        }
+        break;
+      case "unchanged":
+        console.log(`Already up to date (${result.current})`);
+        break;
+      case "upgraded":
+        console.log(
+          `Upgraded relay from ${result.previous} to ${result.latest}`,
+        );
+        break;
+    }
+  }
+
+  // --check mode: exit 1 when we're behind the latest release so CI
+  // and shell prompt integrations can use it as a staleness gate.
+  if (result.action === "checked" && !result.upToDate) {
+    process.exitCode = 1;
+  }
+}
+
+async function runServe(cmd: {
+  dir?: string;
+  port?: number;
+  noUi: boolean;
+  mcp: boolean;
+}): Promise<void> {
   // --- Resolve .relay/ directory ---
   let relayDir: string | null = null;
 
-  if (args.dir) {
-    relayDir = await resolveRelayDir(args.dir);
+  if (cmd.dir) {
+    relayDir = await resolveRelayDir(cmd.dir);
   } else {
     relayDir = await findRelayDir(process.cwd());
   }
@@ -363,16 +386,30 @@ async function main(): Promise<void> {
   const docsDir = join(relayDir, "docs");
 
   // --- MCP mode ---
-  if (args.mcp) {
+  if (cmd.mcp) {
+    // Soft deprecation: the MCP server is the legacy path now. Its
+    // long-lived process resolves .relay/ once at startup, which is
+    // brittle in worktree-heavy workflows — a worktree created mid-
+    // session writes to the wrong tree silently. The CLI walks up
+    // from cwd on every call. Emit one stderr line so anyone who
+    // wires this up notices, but don't fail-stop — this is the
+    // "still works for non-worktree workflows" path.
     console.error(
       `Relay MCP server (stdio) — tasks: ${tasksDir}, plans: ${plansDir}, docs: ${docsDir}`,
+    );
+    console.error(
+      `[relay] note: the MCP server is the legacy integration path. ` +
+        `It resolves .relay/ once from this cwd (${relayDir}); ` +
+        `agents that cd into a git worktree will still write here. ` +
+        `Prefer 'relay <task|plan|doc> …' over MCP tools — every CLI ` +
+        `call resolves .relay/ from the agent's actual cwd.`,
     );
     await startMcpServer(relayDir, tasksDir, plansDir, docsDir);
     return;
   }
 
   // --- HTTP server mode ---
-  const uiDistDir = args.noUi
+  const uiDistDir = cmd.noUi
     ? undefined
     : resolve(join(import.meta.dir, "../packages/ui/dist"));
 
@@ -400,7 +437,7 @@ async function main(): Promise<void> {
   // failure — usually an orphaned `bun dev` from a previous session. Catch it
   // here and replace the stack trace with a friendly message that identifies
   // the squatter by PID and shows the exact `kill` command to run.
-  const serverPort = args.port ?? 4242;
+  const serverPort = cmd.port ?? 4242;
   let handle: ReturnType<typeof startServer>;
   try {
     handle = startServer({
@@ -409,7 +446,7 @@ async function main(): Promise<void> {
       plansDir,
       docsDir,
       port: serverPort,
-      autoIncrement: args.port == null,
+      autoIncrement: cmd.port == null,
       staticDir: uiDistDir,
       binPath,
       execPath,
@@ -432,8 +469,161 @@ async function main(): Promise<void> {
     console.log(`Relay server listening on http://localhost:${handle.port}`);
   }
   console.log(`Relay directory: ${relayDir}`);
-  if (!args.noUi && uiDistDir) {
+  if (!cmd.noUi && uiDistDir) {
     console.log(`UI: http://localhost:${handle.port}`);
+  }
+}
+
+/**
+ * Centralizes the "resolve .relay/, dispatch handler, write output" flow
+ * for every noun command (task / plan / doc / doctor / sync). Keeps the
+ * exit-code, stdout, and stderr handling in one place so each handler
+ * can stay a pure function returning a HandlerResult.
+ */
+async function runWithRelayDirs(
+  run: (dirs: {
+    relayDir: string;
+    tasksDir: string;
+    plansDir: string;
+    docsDir: string;
+  }) => Promise<HandlerResult>,
+): Promise<void> {
+  const dirs = await resolveRelayDirs();
+  if (isRelayDirsError(dirs)) {
+    console.error(`relay: ${dirs.error}`);
+    process.exit(1);
+  }
+  const result = await run(dirs);
+  if (result.stdout) process.stdout.write(result.stdout + "\n");
+  if (result.stderr) process.stderr.write(result.stderr + "\n");
+  if (result.exitCode !== 0) process.exitCode = result.exitCode;
+}
+
+async function main(): Promise<void> {
+  const cmd: Command = parseArgv(process.argv);
+
+  switch (cmd.kind) {
+    case "help":
+      console.log(helpText(cmd.topic));
+      return;
+    case "error":
+      console.error(`relay: ${cmd.message}`);
+      if (cmd.showHelp) {
+        console.error("");
+        console.error(helpText());
+      }
+      process.exit(1);
+      return;
+    case "init":
+      await runInit(cmd);
+      return;
+    case "onboard":
+      await runOnboardCmd(cmd);
+      return;
+    case "upgrade":
+      await runUpgradeCmd(cmd);
+      return;
+    case "where": {
+      const code = await runWhere(cmd);
+      if (code !== 0) process.exitCode = code;
+      return;
+    }
+    case "serve":
+      await runServe(cmd);
+      return;
+    case "task-list":
+      await runWithRelayDirs((d) => runTaskList(cmd, d));
+      return;
+    case "task-get":
+      await runWithRelayDirs((d) => runTaskGet(cmd, d));
+      return;
+    case "task-create":
+      await runWithRelayDirs((d) => runTaskCreate(cmd, d));
+      return;
+    case "task-update":
+      await runWithRelayDirs((d) => runTaskUpdate(cmd, d));
+      return;
+    case "task-delete":
+      await runWithRelayDirs((d) => runTaskDelete(cmd, d));
+      return;
+    case "task-link-ref":
+      await runWithRelayDirs((d) => runTaskLinkRef(cmd, d));
+      return;
+    case "task-add-subtask":
+      await runWithRelayDirs((d) => runTaskAddSubtask(cmd, d));
+      return;
+    case "task-complete-subtask":
+      await runWithRelayDirs((d) => runTaskCompleteSubtask(cmd, d));
+      return;
+    case "task-reorder":
+      await runWithRelayDirs((d) => runTaskReorder(cmd, d));
+      return;
+    case "plan-list":
+      await runWithRelayDirs((d) =>
+        runPlanList(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-get":
+      await runWithRelayDirs((d) =>
+        runPlanGet(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-create":
+      await runWithRelayDirs((d) =>
+        runPlanCreate(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-update":
+      await runWithRelayDirs((d) =>
+        runPlanUpdate(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-delete":
+      await runWithRelayDirs((d) =>
+        runPlanDelete(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-link-task":
+      await runWithRelayDirs((d) =>
+        runPlanLinkTask(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "plan-cut-tasks":
+      await runWithRelayDirs((d) =>
+        runPlanCutTasks(cmd, { rootDir: d.relayDir, plansDir: d.plansDir }),
+      );
+      return;
+    case "doc-list":
+      await runWithRelayDirs((d) =>
+        runDocList(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-get":
+      await runWithRelayDirs((d) =>
+        runDocGet(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-create":
+      await runWithRelayDirs((d) =>
+        runDocCreate(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-update":
+      await runWithRelayDirs((d) =>
+        runDocUpdate(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doc-delete":
+      await runWithRelayDirs((d) =>
+        runDocDelete(cmd, { rootDir: d.relayDir, docsDir: d.docsDir }),
+      );
+      return;
+    case "doctor":
+      await runWithRelayDirs((d) => runDoctorCmd(cmd, d));
+      return;
+    case "sync":
+      await runWithRelayDirs((d) => runSyncCmd(cmd, d));
+      return;
   }
 }
 
