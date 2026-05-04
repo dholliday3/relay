@@ -22,6 +22,18 @@ The installer drops the binary at `~/.local/bin/relay` and idempotently adds tha
 
 Every `relay <verb>` invocation walks up from `process.cwd()` to find `.relay/`. If you `cd` into a git worktree, the next CLI call operates on the worktree's `.relay/` (or, if `worktreeMode: shared` is set in `.relay/config.yaml`, the main checkout's). Run `relay where` from any directory to confirm what relay would resolve to — it prints the resolved path, whether you're in a worktree, and which mode applies. Use it whenever you're unsure which `.relay/` an agent is touching.
 
+### Agents working in a worktree — shell cwd gotcha
+
+Some agent harnesses (e.g. Claude Code's Bash tool) reset working directory **between invocations**. `cd <worktree> && relay …` works, but a follow-up `relay …` in a separate shell call resolves from the parent shell's cwd — usually the main checkout — and silently writes the new task/plan/doc into main's `.relay/` instead of the worktree's. This produces an orphan diff on main that doesn't ride with the feature branch's PR.
+
+When working from a worktree, do one of:
+
+- Always `cd <worktree> && relay …` in **the same shell call**.
+- Run `relay where` once at the start to verify resolution; if it shows the wrong checkout, every subsequent relay call in this session needs the explicit `cd`.
+- Or use `relay --root <worktree>` if your relay version supports it.
+
+If you discover relay artifacts already landed on main (modified `.relay/tasks/.counter`, untracked `TASK-*.md`), move them to the branch before opening or merging the PR — `cp` the new task file + `.counter` into the worktree's `.relay/`, `git checkout` the main repo's `.counter` and `rm` the orphan task file, then commit on the branch.
+
 ## Primitives
 
 **Plans** (`PLAN-*`) are strategic documents — PRDs, feature specs, brainstorms. They are higher-level than tasks and can link to the tasks that implement them. Statuses: `draft`, `active`, `completed`, `archived`.
