@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5
+
+### Fixed
+
+- **`--body-from-stdin` silently dropped body, causing data loss on `update`.** `for await of process.stdin` returned 0 bytes when invoked through the binary entry, even with content piped via heredoc — a Bun runtime quirk specific to the relay dispatch shape. `resolveBody` then passed the empty string through, so `relay task update <id> --body-from-stdin <<EOF…` printed "Updated TASK-N" and overwrote the existing body with `""`. Now uses `Bun.stdin.text()` (drains piped stdin reliably) and refuses to silently set `body=""` when stdin yields no bytes — exits 1 with a message pointing at `--body ""` for the rare intentional-empty case. Affects `task`, `plan`, `doc` create + update. (#16)
+
 ## 0.5.1
 
 ### Changed
