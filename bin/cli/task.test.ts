@@ -161,6 +161,27 @@ describe("task create", () => {
     expect(t.body).toBe("piped body content");
   });
 
+  test("--body-from-stdin with empty stdin throws EmptyStdinError (no silent body=\"\")", async () => {
+    // Regression: an earlier version silently wrote body="" when stdin
+    // yielded no bytes — destroyed existing bodies on `update` and
+    // created bodyless tasks on `create`. The fix turns this into a
+    // clean error the dispatcher converts to stderr + exit 1.
+    await expect(
+      runTaskCreate(
+        {
+          kind: "task-create",
+          title: "Empty stdin",
+          bodyFromStdin: true,
+          tags: [],
+          blockedBy: [],
+          relatedTo: [],
+          json: false,
+        },
+        { ...ctx, readStdin: async () => "" },
+      ),
+    ).rejects.toThrow(/--body-from-stdin was set but stdin had no content/);
+  });
+
   test("--body-from-file reads from disk", async () => {
     const path = join(dir, "body.md");
     await writeFile(path, "from a file");
@@ -255,6 +276,72 @@ describe("task update", () => {
       },
       ctx,
     );
+  });
+
+  test("--body-from-stdin with empty stdin throws — does NOT silently overwrite existing body", async () => {
+    // Pre-condition: TASK-001 was created in beforeEach and has no body.
+    // Update it with a real body first via --body, then prove the empty-
+    // stdin update doesn't wipe it.
+    await runTaskUpdate(
+      {
+        kind: "task-update",
+        id: "TASK-001",
+        body: "do not lose this body",
+        bodyFromStdin: false,
+        clearPriority: false,
+        clearProject: false,
+        clearEpic: false,
+        clearSprint: false,
+        addTags: [],
+        removeTags: [],
+        clearTags: false,
+        addBlockedBy: [],
+        removeBlockedBy: [],
+        clearBlockedBy: false,
+        addRelatedTo: [],
+        removeRelatedTo: [],
+        clearRelatedTo: false,
+        clearAssignee: false,
+        clearCreatedBy: false,
+        json: false,
+      },
+      ctx,
+    );
+
+    await expect(
+      runTaskUpdate(
+        {
+          kind: "task-update",
+          id: "TASK-001",
+          bodyFromStdin: true,
+          clearPriority: false,
+          clearProject: false,
+          clearEpic: false,
+          clearSprint: false,
+          addTags: [],
+          removeTags: [],
+          clearTags: false,
+          addBlockedBy: [],
+          removeBlockedBy: [],
+          clearBlockedBy: false,
+          addRelatedTo: [],
+          removeRelatedTo: [],
+          clearRelatedTo: false,
+          clearAssignee: false,
+          clearCreatedBy: false,
+          json: false,
+        },
+        { ...ctx, readStdin: async () => "" },
+      ),
+    ).rejects.toThrow(/--body-from-stdin was set but stdin had no content/);
+
+    // Verify the body survived.
+    const after = await runTaskGet(
+      { kind: "task-get", id: "TASK-001", json: true },
+      ctx,
+    );
+    const t = JSON.parse(after.stdout!);
+    expect(t.body).toBe("do not lose this body");
   });
 
   test("updates discrete scalar fields", async () => {

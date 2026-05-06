@@ -25,6 +25,7 @@ import {
 } from "../../packages/core/src/index.ts";
 import type { Task, TaskFilters } from "../../packages/core/src/types.ts";
 import { applyListOps } from "./list-ops.ts";
+import { EmptyStdinError, readStdinAll } from "./stdin.ts";
 import type {
   TaskListCommand,
   TaskGetCommand,
@@ -116,14 +117,6 @@ function taskJson(t: Task): Record<string, unknown> {
   };
 }
 
-async function readStdinAll(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-  return Buffer.concat(chunks).toString("utf-8");
-}
-
 /** Resolve the body source for `create` / `update` commands. */
 async function resolveBody(
   cmd: { body?: string; bodyFromFile?: string; bodyFromStdin: boolean },
@@ -132,7 +125,9 @@ async function resolveBody(
   if (cmd.body !== undefined) return cmd.body;
   if (cmd.bodyFromFile) return readFile(cmd.bodyFromFile, "utf-8");
   if (cmd.bodyFromStdin) {
-    return ctx.readStdin ? ctx.readStdin() : readStdinAll();
+    const got = ctx.readStdin ? await ctx.readStdin() : await readStdinAll();
+    if (got.length === 0) throw new EmptyStdinError();
+    return got;
   }
   return undefined;
 }
