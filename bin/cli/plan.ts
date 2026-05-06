@@ -20,6 +20,7 @@ import {
 } from "../../packages/core/src/index.ts";
 import type { Plan } from "../../packages/core/src/index.ts";
 import { applyListOps } from "./list-ops.ts";
+import { EmptyStdinError, readStdinAll } from "./stdin.ts";
 import type {
   PlanListCommand,
   PlanGetCommand,
@@ -87,14 +88,6 @@ function planJson(p: Plan): Record<string, unknown> {
   };
 }
 
-async function readStdinAll(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-  return Buffer.concat(chunks).toString("utf-8");
-}
-
 async function resolveBody(
   cmd: { body?: string; bodyFromFile?: string; bodyFromStdin: boolean },
   ctx: PlanCtx,
@@ -102,7 +95,9 @@ async function resolveBody(
   if (cmd.body !== undefined) return cmd.body;
   if (cmd.bodyFromFile) return readFile(cmd.bodyFromFile, "utf-8");
   if (cmd.bodyFromStdin) {
-    return ctx.readStdin ? ctx.readStdin() : readStdinAll();
+    const got = ctx.readStdin ? await ctx.readStdin() : await readStdinAll();
+    if (got.length === 0) throw new EmptyStdinError();
+    return got;
   }
   return undefined;
 }

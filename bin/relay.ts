@@ -21,6 +21,7 @@ import { parseArgv, helpText } from "./cli/parse.ts";
 import type { Command } from "./cli/parse.ts";
 import { runWhere } from "./cli/where.ts";
 import { resolveRelayDirs, isRelayDirsError } from "./cli/relay-dir.ts";
+import { EmptyStdinError } from "./cli/stdin.ts";
 import {
   runTaskList,
   runTaskGet,
@@ -574,7 +575,19 @@ async function runWithRelayDirs(
     console.error(`relay: ${dirs.error}`);
     process.exit(1);
   }
-  const result = await run(dirs);
+  let result: HandlerResult;
+  try {
+    result = await run(dirs);
+  } catch (err) {
+    // Known user-facing errors translate to a clean stderr + exit 1, no
+    // stack trace. Anything else is genuinely unexpected — let it bubble
+    // to main().catch and surface fully.
+    if (err instanceof EmptyStdinError) {
+      result = { stderr: `relay: ${err.message}`, exitCode: 1 };
+    } else {
+      throw err;
+    }
+  }
   if (result.stdout) process.stdout.write(result.stdout + "\n");
   if (result.stderr) process.stderr.write(result.stderr + "\n");
   if (result.exitCode !== 0) process.exitCode = result.exitCode;
