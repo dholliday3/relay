@@ -87,6 +87,20 @@ describe("createTask", () => {
     expect(t1.id).toBe("TASK-001");
     expect(t2.id).toBe("TASK-002");
   });
+
+  test("round-trips description through frontmatter", async () => {
+    const summary = "Short summary shown under title";
+    const task = await createTask(dir, {
+      title: "With description",
+      description: summary,
+    });
+    expect(task.description).toBe(summary);
+
+    const files = await readdir(dir);
+    const mdFile = files.find((f) => f.endsWith(".md"))!;
+    const { data } = matter(await readFile(join(dir, mdFile), "utf-8"));
+    expect(data.description).toBe(summary);
+  });
 });
 
 describe("updateTask", () => {
@@ -144,6 +158,33 @@ describe("updateTask", () => {
       body: "Updated body",
     });
     expect(updated.body).toBe("Updated body");
+  });
+
+  test("sets and clears description on update", async () => {
+    const task = await createTask(dir, { title: "DescTest" });
+    expect(task.description).toBeUndefined();
+
+    const withDesc = await updateTask(dir, task.id, {
+      description: "Quick summary",
+    });
+    expect(withDesc.description).toBe("Quick summary");
+
+    const cleared = await updateTask(dir, task.id, {
+      description: null,
+    });
+    expect(cleared.description).toBeUndefined();
+    const { data } = matter(await readFile(cleared.filePath, "utf-8"));
+    expect(data.description).toBeUndefined();
+  });
+
+  test("preserves description across unrelated updates", async () => {
+    const summary = "Short scannable summary";
+    const task = await createTask(dir, {
+      title: "Preserve",
+      description: summary,
+    });
+    const updated = await updateTask(dir, task.id, { status: "in-progress" });
+    expect(updated.description).toBe(summary);
   });
 
   test("throws for non-existent task", async () => {

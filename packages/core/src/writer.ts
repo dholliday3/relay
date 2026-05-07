@@ -108,6 +108,7 @@ export async function createTask(
   const fm = buildFrontmatter({
     id,
     title: validated.title,
+    description: validated.description,
     status: validated.status,
     priority: validated.priority,
     order: validated.order,
@@ -133,6 +134,7 @@ export async function createTask(
   return {
     id,
     title: validated.title,
+    description: validated.description,
     status: validated.status,
     priority: validated.priority,
     order: validated.order,
@@ -173,6 +175,10 @@ export async function updateTask(
 
   const updated = { ...existing, updated: now };
   if (validated.title !== undefined) updated.title = validated.title;
+  if (validated.description !== undefined) {
+    updated.description =
+      validated.description === null ? undefined : validated.description;
+  }
   if (validated.status !== undefined) updated.status = validated.status;
   if (validated.priority !== undefined) {
     updated.priority =
@@ -216,6 +222,7 @@ export async function updateTask(
   const fm = buildFrontmatter({
     id: updated.id,
     title: updated.title,
+    description: updated.description,
     status: updated.status,
     priority: updated.priority,
     order: updated.order,
@@ -316,6 +323,7 @@ export async function toggleSubtask(
   const fm = buildFrontmatter({
     id: data.id,
     title: data.title,
+    description: data.description,
     status: data.status,
     priority: data.priority,
     order: data.order,
@@ -381,6 +389,7 @@ export async function addSubtask(
   const fm = buildFrontmatter({
     id: data.id,
     title: data.title,
+    description: data.description,
     status: data.status,
     priority: data.priority,
     order: data.order,

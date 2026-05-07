@@ -58,6 +58,7 @@ export interface TaskCtx {
 
 function taskSummary(t: Task): string {
   const parts: string[] = [`[${t.id}] ${t.title}`, `status: ${t.status}`];
+  if (t.description) parts.push(`description: ${t.description}`);
   if (t.priority) parts.push(`priority: ${t.priority}`);
   if (t.project) parts.push(`project: ${t.project}`);
   if (t.epic) parts.push(`epic: ${t.epic}`);
@@ -70,9 +71,12 @@ function formatTaskFull(t: Task): string {
   const lines: string[] = [
     `# ${t.id}: ${t.title}`,
     "",
+  ];
+  if (t.description) lines.push(`> ${t.description}`, "");
+  lines.push(
     `- Status: ${t.status}`,
     `- Priority: ${t.priority ?? "none"}`,
-  ];
+  );
   if (t.project) lines.push(`- Project: ${t.project}`);
   if (t.epic) lines.push(`- Epic: ${t.epic}`);
   if (t.sprint) lines.push(`- Sprint: ${t.sprint}`);
@@ -99,6 +103,7 @@ function taskJson(t: Task): Record<string, unknown> {
   return {
     id: t.id,
     title: t.title,
+    description: t.description,
     status: t.status,
     priority: t.priority,
     project: t.project,
@@ -198,6 +203,7 @@ export async function runTaskCreate(
   // is governed in one place (the schema).
   const task = await createTask(ctx.tasksDir, {
     title: cmd.title,
+    ...(cmd.description !== undefined ? { description: cmd.description } : {}),
     ...(cmd.status ? { status: cmd.status } : {}),
     ...(cmd.priority ? { priority: cmd.priority } : {}),
     ...(body !== undefined ? { body } : {}),
@@ -255,6 +261,8 @@ export async function runTaskUpdate(
   // fields are unchanged).
   const patch: Parameters<typeof updateTask>[2] = {};
   if (cmd.title !== undefined) patch.title = cmd.title;
+  if (cmd.description !== undefined) patch.description = cmd.description;
+  else if (cmd.clearDescription) patch.description = null;
   if (cmd.status !== undefined) patch.status = cmd.status;
   if (cmd.priority !== undefined) patch.priority = cmd.priority;
   else if (cmd.clearPriority) patch.priority = null;

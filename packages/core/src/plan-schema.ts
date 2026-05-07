@@ -18,11 +18,16 @@ function normalizeLegacyTaskLinkFields(value: unknown): unknown {
   return { ...record, tasks: record.tasks };
 }
 
+// Short scannable summary in YAML frontmatter (agent-skill convention).
+// Body holds full content; description is the at-a-glance line.
+const descriptionField = z.string().max(500);
+
 export const PlanFrontmatterSchema = z.preprocess(
   normalizeLegacyTaskLinkFields,
   z.object({
     id: z.string(),
     title: z.string(),
+    description: descriptionField.optional(),
     status: PlanStatusEnum,
     created: z.coerce.date(),
     updated: z.coerce.date(),
@@ -39,6 +44,7 @@ export const CreatePlanInputSchema = z.preprocess(
   normalizeLegacyTaskLinkFields,
   z.object({
     title: z.string().min(1),
+    description: descriptionField.optional(),
     status: PlanStatusEnum.default("draft"),
     tags: z.array(lowercaseString).optional(),
     project: z.string().optional(),
@@ -54,6 +60,7 @@ export const PlanPatchSchema = z.preprocess(
   normalizeLegacyTaskLinkFields,
   z.object({
     title: z.string().min(1).optional(),
+    description: descriptionField.nullish(),
     status: PlanStatusEnum.optional(),
     tags: z.array(lowercaseString).optional(),
     project: z.string().nullish(),

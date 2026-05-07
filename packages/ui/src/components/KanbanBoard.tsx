@@ -140,6 +140,14 @@ function TaskCardBody({ task, hideBadges }: { task: Task; hideBadges: boolean })
           {task.title}
         </span>
       </div>
+      {task.description && (
+        <span
+          className="line-clamp-2 text-[11px] leading-snug text-muted-foreground"
+          title={task.description}
+        >
+          {task.description}
+        </span>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{task.id}</span>
         {!hideBadges && task.assignee && (

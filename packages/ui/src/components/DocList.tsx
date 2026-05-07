@@ -55,6 +55,14 @@ export function DocList({
                   {doc.title}
                 </span>
               </div>
+              {doc.description && (
+                <span
+                  className="line-clamp-1 text-[12px] text-muted-foreground"
+                  title={doc.description}
+                >
+                  {doc.description}
+                </span>
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-mono text-[11px] text-muted-foreground">
                   {doc.id}

@@ -49,8 +49,11 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
   const { insertIntoCopilotInput } = useAppContext();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(plan.title);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState(plan.description ?? "");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
   const bodyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,11 +63,23 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
   }, [plan.id, plan.title]);
 
   useEffect(() => {
+    setDescriptionDraft(plan.description ?? "");
+    setEditingDescription(false);
+  }, [plan.id, plan.description]);
+
+  useEffect(() => {
     if (editingTitle && titleInputRef.current) {
       titleInputRef.current.focus();
       titleInputRef.current.select();
     }
   }, [editingTitle]);
+
+  useEffect(() => {
+    if (editingDescription && descriptionInputRef.current) {
+      descriptionInputRef.current.focus();
+      descriptionInputRef.current.select();
+    }
+  }, [editingDescription]);
 
   useEffect(() => {
     setSaveStatus("idle");
@@ -106,6 +121,30 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
     } else if (e.key === "Escape") {
       setTitleDraft(plan.title);
       setEditingTitle(false);
+    }
+  };
+
+  const handleDescriptionSave = () => {
+    setEditingDescription(false);
+    const trimmed = descriptionDraft.trim();
+    const current = plan.description ?? "";
+    if (trimmed === current) return;
+    if (trimmed.length === 0) {
+      saveField({ description: null });
+    } else if (trimmed.length <= 500) {
+      saveField({ description: trimmed });
+    } else {
+      setDescriptionDraft(current);
+    }
+  };
+
+  const handleDescriptionKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleDescriptionSave();
+    } else if (e.key === "Escape") {
+      setDescriptionDraft(plan.description ?? "");
+      setEditingDescription(false);
     }
   };
 
@@ -281,6 +320,31 @@ export function PlanDetail({ plan, planMeta, onUpdated, onDelete, onTaskClick, o
         >
           {plan.title}
         </h1>
+      )}
+
+      {/* Inline editable description (short scannable summary) */}
+      {editingDescription ? (
+        <textarea
+          ref={descriptionInputRef}
+          className="w-full resize-none border-0 border-b border-primary bg-transparent py-0.5 text-sm leading-snug text-muted-foreground outline-none"
+          value={descriptionDraft}
+          maxLength={500}
+          rows={2}
+          onChange={(e) => setDescriptionDraft(e.target.value)}
+          onBlur={handleDescriptionSave}
+          onKeyDown={handleDescriptionKeyDown}
+          placeholder="Short summary shown under the title in lists (max 500 chars)"
+        />
+      ) : (
+        <p
+          className="cursor-text border-b border-transparent py-0.5 text-sm leading-snug text-muted-foreground transition-colors hover:border-border"
+          onClick={() => setEditingDescription(true)}
+          title="Click to edit description"
+        >
+          {plan.description ?? (
+            <span className="italic opacity-60">Add a description…</span>
+          )}
+        </p>
       )}
 
       {/* Tiptap editor */}

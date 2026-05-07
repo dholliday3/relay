@@ -70,6 +70,14 @@ function PlanRowContent({ plan, hideBadges }: { plan: Plan; hideBadges: boolean 
       <div className="flex items-center gap-1.5">
         <span className="truncate text-[13px] font-semibold">{plan.title}</span>
       </div>
+      {plan.description && (
+        <span
+          className="line-clamp-1 text-[12px] text-muted-foreground"
+          title={plan.description}
+        >
+          {plan.description}
+        </span>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{plan.id}</span>
         {!hideBadges && plan.assignee && (

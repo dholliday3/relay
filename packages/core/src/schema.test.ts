@@ -124,6 +124,23 @@ describe("CreateTaskInputSchema", () => {
     });
     expect(result.body).toBe("Some content");
   });
+
+  test("accepts optional description", () => {
+    const result = CreateTaskInputSchema.parse({
+      title: "Test",
+      description: "One-line summary for scannability",
+    });
+    expect(result.description).toBe("One-line summary for scannability");
+  });
+
+  test("rejects description longer than 500 chars", () => {
+    expect(() =>
+      CreateTaskInputSchema.parse({
+        title: "Test",
+        description: "x".repeat(501),
+      }),
+    ).toThrow();
+  });
 });
 
 describe("TaskPatchSchema", () => {
@@ -146,6 +163,17 @@ describe("TaskPatchSchema", () => {
     expect(result.project).toBeNull();
     expect(result.epic).toBeNull();
     expect(result.sprint).toBeNull();
+  });
+
+  test("description can be null (to clear)", () => {
+    const result = TaskPatchSchema.parse({ description: null });
+    expect(result.description).toBeNull();
+  });
+
+  test("description respects 500 char cap on update", () => {
+    expect(() =>
+      TaskPatchSchema.parse({ description: "x".repeat(501) }),
+    ).toThrow();
   });
 });
 
