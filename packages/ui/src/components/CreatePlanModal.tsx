@@ -23,6 +23,7 @@ export function CreatePlanModal({
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [status, setStatus] = useState<PlanStatus>("draft");
   const [project, setProject] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -35,6 +36,7 @@ export function CreatePlanModal({
   const buildInput = (): CreatePlanInput => {
     const trimmed = title.trim();
     const input: CreatePlanInput = { title: trimmed || "Untitled", status };
+    if (description.trim()) input.description = description.trim();
     if (project) input.project = project;
     if (assignee.trim()) input.assignee = assignee.trim();
     if (createdBy.trim()) input.createdBy = createdBy.trim();
@@ -49,7 +51,7 @@ export function CreatePlanModal({
   };
 
   const handleEscape = () => {
-    if (title.trim() || body.trim()) {
+    if (title.trim() || description.trim() || body.trim()) {
       onCreate(buildInput());
     } else {
       onCancel();
@@ -113,12 +115,22 @@ export function CreatePlanModal({
         />
 
         <textarea
+          className="w-full resize-none border-0 border-b border-border bg-transparent py-1.5 text-sm leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+          value={description}
+          maxLength={500}
+          onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Short summary (max 500 chars) — shown under the title in lists"
+          rows={2}
+        />
+
+        <textarea
           className="w-full flex-1 resize-none border-0 bg-transparent py-1 text-xs/relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add overview, goals, tasks to cut..."
-          rows={expanded ? 12 : 5}
+          rows={expanded ? 11 : 4}
         />
 
         <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">

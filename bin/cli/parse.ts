@@ -99,6 +99,7 @@ export interface TaskGetCommand {
 export interface TaskCreateCommand {
   kind: "task-create";
   title: string;
+  description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
   body?: string;
@@ -136,6 +137,8 @@ export interface TaskUpdateCommand {
   kind: "task-update";
   id: string;
   title?: string;
+  description?: string;
+  clearDescription: boolean;
   status?: TaskStatus;
   priority?: TaskPriority;
   clearPriority: boolean;
@@ -226,6 +229,7 @@ export interface PlanGetCommand {
 export interface PlanCreateCommand {
   kind: "plan-create";
   title: string;
+  description?: string;
   status?: PlanStatus;
   body?: string;
   bodyFromFile?: string;
@@ -248,6 +252,8 @@ export interface PlanUpdateCommand {
   kind: "plan-update";
   id: string;
   title?: string;
+  description?: string;
+  clearDescription: boolean;
   status?: PlanStatus;
   body?: string;
   bodyFromFile?: string;
@@ -304,6 +310,7 @@ export interface DocGetCommand {
 export interface DocCreateCommand {
   kind: "doc-create";
   title: string;
+  description?: string;
   body?: string;
   bodyFromFile?: string;
   bodyFromStdin: boolean;
@@ -318,6 +325,8 @@ export interface DocUpdateCommand {
   kind: "doc-update";
   id: string;
   title?: string;
+  description?: string;
+  clearDescription: boolean;
   body?: string;
   bodyFromFile?: string;
   bodyFromStdin: boolean;
@@ -805,6 +814,8 @@ function parseTaskCreate(args: string[]): Command {
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
       titleSet = true;
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
     } else if (arg === "--status" && i + 1 < args.length) {
       const v = args[++i];
       const s = asTaskStatus(v);
@@ -888,6 +899,7 @@ function parseTaskUpdate(args: string[]): Command {
   const result: TaskUpdateCommand = {
     kind: "task-update",
     id: "", // filled below
+    clearDescription: false,
     bodyFromStdin: false,
     clearPriority: false,
     clearProject: false,
@@ -936,6 +948,10 @@ function parseTaskUpdate(args: string[]): Command {
 
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
+    } else if (arg === "--clear-description") {
+      result.clearDescription = true;
     } else if (arg === "--status" && i + 1 < args.length) {
       const v = args[++i];
       const s = asTaskStatus(v);
@@ -1075,6 +1091,12 @@ function parseTaskUpdate(args: string[]): Command {
     return {
       kind: "error",
       message: "--clear-priority is mutually exclusive with --priority",
+    };
+  }
+  if (result.clearDescription && result.description !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-description is mutually exclusive with --description",
     };
   }
   if (result.clearProject && result.project !== undefined) {
@@ -1447,6 +1469,8 @@ function parsePlanCreate(args: string[]): Command {
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
       titleSet = true;
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
     } else if (arg === "--status" && i + 1 < args.length) {
       const v = args[++i];
       const s = asPlanStatus(v);
@@ -1512,6 +1536,7 @@ function parsePlanUpdate(args: string[]): Command {
   const result: PlanUpdateCommand = {
     kind: "plan-update",
     id: "",
+    clearDescription: false,
     bodyFromStdin: false,
     clearProject: false,
     addTags: [],
@@ -1550,6 +1575,10 @@ function parsePlanUpdate(args: string[]): Command {
 
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
+    } else if (arg === "--clear-description") {
+      result.clearDescription = true;
     } else if (arg === "--status" && i + 1 < args.length) {
       const v = args[++i];
       const s = asPlanStatus(v);
@@ -1638,6 +1667,12 @@ function parsePlanUpdate(args: string[]): Command {
     return {
       kind: "error",
       message: "--clear-tasks is mutually exclusive with --task / --add-task",
+    };
+  }
+  if (result.clearDescription && result.description !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-description is mutually exclusive with --description",
     };
   }
   if (result.clearProject && result.project !== undefined) {
@@ -1862,6 +1897,8 @@ function parseDocCreate(args: string[]): Command {
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
       titleSet = true;
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
     } else if (arg === "--body" && i + 1 < args.length) {
       result.body = args[++i];
     } else if (arg === "--body-from-file" && i + 1 < args.length) {
@@ -1915,6 +1952,7 @@ function parseDocUpdate(args: string[]): Command {
   const result: DocUpdateCommand = {
     kind: "doc-update",
     id: "",
+    clearDescription: false,
     bodyFromStdin: false,
     clearProject: false,
     addTags: [],
@@ -1952,6 +1990,10 @@ function parseDocUpdate(args: string[]): Command {
 
     if (arg === "--title" && i + 1 < args.length) {
       result.title = args[++i];
+    } else if (arg === "--description" && i + 1 < args.length) {
+      result.description = args[++i];
+    } else if (arg === "--clear-description") {
+      result.clearDescription = true;
     } else if (arg === "--body" && i + 1 < args.length) {
       result.body = args[++i];
     } else if (arg === "--body-from-file" && i + 1 < args.length) {
@@ -2016,6 +2058,12 @@ function parseDocUpdate(args: string[]): Command {
     return {
       kind: "error",
       message: "--clear-tags is mutually exclusive with --tag / --add-tag",
+    };
+  }
+  if (result.clearDescription && result.description !== undefined) {
+    return {
+      kind: "error",
+      message: "--clear-description is mutually exclusive with --description",
     };
   }
   if (result.clearRefs && (result.replaceRefs || result.addRefs.length > 0)) {
@@ -2236,6 +2284,8 @@ export function helpText(topic?: string): string {
         "  delete <ID>                Archive (or hard-delete, per config)",
         "",
         "Common flags (where applicable):",
+        "  --description \"…\"          Short scannable summary (max 500 chars) shown under the title in lists",
+        "  --clear-description        Remove the description (update only)",
         "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag)",
         "  --ref <url-or-sha>         Repeatable. Same semantics as --tag",
         "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
@@ -2260,6 +2310,8 @@ export function helpText(topic?: string): string {
         "",
         "Common flags (where applicable):",
         "  --status <s>               One of: draft, active, completed, archived",
+        "  --description \"…\"          Short scannable summary (max 500 chars) shown under the title in lists",
+        "  --clear-description        Remove the description (update only)",
         "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag for deltas)",
         "  --task <ID>                Repeatable. On 'create' links existing tasks; on 'update' replaces (use --add-task / --remove-task)",
         "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
@@ -2288,6 +2340,8 @@ export function helpText(topic?: string): string {
         "Common flags (where applicable):",
         "  --status <s>               One of: draft, backlog, open, in-progress, done, cancelled",
         "  --priority <p>             One of: low, medium, high, urgent",
+        "  --description \"…\"          Short scannable summary (max 500 chars) shown under the title in lists",
+        "  --clear-description        Remove the description (update only)",
         "  --tag <t>                  Repeatable. On 'create' adds; on 'update' replaces (use --add-tag / --remove-tag for deltas)",
         "  --body \"…\" / --body-from-file <path> / --body-from-stdin",
         "  --json                     Emit structured JSON instead of human-readable text",

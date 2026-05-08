@@ -15,9 +15,16 @@ const lowercaseString = z
   .string()
   .refine((s) => s === s.toLowerCase(), "Tags must be lowercase");
 
+// Short scannable summary in the YAML frontmatter, modeled on the
+// `description` convention used by agent skills. Body still holds the
+// full content; description is the at-a-glance line shown under the
+// title in lists and pickers.
+const descriptionField = z.string().max(500);
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string(),
   title: z.string(),
+  description: descriptionField.optional(),
   status: StatusEnum,
   created: z.coerce.date(),
   updated: z.coerce.date(),
@@ -36,6 +43,7 @@ export const TaskFrontmatterSchema = z.object({
 
 export const CreateTaskInputSchema = z.object({
   title: z.string().min(1),
+  description: descriptionField.optional(),
   status: StatusEnum.default("open"),
   priority: PriorityEnum.optional(),
   order: z.number().optional(),
@@ -53,6 +61,7 @@ export const CreateTaskInputSchema = z.object({
 
 export const TaskPatchSchema = z.object({
   title: z.string().min(1).optional(),
+  description: descriptionField.nullish(),
   status: StatusEnum.optional(),
   priority: PriorityEnum.nullish(),
   order: z.number().nullish(),

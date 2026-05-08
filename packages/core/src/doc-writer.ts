@@ -102,6 +102,7 @@ export async function createDoc(
   const frontmatter = buildFrontmatter({
     id,
     title: validated.title,
+    description: validated.description,
     tags,
     project: validated.project,
     createdBy: validated.createdBy,
@@ -119,6 +120,7 @@ export async function createDoc(
   return {
     id,
     title: validated.title,
+    description: validated.description,
     tags,
     project: validated.project,
     createdBy: validated.createdBy,
@@ -151,6 +153,10 @@ export async function updateDoc(
 
   const updated = { ...existing, updated: now };
   if (validated.title !== undefined) updated.title = validated.title;
+  if (validated.description !== undefined) {
+    updated.description =
+      validated.description === null ? undefined : validated.description;
+  }
   if (validated.tags !== undefined) {
     updated.tags = validated.tags.length > 0 ? validated.tags : undefined;
   }
@@ -171,6 +177,7 @@ export async function updateDoc(
   const frontmatter = buildFrontmatter({
     id: updated.id,
     title: updated.title,
+    description: updated.description,
     tags: updated.tags,
     project: updated.project,
     createdBy: updated.createdBy,

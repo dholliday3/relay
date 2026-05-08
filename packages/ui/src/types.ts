@@ -1,6 +1,7 @@
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   status: "draft" | "backlog" | "open" | "in-progress" | "done" | "cancelled";
   created: string;
   updated: string;
@@ -24,6 +25,7 @@ export type Priority = Task["priority"];
 
 export interface TaskPatch {
   title?: string;
+  description?: string | null;
   status?: Status;
   priority?: Priority | null;
   project?: string | null;
@@ -55,6 +57,7 @@ export interface RelayConfig {
 
 export interface CreateTaskInput {
   title: string;
+  description?: string;
   status?: Status;
   priority?: Priority;
   project?: string;
@@ -71,6 +74,7 @@ export interface CreateTaskInput {
 export interface Plan {
   id: string;
   title: string;
+  description?: string;
   status: "draft" | "active" | "completed" | "archived";
   created: string;
   updated: string;
@@ -88,6 +92,7 @@ export type PlanStatus = Plan["status"];
 
 export interface PlanPatch {
   title?: string;
+  description?: string | null;
   status?: PlanStatus;
   tags?: string[];
   project?: string | null;
@@ -99,6 +104,7 @@ export interface PlanPatch {
 
 export interface CreatePlanInput {
   title: string;
+  description?: string;
   status?: PlanStatus;
   tags?: string[];
   project?: string;
@@ -115,6 +121,7 @@ export interface PlanMeta {
 export interface Doc {
   id: string;
   title: string;
+  description?: string;
   created: string;
   updated: string;
   tags?: string[];
@@ -127,6 +134,7 @@ export interface Doc {
 
 export interface DocPatch {
   title?: string;
+  description?: string | null;
   tags?: string[];
   project?: string | null;
   createdBy?: string | null;
@@ -135,6 +143,7 @@ export interface DocPatch {
 
 export interface CreateDocInput {
   title: string;
+  description?: string;
   tags?: string[];
   project?: string;
   createdBy?: string;

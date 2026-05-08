@@ -34,6 +34,7 @@ import type { Doc, Plan } from "@relay/core";
 function taskSummary(t: {
   id: string;
   title: string;
+  description?: string;
   status: string;
   priority?: string;
   project?: string;
@@ -45,6 +46,7 @@ function taskSummary(t: {
   updated: Date;
 }): string {
   const parts = [`[${t.id}] ${t.title}`, `status: ${t.status}`];
+  if (t.description) parts.push(`description: ${t.description}`);
   if (t.priority) parts.push(`priority: ${t.priority}`);
   if (t.project) parts.push(`project: ${t.project}`);
   if (t.epic) parts.push(`epic: ${t.epic}`);
@@ -56,6 +58,7 @@ function taskSummary(t: {
 function formatTaskFull(t: {
   id: string;
   title: string;
+  description?: string;
   status: string;
   priority?: string;
   project?: string;
@@ -70,9 +73,12 @@ function formatTaskFull(t: {
   const lines = [
     `# ${t.id}: ${t.title}`,
     "",
+  ];
+  if (t.description) lines.push(`> ${t.description}`, "");
+  lines.push(
     `- Status: ${t.status}`,
     `- Priority: ${t.priority ?? "none"}`,
-  ];
+  );
   if (t.project) lines.push(`- Project: ${t.project}`);
   if (t.epic) lines.push(`- Epic: ${t.epic}`);
   if (t.sprint) lines.push(`- Sprint: ${t.sprint}`);
@@ -94,6 +100,7 @@ function formatTaskFull(t: {
 
 function planSummary(p: Plan): string {
   const parts = [`[${p.id}] ${p.title}`, `status: ${p.status}`];
+  if (p.description) parts.push(`description: ${p.description}`);
   if (p.project) parts.push(`project: ${p.project}`);
   if (p.tags && p.tags.length > 0) parts.push(`tags: ${p.tags.join(", ")}`);
   if (p.tasks && p.tasks.length > 0) parts.push(`tasks: ${p.tasks.join(", ")}`);
@@ -104,8 +111,9 @@ function formatPlanFull(p: Plan): string {
   const lines = [
     `# ${p.id}: ${p.title}`,
     "",
-    `- Status: ${p.status}`,
   ];
+  if (p.description) lines.push(`> ${p.description}`, "");
+  lines.push(`- Status: ${p.status}`);
   if (p.project) lines.push(`- Project: ${p.project}`);
   if (p.assignee) lines.push(`- Assignee: ${p.assignee}`);
   if (p.createdBy) lines.push(`- Created by: ${p.createdBy}`);
@@ -122,6 +130,7 @@ function formatPlanFull(p: Plan): string {
 
 function docSummary(doc: Doc): string {
   const parts = [`[${doc.id}] ${doc.title}`];
+  if (doc.description) parts.push(`description: ${doc.description}`);
   if (doc.project) parts.push(`project: ${doc.project}`);
   if (doc.tags && doc.tags.length > 0) parts.push(`tags: ${doc.tags.join(", ")}`);
   return parts.join(" | ");
@@ -129,6 +138,7 @@ function docSummary(doc: Doc): string {
 
 function formatDocFull(doc: Doc): string {
   const lines = [`# ${doc.id}: ${doc.title}`, ""];
+  if (doc.description) lines.push(`> ${doc.description}`, "");
   if (doc.project) lines.push(`- Project: ${doc.project}`);
   if (doc.createdBy) lines.push(`- Created by: ${doc.createdBy}`);
   if (doc.tags && doc.tags.length > 0) lines.push(`- Tags: ${doc.tags.join(", ")}`);
@@ -256,6 +266,13 @@ export async function startMcpServer(
     "Create a new task. Returns the created task details.",
     {
       title: z.string().min(1).describe("Task title (required)"),
+      description: z
+        .string()
+        .max(500)
+        .optional()
+        .describe(
+          "Short scannable summary (max 500 chars). One or two sentences shown under the title in lists; the body holds the full content.",
+        ),
       status: z
         .enum(["draft", "backlog", "open", "in-progress", "done", "cancelled"])
         .optional()
@@ -294,6 +311,14 @@ export async function startMcpServer(
     {
       id: z.string().describe("Task ID to update"),
       title: z.string().min(1).optional().describe("New title"),
+      description: z
+        .string()
+        .max(500)
+        .nullable()
+        .optional()
+        .describe(
+          "New short summary shown under the title (max 500 chars; null to clear).",
+        ),
       status: z
         .enum(["draft", "backlog", "open", "in-progress", "done", "cancelled"])
         .optional()
@@ -711,6 +736,13 @@ export async function startMcpServer(
       "Create a new plan. Plans are strategic documents for brainstorming, feature specs, or PRDs.",
       {
         title: z.string().min(1).describe("Plan title (required)"),
+        description: z
+          .string()
+          .max(500)
+          .optional()
+          .describe(
+            "Short scannable summary (max 500 chars). One or two sentences shown under the title in lists; the body holds the full content.",
+          ),
         status: z
           .enum(["draft", "active", "completed", "archived"])
           .optional()
@@ -742,6 +774,14 @@ export async function startMcpServer(
       {
         id: z.string().describe("Plan ID to update"),
         title: z.string().min(1).optional().describe("New title"),
+        description: z
+          .string()
+          .max(500)
+          .nullable()
+          .optional()
+          .describe(
+            "New short summary shown under the title (max 500 chars; null to clear).",
+          ),
         status: z
           .enum(["draft", "active", "completed", "archived"])
           .optional()
@@ -977,6 +1017,13 @@ export async function startMcpServer(
       "Create a new reference doc. Use docs for durable references and notes rather than plans or tasks.",
       {
         title: z.string().min(1).describe("Doc title (required)"),
+        description: z
+          .string()
+          .max(500)
+          .optional()
+          .describe(
+            "Short scannable summary (max 500 chars). One or two sentences shown under the title in lists; the body holds the full content.",
+          ),
         tags: z.array(z.string()).optional().describe("Tags (lowercase)"),
         project: z.string().optional().describe("Project name"),
         createdBy: z.string().optional().describe("Creator name (human or agent who created this doc)"),
@@ -1002,6 +1049,14 @@ export async function startMcpServer(
       {
         id: z.string().describe("Doc ID to update"),
         title: z.string().min(1).optional().describe("New title"),
+        description: z
+          .string()
+          .max(500)
+          .nullable()
+          .optional()
+          .describe(
+            "New short summary shown under the title (max 500 chars; null to clear).",
+          ),
         tags: z.array(z.string()).optional().describe("New tags (replaces existing)"),
         project: z.string().nullable().optional().describe("New project (null to clear)"),
         createdBy: z.string().nullable().optional().describe("Creator name (null to clear)"),

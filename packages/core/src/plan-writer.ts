@@ -106,6 +106,7 @@ export async function createPlan(
   const fm = buildFrontmatter({
     id,
     title: validated.title,
+    description: validated.description,
     status: validated.status,
     tags,
     project: validated.project,
@@ -126,6 +127,7 @@ export async function createPlan(
   return {
     id,
     title: validated.title,
+    description: validated.description,
     status: validated.status,
     tags,
     project: validated.project,
@@ -161,6 +163,10 @@ export async function updatePlan(
 
   const updated = { ...existing, updated: now };
   if (validated.title !== undefined) updated.title = validated.title;
+  if (validated.description !== undefined) {
+    updated.description =
+      validated.description === null ? undefined : validated.description;
+  }
   if (validated.status !== undefined) updated.status = validated.status;
   if (validated.tags !== undefined) {
     updated.tags = validated.tags.length > 0 ? validated.tags : undefined;
@@ -188,6 +194,7 @@ export async function updatePlan(
   const fm = buildFrontmatter({
     id: updated.id,
     title: updated.title,
+    description: updated.description,
     status: updated.status,
     tags: updated.tags,
     project: updated.project,
@@ -318,6 +325,7 @@ export async function cutTasksFromPlan(
   const fm = buildFrontmatter({
     id: planData.id,
     title: planData.title,
+    description: planData.description,
     status: planData.status,
     tags: planData.tags,
     project: planData.project,

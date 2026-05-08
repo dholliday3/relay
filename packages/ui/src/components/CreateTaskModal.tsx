@@ -25,6 +25,7 @@ export function CreateTaskModal({
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [status, setStatus] = useState<Status>(defaultStatus);
   const [priority, setPriority] = useState<Priority | "">("");
   const [project, setProject] = useState("");
@@ -40,6 +41,7 @@ export function CreateTaskModal({
   const buildInput = (statusOverride?: Status): CreateTaskInput => {
     const trimmed = title.trim();
     const input: CreateTaskInput = { title: trimmed || "Untitled", status: statusOverride ?? status };
+    if (description.trim()) input.description = description.trim();
     if (priority) input.priority = priority;
     if (project) input.project = project;
     if (epic) input.epic = epic;
@@ -57,7 +59,7 @@ export function CreateTaskModal({
   };
 
   const handleEscape = () => {
-    if (title.trim() || body.trim()) {
+    if (title.trim() || description.trim() || body.trim()) {
       onCreate(buildInput("draft"));
     } else {
       onCancel();
@@ -127,12 +129,22 @@ export function CreateTaskModal({
         />
 
         <textarea
+          className="w-full resize-none border-0 border-b border-border bg-transparent py-1.5 text-sm leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+          value={description}
+          maxLength={500}
+          onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Short summary (max 500 chars) — shown under the title in lists"
+          rows={2}
+        />
+
+        <textarea
           className="w-full flex-1 resize-none border-0 bg-transparent py-1 text-xs/relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Add a description..."
-          rows={expanded ? 12 : 5}
+          placeholder="Add details, notes, acceptance criteria..."
+          rows={expanded ? 11 : 4}
         />
 
         <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">

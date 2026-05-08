@@ -426,6 +426,51 @@ describe("parseArgv — task <verb>", () => {
     ).toBe("error");
   });
 
+  test("task create — accepts --description", () => {
+    const cmd = parseArgv(
+      argv("task", "create", "--title", "T", "--description", "Quick summary"),
+    );
+    expect(cmd).toMatchObject({
+      kind: "task-create",
+      title: "T",
+      description: "Quick summary",
+    });
+  });
+
+  test("task update — --description sets and --clear-description clears", () => {
+    const set = parseArgv(
+      argv("task", "update", "TASK-001", "--description", "New summary"),
+    );
+    expect(set).toMatchObject({
+      kind: "task-update",
+      description: "New summary",
+      clearDescription: false,
+    });
+
+    const clear = parseArgv(
+      argv("task", "update", "TASK-001", "--clear-description"),
+    );
+    expect(clear).toMatchObject({
+      kind: "task-update",
+      clearDescription: true,
+    });
+  });
+
+  test("task update — --description + --clear-description is mutually exclusive", () => {
+    expect(
+      parseArgv(
+        argv(
+          "task",
+          "update",
+          "TASK-001",
+          "--description",
+          "x",
+          "--clear-description",
+        ),
+      ).kind,
+    ).toBe("error");
+  });
+
   test("task delete — requires ID", () => {
     expect(parseArgv(argv("task", "delete")).kind).toBe("error");
     expect(parseArgv(argv("task", "delete", "TASK-001"))).toEqual({

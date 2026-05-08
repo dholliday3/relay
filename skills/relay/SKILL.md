@@ -114,6 +114,19 @@ relay task create --title "Fix login redirect"
 
 That's the minimum. Defaults: `status: backlog`, no priority. Only set `--status open` if the user says it's ready to pick up now or the context makes that obvious. Only set `--priority` if the user specified one or the context clearly calls for it. If a `--project`, `--epic`, `--sprint`, `--blocked-by`, or `--related-to` is obvious from context, include it — but don't interrogate the user for metadata they didn't ask to set.
 
+### `--description` (optional, scannable summary)
+
+Tasks, plans, and docs all support an optional `description` field in YAML frontmatter — modeled on the agent-skill convention. It's a one-or-two sentence summary (max 500 chars) shown under the title in lists, kanban cards, and `get` output. Use it when the title alone won't tell a future reader (or future agent) what this is about at a glance. Body still holds the full content; description is the at-a-glance line.
+
+```sh
+relay task create --title "Fix login redirect" \
+  --description "OAuth callback drops the redirect param when state is restored from cookies"
+relay task update TKT-001 --description "New short summary"
+relay task update TKT-001 --clear-description
+```
+
+Same flag works for `relay plan create/update` and `relay doc create/update`.
+
 For long bodies, pipe via stdin or read from a file:
 
 ```sh

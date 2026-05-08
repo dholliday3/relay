@@ -37,6 +37,7 @@ export interface DocCtx {
 
 function docSummary(d: Doc): string {
   const parts: string[] = [`[${d.id}] ${d.title}`];
+  if (d.description) parts.push(`description: ${d.description}`);
   if (d.project) parts.push(`project: ${d.project}`);
   if (d.tags && d.tags.length > 0) parts.push(`tags: ${d.tags.join(", ")}`);
   return parts.join(" | ");
@@ -44,6 +45,7 @@ function docSummary(d: Doc): string {
 
 function formatDocFull(d: Doc): string {
   const lines: string[] = [`# ${d.id}: ${d.title}`, ""];
+  if (d.description) lines.push(`> ${d.description}`, "");
   if (d.project) lines.push(`- Project: ${d.project}`);
   if (d.createdBy) lines.push(`- Created by: ${d.createdBy}`);
   if (d.tags && d.tags.length > 0) lines.push(`- Tags: ${d.tags.join(", ")}`);
@@ -60,6 +62,7 @@ function docJson(d: Doc): Record<string, unknown> {
   return {
     id: d.id,
     title: d.title,
+    description: d.description,
     project: d.project,
     tags: d.tags,
     createdBy: d.createdBy,
@@ -136,6 +139,7 @@ export async function runDocCreate(
 
   const doc = await createDoc(ctx.rootDir, ctx.docsDir, {
     title: cmd.title,
+    ...(cmd.description !== undefined ? { description: cmd.description } : {}),
     ...(body !== undefined ? { body } : {}),
     ...(cmd.project ? { project: cmd.project } : {}),
     ...(cmd.tags.length > 0 ? { tags: cmd.tags } : {}),
@@ -178,6 +182,8 @@ export async function runDocUpdate(
 
   const patch: Parameters<typeof updateDoc>[2] = {};
   if (cmd.title !== undefined) patch.title = cmd.title;
+  if (cmd.description !== undefined) patch.description = cmd.description;
+  else if (cmd.clearDescription) patch.description = null;
   if (body !== undefined) patch.body = body;
   if (cmd.project !== undefined) patch.project = cmd.project;
   else if (cmd.clearProject) patch.project = null;

@@ -44,6 +44,7 @@ export interface PlanCtx {
 
 function planSummary(p: Plan): string {
   const parts: string[] = [`[${p.id}] ${p.title}`, `status: ${p.status}`];
+  if (p.description) parts.push(`description: ${p.description}`);
   if (p.project) parts.push(`project: ${p.project}`);
   if (p.tags && p.tags.length > 0) parts.push(`tags: ${p.tags.join(", ")}`);
   if (p.tasks && p.tasks.length > 0) parts.push(`tasks: ${p.tasks.join(", ")}`);
@@ -54,8 +55,9 @@ function formatPlanFull(p: Plan): string {
   const lines: string[] = [
     `# ${p.id}: ${p.title}`,
     "",
-    `- Status: ${p.status}`,
   ];
+  if (p.description) lines.push(`> ${p.description}`, "");
+  lines.push(`- Status: ${p.status}`);
   if (p.project) lines.push(`- Project: ${p.project}`);
   if (p.assignee) lines.push(`- Assignee: ${p.assignee}`);
   if (p.createdBy) lines.push(`- Created by: ${p.createdBy}`);
@@ -75,6 +77,7 @@ function planJson(p: Plan): Record<string, unknown> {
   return {
     id: p.id,
     title: p.title,
+    description: p.description,
     status: p.status,
     project: p.project,
     tags: p.tags,
@@ -155,6 +158,7 @@ export async function runPlanCreate(
 
   const plan = await createPlan(ctx.rootDir, ctx.plansDir, {
     title: cmd.title,
+    ...(cmd.description !== undefined ? { description: cmd.description } : {}),
     ...(cmd.status ? { status: cmd.status } : {}),
     ...(body !== undefined ? { body } : {}),
     ...(cmd.project ? { project: cmd.project } : {}),
@@ -199,6 +203,8 @@ export async function runPlanUpdate(
 
   const patch: Parameters<typeof updatePlan>[2] = {};
   if (cmd.title !== undefined) patch.title = cmd.title;
+  if (cmd.description !== undefined) patch.description = cmd.description;
+  else if (cmd.clearDescription) patch.description = null;
   if (cmd.status !== undefined) patch.status = cmd.status;
   if (body !== undefined) patch.body = body;
   if (cmd.project !== undefined) patch.project = cmd.project;

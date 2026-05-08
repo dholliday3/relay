@@ -109,6 +109,14 @@ function TaskRowContent({ task, hideBadges }: { task: Task; hideBadges: boolean 
         )}
         <span className="truncate text-[13px] font-semibold">{task.title}</span>
       </div>
+      {task.description && (
+        <span
+          className="line-clamp-1 text-[12px] text-muted-foreground"
+          title={task.description}
+        >
+          {task.description}
+        </span>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{task.id}</span>
         {!hideBadges && task.assignee && (
