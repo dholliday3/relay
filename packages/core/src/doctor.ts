@@ -267,7 +267,7 @@ async function checkFilenameDrift(
   const drifted: ParsedArtifact[] = [];
 
   for (const a of artifacts) {
-    const match = a.file.match(/^([A-Z]+-\d+)(?:-.*)?\.md$/);
+    const match = a.file.match(/^([A-Z]+-[0-9A-Za-z]+)(?:-.*)?\.md$/);
     if (!match) continue; // No id-prefix in filename — nothing to compare
     const filenameId = match[1];
     if (filenameId === a.id) continue;
@@ -288,7 +288,7 @@ async function checkFilenameDrift(
     // *current* filesystem, not the artifacts snapshot, so prior renames in
     // this pass are visible.
     for (const a of drifted) {
-      const suffixMatch = a.file.match(/^[A-Z]+-\d+(-.*\.md|\.md)$/);
+      const suffixMatch = a.file.match(/^[A-Z]+-[0-9A-Za-z]+(-.*\.md|\.md)$/);
       const suffix = suffixMatch ? suffixMatch[1] : ".md";
       const newName = `${a.id}${suffix}`;
       const oldPath = join(dir, a.file);

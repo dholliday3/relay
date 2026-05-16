@@ -75,7 +75,7 @@ async function changedArtifactIds(
     // Extract ID from filename if it matches our pattern
     const basename = filePath.split("/").pop() ?? "";
     if (extname(basename) === ".md") {
-      const match = basename.match(/^([A-Z]+-\d+)/);
+      const match = basename.match(/^([A-Z]+-[0-9A-Za-z]+)/);
       if (match) ids.push(match[1]);
     }
     // Also include counter/config changes

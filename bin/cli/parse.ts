@@ -2319,8 +2319,8 @@ export function helpText(topic?: string): string {
         "",
         "Examples:",
         "  relay plan list --status active --json",
-        "  relay plan create --title \"Q3 roadmap\" --tag roadmap --task TASK-001 --task TASK-002",
-        "  relay plan cut-tasks PLAN-005",
+        "  relay plan create --title \"Q3 roadmap\" --tag roadmap --task TASK-K3F9P --task TASK-9M2VT",
+        "  relay plan cut-tasks PLAN-9M2VT",
       ].join("\n");
     case "task":
       return [
@@ -2349,7 +2349,7 @@ export function helpText(topic?: string): string {
         "Examples:",
         "  relay task list --status open --json",
         "  relay task create --title \"Fix login\" --priority high --tag bug --tag auth",
-        "  relay task update TKT-001 --status in-progress --assignee claude-code",
+        "  relay task update TKT-K3F9P --status in-progress --assignee claude-code",
         "  cat notes.md | relay task create --title \"Refactor parser\" --body-from-stdin",
       ].join("\n");
     default:
