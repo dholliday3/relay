@@ -135,7 +135,7 @@ describe("compiled binary smoke", () => {
       expect(create.code).toBe(0);
       const created = JSON.parse(create.stdout);
       expect(created.title).toBe("from compiled binary");
-      expect(created.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+      expect(created.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
 
       // task list --json reads what we just wrote, round-tripping
       // through the on-disk markdown + frontmatter + readers.

@@ -244,7 +244,7 @@ export async function startMcpServer(
     "get_task",
     "Get full details of a task by ID, including body content.",
     {
-      id: z.string().describe("Task ID (e.g. TASK-k3f9p)"),
+      id: z.string().describe("Task ID (e.g. TASK-K3F9P)"),
     },
     async (args) => {
       const task = await getTask(tasksDir, args.id);
@@ -607,7 +607,7 @@ export async function startMcpServer(
   server.prompt(
     "task-context",
     "Get formatted context for working on a specific task, including details, subtasks, and related tasks",
-    { id: z.string().describe("Task ID (e.g. TASK-k3f9p)") },
+    { id: z.string().describe("Task ID (e.g. TASK-K3F9P)") },
     async (args) => {
       const task = await getTask(tasksDir, args.id);
       if (!task) {
@@ -716,7 +716,7 @@ export async function startMcpServer(
       "get_plan",
       "Get full details of a plan by ID, including body content.",
       {
-        id: z.string().describe("Plan ID (e.g. PLAN-k3f9p)"),
+        id: z.string().describe("Plan ID (e.g. PLAN-K3F9P)"),
       },
       async (args) => {
         const plan = await getPlan(plansDir, args.id);
@@ -920,7 +920,7 @@ export async function startMcpServer(
     server.prompt(
       "plan-context",
       "Get formatted context for working on a plan, including linked tasks",
-      { id: z.string().describe("Plan ID (e.g. PLAN-k3f9p)") },
+      { id: z.string().describe("Plan ID (e.g. PLAN-K3F9P)") },
       async (args) => {
         const plan = await getPlan(plansDir, args.id);
         if (!plan) {
@@ -998,7 +998,7 @@ export async function startMcpServer(
       "get_doc",
       "Get full details of a reference doc by ID, including body content.",
       {
-        id: z.string().describe("Doc ID (e.g. DOC-k3f9p)"),
+        id: z.string().describe("Doc ID (e.g. DOC-K3F9P)"),
       },
       async (args) => {
         const doc = await getDoc(docsDir, args.id);

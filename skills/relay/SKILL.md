@@ -42,7 +42,7 @@ If you discover relay artifacts already landed on main (untracked `TASK-*.md` fi
 
 **Docs** (`DOC-*`) are durable reference material — architecture notes, UX guidance, integration docs, and research summaries worth keeping around. They do not have workflow state. Treat them as stable context for humans and agents.
 
-**IDs are random** (e.g. `TKT-k3f9p`), assigned per-artifact at creation. Two branches creating tasks in parallel will always get distinct IDs, so merging a feature branch back to main never produces an ID collision — no coordination needed. Legacy incremental IDs (`TKT-001`-style) from older relay versions keep working unchanged.
+**IDs are random** (e.g. `TKT-K3F9P`), assigned per-artifact at creation. Two branches creating tasks in parallel will always get distinct IDs, so merging a feature branch back to main never produces an ID collision — no coordination needed. Legacy incremental IDs (`TKT-001`-style) from older relay versions keep working unchanged.
 
 The typical flow is: capture durable context in docs → brainstorm in a plan → cut tasks from the plan → pick up a task → hand off to an agent → review what changed → mark done and link the commit.
 

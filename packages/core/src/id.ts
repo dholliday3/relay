@@ -4,10 +4,10 @@ import { join, dirname } from "node:path";
 import { getConfig } from "./config.js";
 
 const ID_SUFFIX_LENGTH = 5;
-// Crockford-style base32 (lowercase, no i/l/o/u) — visually unambiguous,
+// Crockford-style base32 (uppercase, no I/L/O/U) — visually unambiguous,
 // case-insensitive grep-friendly, and 5 chars gives ~33M values which makes
 // cross-branch collisions vanishingly unlikely without coordination.
-const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const MAX_RETRIES = 10;
 
 function randomSuffix(length: number): string {
@@ -44,7 +44,7 @@ async function existingIds(dir: string): Promise<Set<string>> {
     const entries = await readdir(dir);
     const ids = new Set<string>();
     for (const name of entries) {
-      const m = name.match(/^([A-Z]+-[0-9a-z]+)/);
+      const m = name.match(/^([A-Z]+-[0-9A-Za-z]+)/);
       if (m) ids.add(m[1]);
     }
     return ids;

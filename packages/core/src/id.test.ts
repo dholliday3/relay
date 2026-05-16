@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { slugify, formatId, formatFilename, nextId, nextIdForDir } from "./id.js";
 
-const ID_RE = /^[A-Z]+-[0-9a-z]{5}$/;
+const ID_RE = /^[A-Z]+-[0-9A-Z]{5}$/;
 
 describe("slugify", () => {
   test("lowercases and replaces spaces with hyphens", () => {
@@ -33,20 +33,20 @@ describe("slugify", () => {
 
 describe("formatId", () => {
   test("joins prefix and suffix with a hyphen", () => {
-    expect(formatId("TKT", "k3f9p")).toBe("TKT-k3f9p");
+    expect(formatId("TKT", "K3F9P")).toBe("TKT-K3F9P");
     expect(formatId("ART", "00001")).toBe("ART-00001");
   });
 });
 
 describe("formatFilename", () => {
   test("produces correct filename", () => {
-    expect(formatFilename("TKT-k3f9p", "Add Task Search")).toBe(
-      "TKT-k3f9p-add-task-search.md",
+    expect(formatFilename("TKT-K3F9P", "Add Task Search")).toBe(
+      "TKT-K3F9P-add-task-search.md",
     );
   });
 
   test("handles empty title", () => {
-    expect(formatFilename("TKT-k3f9p", "")).toBe("TKT-k3f9p.md");
+    expect(formatFilename("TKT-K3F9P", "")).toBe("TKT-K3F9P.md");
   });
 });
 
@@ -63,7 +63,7 @@ describe("nextId", () => {
 
   test("returns a TASK-prefixed id matching the 5-char base32 format", async () => {
     const result = await nextId(dir);
-    expect(result.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(result.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
   });
 
   test("uses prefix from config", async () => {
@@ -72,7 +72,7 @@ describe("nextId", () => {
     await mkdir(tasksDir, { recursive: true });
     await writeFile(join(relayDir, "config.yaml"), "prefix: ART\ndeleteMode: archive\n", "utf-8");
     const result = await nextId(tasksDir);
-    expect(result.id).toMatch(/^ART-[0-9a-z]{5}$/);
+    expect(result.id).toMatch(/^ART-[0-9A-Z]{5}$/);
     await rm(relayDir, { recursive: true, force: true });
   });
 
@@ -110,7 +110,7 @@ describe("nextId", () => {
 
   test("treats legacy incremental ids as taken and coexists with them", async () => {
     // Existing repos have TASK-001-style files. The collision scanner uses
-    // [A-Z]+-[0-9a-z]+ so legacy IDs register as taken; new IDs avoid them
+    // [A-Z]+-[0-9A-Za-z]+ so legacy IDs register as taken; new IDs avoid them
     // but the legacy files keep working unchanged.
     const legacy = ["TASK-001", "TASK-002", "TASK-042"];
     for (const id of legacy) {

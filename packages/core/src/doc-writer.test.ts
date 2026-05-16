@@ -28,7 +28,7 @@ describe("doc-writer", () => {
   test("creates a doc file with correct frontmatter", async () => {
     const doc = await createDoc(rootDir, docsDir, { title: "Reference Doc" });
 
-    expect(doc.id).toMatch(/^DOC-[0-9a-z]{5}$/);
+    expect(doc.id).toMatch(/^DOC-[0-9A-Z]{5}$/);
     expect(doc.title).toBe("Reference Doc");
 
     const files = await readdir(docsDir);
@@ -64,7 +64,7 @@ describe("doc-writer", () => {
       "utf-8",
     );
     const doc = await createDoc(rootDir, docsDir, { title: "Custom Prefix" });
-    expect(doc.id).toMatch(/^REF-[0-9a-z]{5}$/);
+    expect(doc.id).toMatch(/^REF-[0-9A-Z]{5}$/);
   });
 
   test("updates frontmatter fields", async () => {

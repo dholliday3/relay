@@ -50,10 +50,10 @@ Run \`relay <verb>\` from anywhere inside the project. Every invocation walks up
 
 \`\`\`
 relay task list --status open                  # what's ready to pick up
-relay task get TKT-k3f9p                       # full body, subtasks, refs, agent notes
+relay task get TKT-K3F9P                       # full body, subtasks, refs, agent notes
 relay task create --title "…"                  # new task; defaults to backlog
-relay task update TKT-k3f9p --status in-progress --assignee claude-code
-relay plan cut-tasks PLAN-9m2vt                # checkboxes → linked tasks in one call
+relay task update TKT-K3F9P --status in-progress --assignee claude-code
+relay plan cut-tasks PLAN-9M2VT                # checkboxes → linked tasks in one call
 relay where                                    # which .relay/ would this resolve to?
 \`\`\`
 

@@ -15,10 +15,10 @@ export interface TaskChangeEvent {
 
 type EventCallback = (event: TaskChangeEvent) => void;
 
-/** Extract task ID from filename like "TASK-k3f9p-some-slug.md" → "TASK-k3f9p" */
+/** Extract task ID from filename like "TASK-K3F9P-some-slug.md" → "TASK-K3F9P" */
 function extractTaskId(filename: string): string | null {
   const name = filename.replace(/\.md$/, "");
-  const match = name.match(/^([A-Z]+-[0-9a-z]+)/);
+  const match = name.match(/^([A-Z]+-[0-9A-Za-z]+)/);
   return match ? match[1] : null;
 }
 

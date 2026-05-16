@@ -33,7 +33,7 @@ describe("createPlan", () => {
       status: "draft",
     });
 
-    expect(plan.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
+    expect(plan.id).toMatch(/^PLAN-[0-9A-Z]{5}$/);
     expect(plan.title).toBe("My First Plan");
     expect(plan.status).toBe("draft");
     expect(plan.created).toBeInstanceOf(Date);
@@ -88,8 +88,8 @@ describe("createPlan", () => {
   test("allocates distinct ids per plan", async () => {
     const p1 = await createPlan(rootDir, plansDir, { title: "First" });
     const p2 = await createPlan(rootDir, plansDir, { title: "Second" });
-    expect(p1.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
-    expect(p2.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
+    expect(p1.id).toMatch(/^PLAN-[0-9A-Z]{5}$/);
+    expect(p2.id).toMatch(/^PLAN-[0-9A-Z]{5}$/);
     expect(p1.id).not.toBe(p2.id);
   });
 
@@ -114,7 +114,7 @@ describe("createPlan", () => {
       "utf-8",
     );
     const plan = await createPlan(rootDir, plansDir, { title: "Custom Prefix" });
-    expect(plan.id).toMatch(/^PRD-[0-9a-z]{5}$/);
+    expect(plan.id).toMatch(/^PRD-[0-9A-Z]{5}$/);
   });
 });
 

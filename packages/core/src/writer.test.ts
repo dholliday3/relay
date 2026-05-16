@@ -30,7 +30,7 @@ describe("createTask", () => {
       status: "open",
     });
 
-    expect(task.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(task.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
     expect(task.title).toBe("My First Task");
     expect(task.status).toBe("open");
     expect(task.created).toBeInstanceOf(Date);
@@ -84,8 +84,8 @@ describe("createTask", () => {
   test("allocates distinct ids per task", async () => {
     const t1 = await createTask(dir, { title: "First" });
     const t2 = await createTask(dir, { title: "Second" });
-    expect(t1.id).toMatch(/^TASK-[0-9a-z]{5}$/);
-    expect(t2.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(t1.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
+    expect(t2.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
     expect(t1.id).not.toBe(t2.id);
   });
 

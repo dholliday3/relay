@@ -50,7 +50,7 @@ describe("REST API", () => {
     });
     expect(res.status).toBe(201);
     const task = await res.json();
-    expect(task.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(task.id).toMatch(/^TASK-[0-9A-Z]{5}$/);
     expect(task.title).toBe("Test task");
     expect(task.status).toBe("open");
   });
@@ -189,7 +189,7 @@ describe("REST API", () => {
     });
     expect(res.status).toBe(201);
     const doc = await res.json();
-    expect(doc.id).toMatch(/^DOC-[0-9a-z]{5}$/);
+    expect(doc.id).toMatch(/^DOC-[0-9A-Z]{5}$/);
     expect(doc.title).toBe("Reference Doc");
   });
 
