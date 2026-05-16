@@ -123,7 +123,7 @@ describe("compiled binary smoke", () => {
       expect(skillContent).toContain("relay task list");
 
       // task create — exercises argv parser, dispatch, @relay/core,
-      // ID assignment + counter, atomic file write.
+      // ID allocation, atomic file write.
       const create = await runBinary(
         project,
         "task",
@@ -135,7 +135,7 @@ describe("compiled binary smoke", () => {
       expect(create.code).toBe(0);
       const created = JSON.parse(create.stdout);
       expect(created.title).toBe("from compiled binary");
-      expect(created.id).toMatch(/^TASK-\d{3}$/);
+      expect(created.id).toMatch(/^TASK-[0-9a-z]{5}$/);
 
       // task list --json reads what we just wrote, round-tripping
       // through the on-disk markdown + frontmatter + readers.

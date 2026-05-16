@@ -33,7 +33,7 @@ describe("createPlan", () => {
       status: "draft",
     });
 
-    expect(plan.id).toBe("PLAN-001");
+    expect(plan.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
     expect(plan.title).toBe("My First Plan");
     expect(plan.status).toBe("draft");
     expect(plan.created).toBeInstanceOf(Date);
@@ -41,11 +41,11 @@ describe("createPlan", () => {
 
     const files = await readdir(plansDir);
     const mdFile = files.find((f) => f.endsWith(".md"));
-    expect(mdFile).toBe("PLAN-001-my-first-plan.md");
+    expect(mdFile).toBe(`${plan.id}-my-first-plan.md`);
 
     const raw = await readFile(join(plansDir, mdFile!), "utf-8");
     const { data } = matter(raw);
-    expect(data.id).toBe("PLAN-001");
+    expect(data.id).toBe(plan.id);
     expect(data.title).toBe("My First Plan");
     expect(data.status).toBe("draft");
   });
@@ -85,11 +85,12 @@ describe("createPlan", () => {
     expect(plan.body).toBe("## Overview\n\nSome plan content");
   });
 
-  test("increments counter for each plan", async () => {
+  test("allocates distinct ids per plan", async () => {
     const p1 = await createPlan(rootDir, plansDir, { title: "First" });
     const p2 = await createPlan(rootDir, plansDir, { title: "Second" });
-    expect(p1.id).toBe("PLAN-001");
-    expect(p2.id).toBe("PLAN-002");
+    expect(p1.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
+    expect(p2.id).toMatch(/^PLAN-[0-9a-z]{5}$/);
+    expect(p1.id).not.toBe(p2.id);
   });
 
   test("stores linked task IDs", async () => {
@@ -113,7 +114,7 @@ describe("createPlan", () => {
       "utf-8",
     );
     const plan = await createPlan(rootDir, plansDir, { title: "Custom Prefix" });
-    expect(plan.id).toBe("PRD-001");
+    expect(plan.id).toMatch(/^PRD-[0-9a-z]{5}$/);
   });
 });
 
@@ -288,13 +289,14 @@ describe("cutTasksFromPlan", () => {
     expect(result.createdTasks[0].project).toBe("myproject");
 
     // Plan body should have items checked off with task IDs
-    expect(result.plan.body).toContain("[x] Build API endpoint (TASK-001)");
-    expect(result.plan.body).toContain("[x] Add tests (TASK-002)");
+    const [t1, t2] = result.createdTasks;
+    expect(result.plan.body).toContain(`[x] Build API endpoint (${t1.id})`);
+    expect(result.plan.body).toContain(`[x] Add tests (${t2.id})`);
     expect(result.plan.body).toContain("[x] Already done");
 
     // Plan should have linked tasks
-    expect(result.plan.tasks).toContain("TASK-001");
-    expect(result.plan.tasks).toContain("TASK-002");
+    expect(result.plan.tasks).toContain(t1.id);
+    expect(result.plan.tasks).toContain(t2.id);
 
     // Tasks should exist on disk
     const tasks = await listTasks(tasksDir);
@@ -320,6 +322,6 @@ describe("cutTasksFromPlan", () => {
 
     const result = await cutTasksFromPlan(rootDir, plansDir, plan.id);
     expect(result.plan.tasks).toContain("EXISTING-001");
-    expect(result.plan.tasks).toContain("TASK-001");
+    expect(result.plan.tasks).toContain(result.createdTasks[0].id);
   });
 });

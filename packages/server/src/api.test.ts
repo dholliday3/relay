@@ -50,20 +50,20 @@ describe("REST API", () => {
     });
     expect(res.status).toBe(201);
     const task = await res.json();
-    expect(task.id).toBe("TASK-001");
+    expect(task.id).toMatch(/^TASK-[0-9a-z]{5}$/);
     expect(task.title).toBe("Test task");
     expect(task.status).toBe("open");
   });
 
   test("GET /api/tasks/:id returns a task", async () => {
-    // Create first
-    await fetch(`${base}/api/tasks`, {
+    const createRes = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Findable" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/tasks/TASK-001`);
+    const res = await fetch(`${base}/api/tasks/${id}`);
     expect(res.status).toBe(200);
     const task = await res.json();
     expect(task.title).toBe("Findable");
@@ -75,13 +75,14 @@ describe("REST API", () => {
   });
 
   test("PATCH /api/tasks/:id updates fields", async () => {
-    await fetch(`${base}/api/tasks`, {
+    const createRes = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Original" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/tasks/TASK-001`, {
+    const res = await fetch(`${base}/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "in-progress", priority: "high" }),
@@ -93,13 +94,14 @@ describe("REST API", () => {
   });
 
   test("PATCH /api/tasks/:id/body updates body", async () => {
-    await fetch(`${base}/api/tasks`, {
+    const createRes = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Body Test" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/tasks/TASK-001/body`, {
+    const res = await fetch(`${base}/api/tasks/${id}/body`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body: "New content" }),
@@ -110,13 +112,14 @@ describe("REST API", () => {
   });
 
   test("DELETE /api/tasks/:id archives a task", async () => {
-    await fetch(`${base}/api/tasks`, {
+    const createRes = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "To Delete" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/tasks/TASK-001`, {
+    const res = await fetch(`${base}/api/tasks/${id}`, {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
@@ -128,14 +131,15 @@ describe("REST API", () => {
   });
 
   test("POST /api/tasks/:id/restore restores a task", async () => {
-    await fetch(`${base}/api/tasks`, {
+    const createRes = await fetch(`${base}/api/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Restorable" }),
     });
-    await fetch(`${base}/api/tasks/TASK-001`, { method: "DELETE" });
+    const { id } = await createRes.json();
+    await fetch(`${base}/api/tasks/${id}`, { method: "DELETE" });
 
-    const res = await fetch(`${base}/api/tasks/TASK-001/restore`, {
+    const res = await fetch(`${base}/api/tasks/${id}/restore`, {
       method: "POST",
     });
     expect(res.status).toBe(200);
@@ -185,31 +189,33 @@ describe("REST API", () => {
     });
     expect(res.status).toBe(201);
     const doc = await res.json();
-    expect(doc.id).toBe("DOC-001");
+    expect(doc.id).toMatch(/^DOC-[0-9a-z]{5}$/);
     expect(doc.title).toBe("Reference Doc");
   });
 
   test("GET /api/docs/:id returns a doc", async () => {
-    await fetch(`${base}/api/docs`, {
+    const createRes = await fetch(`${base}/api/docs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Findable Doc" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/docs/DOC-001`);
+    const res = await fetch(`${base}/api/docs/${id}`);
     expect(res.status).toBe(200);
     const doc = await res.json();
     expect(doc.title).toBe("Findable Doc");
   });
 
   test("PATCH /api/docs/:id/body updates body", async () => {
-    await fetch(`${base}/api/docs`, {
+    const createRes = await fetch(`${base}/api/docs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Body Doc" }),
     });
+    const { id } = await createRes.json();
 
-    const res = await fetch(`${base}/api/docs/DOC-001/body`, {
+    const res = await fetch(`${base}/api/docs/${id}/body`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body: "Updated notes" }),

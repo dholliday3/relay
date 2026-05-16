@@ -30,7 +30,7 @@ describe("createTask", () => {
       status: "open",
     });
 
-    expect(task.id).toBe("TASK-001");
+    expect(task.id).toMatch(/^TASK-[0-9a-z]{5}$/);
     expect(task.title).toBe("My First Task");
     expect(task.status).toBe("open");
     expect(task.created).toBeInstanceOf(Date);
@@ -39,12 +39,12 @@ describe("createTask", () => {
     // Verify file exists
     const files = await readdir(dir);
     const mdFile = files.find((f) => f.endsWith(".md"));
-    expect(mdFile).toBe("TASK-001-my-first-task.md");
+    expect(mdFile).toBe(`${task.id}-my-first-task.md`);
 
     // Verify frontmatter
     const raw = await readFile(join(dir, mdFile!), "utf-8");
     const { data } = matter(raw);
-    expect(data.id).toBe("TASK-001");
+    expect(data.id).toBe(task.id);
     expect(data.title).toBe("My First Task");
     expect(data.status).toBe("open");
   });
@@ -81,11 +81,12 @@ describe("createTask", () => {
     expect(task.body).toBe("Some description here");
   });
 
-  test("increments counter for each task", async () => {
+  test("allocates distinct ids per task", async () => {
     const t1 = await createTask(dir, { title: "First" });
     const t2 = await createTask(dir, { title: "Second" });
-    expect(t1.id).toBe("TASK-001");
-    expect(t2.id).toBe("TASK-002");
+    expect(t1.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(t2.id).toMatch(/^TASK-[0-9a-z]{5}$/);
+    expect(t1.id).not.toBe(t2.id);
   });
 
   test("round-trips description through frontmatter", async () => {
@@ -198,34 +199,30 @@ describe("updateTask", () => {
     // of sync (e.g. after a renumber without a file rename). The writer must
     // trust the frontmatter — matching on the filename prefix would route the
     // write to a neighboring task.
-    await createTask(dir, { title: "Task A" });
-    await createTask(dir, { title: "Task B" });
+    const a = await createTask(dir, { title: "Task A" });
+    const b = await createTask(dir, { title: "Task B" });
 
-    // Hand-forge a drift: file `TASK-001-task-a.md` now carries frontmatter id
-    // TASK-002 (the "real" TASK-002), and `TASK-002-task-b.md` carries
-    // frontmatter id TASK-001. An update keyed on TASK-002 must target the
-    // file that *claims* TASK-002 in its frontmatter, not the TASK-002-
-    // prefixed filename.
-    const aPath = join(dir, "TASK-001-task-a.md");
-    const bPath = join(dir, "TASK-002-task-b.md");
+    const aPath = join(dir, `${a.id}-task-a.md`);
+    const bPath = join(dir, `${b.id}-task-b.md`);
     const aRaw = await readFile(aPath, "utf-8");
     const bRaw = await readFile(bPath, "utf-8");
-    await writeFile(aPath, aRaw.replace("id: TASK-001", "id: TASK-002"), "utf-8");
-    await writeFile(bPath, bRaw.replace("id: TASK-002", "id: TASK-001"), "utf-8");
+    // Swap frontmatter ids so each filename's prefix disagrees with its body.
+    await writeFile(aPath, aRaw.replace(`id: ${a.id}`, `id: ${b.id}`), "utf-8");
+    await writeFile(bPath, bRaw.replace(`id: ${b.id}`, `id: ${a.id}`), "utf-8");
 
-    // Tag the "real" TASK-002 so we can assert by a stable attribute.
-    // (Title change would rename the file, obscuring which file was hit.)
-    await updateTask(dir, "TASK-002", { tags: ["hit"] });
+    // Tag the "real" b.id so we can assert by a stable attribute. (Title change
+    // would rename the file, obscuring which file was hit.)
+    await updateTask(dir, b.id, { tags: ["hit"] });
 
-    // The file at aPath still exists (updateTask rewrites in place when the
-    // title does not change) and now has the tag.
+    // aPath now claims b.id in its frontmatter, and that is the file that
+    // should have been updated.
     const aAfter = matter(await readFile(aPath, "utf-8"));
-    expect(aAfter.data.id).toBe("TASK-002");
+    expect(aAfter.data.id).toBe(b.id);
     expect(aAfter.data.tags).toEqual(["hit"]);
 
-    // bPath (frontmatter TASK-001) is untouched.
+    // bPath (frontmatter a.id) is untouched.
     const bAfter = matter(await readFile(bPath, "utf-8"));
-    expect(bAfter.data.id).toBe("TASK-001");
+    expect(bAfter.data.id).toBe(a.id);
     expect(bAfter.data.tags).toBeUndefined();
   });
 });
